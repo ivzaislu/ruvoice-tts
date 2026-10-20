@@ -127,6 +127,7 @@ object Latin {
             when (c) {
                 'c' -> out.append(if (i + 1 < low.length && low[i + 1] in "eiy") "с" else "к")
                 'y' -> out.append(if (i == 0 || low[i - 1] in EN_VOWELS) "й" else "ы")
+                'e' -> out.append(if (i == 0) "э" else "е")   // в начале слова — «э»: Elizabeth → элізабет
                 else -> LETTERS[c]?.let { out.append(it) }
             }
             i++
