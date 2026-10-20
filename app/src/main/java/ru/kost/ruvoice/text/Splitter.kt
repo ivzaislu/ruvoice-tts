@@ -25,18 +25,12 @@ object Splitter {
     // переносом, дефис и \n убираем («со-\nбака» → «собака»). Заглавная — вероятно составное
     // слово («Санкт-\nПетербург»), убираем только перенос, дефис оставляем.
     // Дефис также оставляем (review round 1 п.3), если это на самом деле не разрыв слова
-    // переносом, а обычное дефисное написание, случайно совпавшее со строкой: короткая
-    // приставка/предлог перед дефисом («по-\nрусски», «из-\nза», «кое-\nкто», «во-\nпервых»)
-    // или частица после него («кто-\nто»).
-    private val hyphenKeepPrefixes = setOf("по", "кое", "кой", "из", "во", "в", "за", "на", "под", "над",
-        "от", "до", "обо", "о")
-    private val hyphenKeepParticles = setOf("то", "либо", "нибудь", "таки", "ка", "де")
-    private val hyphenBreakRe = Regex("""([а-яёА-ЯЁ]+)-\n[ \t]*([а-яёА-ЯЁ]+)""")
-    private fun dehyphenate(text: String) = hyphenBreakRe.replace(text) { m ->
+    // переносом, а обычное дефисное написание, случайно совпавшее со строкой: списки у языка
+    // ([TextLayer.keepHyphen]). «і», «ў» — белорусские буквы («Ві-\nцебск»), в русском тексте их нет.
+    private val hyphenBreakRe = Regex("""([а-яёіўА-ЯЁІЎ]+)-\n[ \t]*([а-яёіўА-ЯЁІЎ]+)""")
+    private fun dehyphenate(text: String, layer: TextLayer) = hyphenBreakRe.replace(text) { m ->
         val (before, after) = m.destructured
-        val keepHyphen = after[0].isUpperCase() ||
-            before.lowercase() in hyphenKeepPrefixes ||
-            after.lowercase() in hyphenKeepParticles
+        val keepHyphen = after[0].isUpperCase() || layer.keepHyphen(before.lowercase(), after.lowercase())
         if (keepHyphen) "$before-$after" else before + after
     }
 
@@ -46,11 +40,12 @@ object Splitter {
     // «і», «ў» — белорусские строчные («…\nі пайшоў»), в русском тексте их нет.
     private val softLineBreakRe = Regex("""(?<!\n)\n(?=[ \t]*[а-яёіў])""")
 
-    fun paragraphs(text: String, rules: Rules = Rules()): List<String> {
+    /** [layer] — язык текста: его дефисные написания правило dehyphen не склеивает. */
+    fun paragraphs(text: String, rules: Rules = Rules(), layer: TextLayer = Layers.RU): List<String> {
         // CRLF → LF первым делом (review final-fix п.9): иначе hyphenBreakRe требует «-\n» вплотную
         // и не видит перенос через «-\r\n» — дефис после разрыва строки не убирается.
         var s = text.replace("\r\n", "\n")
-        if (rules.on("dehyphen")) s = dehyphenate(s)
+        if (rules.on("dehyphen")) s = dehyphenate(s, layer)
         if (rules.on("soft_break")) s = softLineBreakRe.replace(s, " ")
         return s.split(Regex("\\n+")).map { it.trim() }.filter { it.isNotEmpty() }
     }

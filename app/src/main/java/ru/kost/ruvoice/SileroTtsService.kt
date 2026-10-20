@@ -121,7 +121,7 @@ object Pipeline {
         // Последний абзац запроса намеренно без паузы абзаца — свою паузу до следующей
         // реплики читалка/пользователь и так делают между вызовами.
         val segments = if (rules.on("ssml") && Ssml.isSsml(src)) Ssml.parse(src) else
-            Splitter.paragraphs(src, rules).mapIndexed { i, p -> Segment(p, paragraph = true) }.let { if (it.isEmpty()) it else it.dropLast(1) + it.last().copy(paragraph = false) }
+            Splitter.paragraphs(src, rules, layer).mapIndexed { i, p -> Segment(p, paragraph = true) }.let { if (it.isEmpty()) it else it.dropLast(1) + it.last().copy(paragraph = false) }
         // длина куска для модели: у чтеца предел куска меряется ею (Splitter.sentences), у быстрого старта — всегда
         val measure = { s: String -> layer.prepare(Marks.parse(s, 0).text, allowed, rules).length }
         val out = ArrayList<Segment>()
@@ -206,7 +206,8 @@ object Pipeline {
     /** Текст сегмента → слова для модели с ударениями (до Stress.forModel), тем же путём, что synthSegment. */
     fun accent(text: String, d: SileroData, stress: Stress, allowed: String, rules: Rules): String {
         var t = if (rules.on("exclaim")) Marks.exclaim(text) else text
-        if (rules.on("question") && SentenceType.classify(t, stress.layer.questions(d), rules) == "general_q") t = Marks.question(t)
+        val q = stress.layer.questions(d)
+        if (rules.on("question") && SentenceType.classify(t, q, rules) == "general_q") t = Marks.question(t, verb = q::verb)
         val marks = Marks.parse(t, rules.focusLevel)
         return stress.apply(stress.layer.prepare(marks.text, allowed, rules), marks.text)
     }
@@ -696,7 +697,7 @@ class SileroTtsService : TextToSpeechService() {
                 // по этому же тексту — так и надо.
                 val questions = layer.questions(d)
                 var text = if (rules.on("exclaim")) Marks.exclaim(seg.text) else seg.text
-                if (rules.on("question") && SentenceType.classify(text, questions, rules) == "general_q") text = Marks.question(text)
+                if (rules.on("question") && SentenceType.classify(text, questions, rules) == "general_q") text = Marks.question(text, verb = questions::verb)
                 val marks = Marks.parse(text, rules.focusLevel)
                 val prepared = layer.prepare(marks.text, sym.allowed, rules)
                 if (prepared.none { it != '+' && it in sym.alphabet }) return null

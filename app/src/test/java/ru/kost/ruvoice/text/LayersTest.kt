@@ -138,6 +138,44 @@ class LayersTest {
         assertEquals("alternative_q", SentenceType.classify("Проста ці складана?", q))
     }
 
+    @Test fun belQuestionFocusSkipsVerbs() {
+        val d = TestData.data()
+        val q = BeLayer.questions(d)
+        fun focus(t: String) = Marks.question(t, null, q::verb)
+        // с глаголом — без метки: подъём модель и так ставит на глагол
+        for (t in listOf("Ты ідзеш?", "Ты прыйдзеш заўтра?", "Вы былі ў Мінску?", "Ты чуў?", "Яна сказала праўду?", "Вы ведаеце?",
+            "Ты можаш дапамагчы?", "Ён працуе тут?", "Будзем?", "Пойдзем у кіно?", "Ці ёсць у вас кава?", "Вы сустрэліся?",
+            "Ён вучыцца?", "Пайшлі?", "Купіце хлеба?", "Яны жывуць тут?", "Ты бачыў яго?", "Ён прыйшоў?"))
+            assertEquals(t, t, focus(t))
+        // без глагола — метка на последнем слове; существительные, прилагательные, местоимения глаголом не считаются
+        for ((t, last) in listOf("Гэта праўда?" to "праўда", "Вы з Мінска?" to "Мінска", "Ты дома?" to "дома",
+            "Гэта ваш сын?" to "сын", "Уся сям'я тут?" to "тут", "Новая кніга?" to "кніга", "Ты з намі?" to "намі",
+            "Кава з малаком?" to "малаком", "Сёння панядзелак?" to "панядзелак", "Ваша маці настаўніца?" to "настаўніца",
+            "Хлеб свежы?" to "свежы", "Гэта ўсё?" to "ўсё", "Зноў дождж?" to "дождж", "Гэта яе кніжка?" to "кніжка",
+            "Гэта наш дом?" to "дом", "Табе холадна?" to "холадна", "Хоць адзін?" to "адзін", "Твая памяць?" to "памяць"))
+            assertEquals(t, t.replace("$last?", "*$last*?"), focus(t))
+        // русский — свой verbLike
+        assertEquals("Ты придёшь завтра?", Marks.question("Ты придёшь завтра?", null, RuLayer.questions(d)::verb))
+        assertEquals("Ты *ідзеш*?", Marks.question("Ты ідзеш?", null, RuLayer.questions(d)::verb))
+    }
+
+    @Test fun belDehyphen() {
+        fun join(t: String, layer: TextLayer = BeLayer) = Splitter.paragraphs(t, Rules(), layer).single()
+        // дефисные написания — по GrammarDB
+        for (w in listOf("па-беларуску", "па-нямецку", "па-мойму", "па-новаму", "па-першае", "па-другое", "па-чалавечы", "з-за",
+            "з-пад", "хто-небудзь", "што-колечы", "дзе-кольвек", "усё-такі", "абы-хто", "абы-як"))
+            assertEquals(w, w, join(w.replaceFirst("-", "-\n")))
+        // перенос: «па», «абы», «за» перед словом — не приставка с дефисом; «і», «ў» — буквы слова
+        for (t in listOf("па-\nмяць", "па-\nчатак", "абы-\nякавы", "за-\nўтра", "рэч-\nка", "ха-\nта", "Ві-\nцебск", "ўз-\nровень"))
+            assertEquals(t, t.replace("-\n", ""), join(t))
+        assertEquals("Санкт-Пецярбург", join("Санкт-\nПецярбург"))
+        // слой доходит от Pipeline.plan
+        assertEquals("па-беларуску", Pipeline.plan("па-\nбеларуску", TestData.data(), 0, 0, layer = BeLayer, allowed = cis).single().text)
+        // русский — свои списки: «по-русски», а «па-\nмять» склеивается
+        assertEquals("по-русски", join("по-\nрусски", RuLayer))
+        assertEquals("память", join("па-\nмять", RuLayer))
+    }
+
     @Test fun belNotWhLongFillersNoStackOverflow() {
         // повтор вводных перед «ці» — притяжательный: на JVM без него StackOverflowError
         assertEquals(" ", BeLayer.questions(TestData.data()).notWhRe!!.replace("ну ".repeat(5000) + "ці?", " "))

@@ -459,7 +459,7 @@
     <string name="analyze_english">English, read by “%1$s”</string>
     <string name="rule_dehyphen">Words split across lines</string>
     <string name="rule_dehyphen_hint">«со-» at the end of a line and «бака» at the start of the next are joined into «собака». Hyphenated words like «Санкт-Петербург» and «по-русски» are left alone.</string>
-    <string name="rule_dehyphen_hint_be">«са-» at the end of a line and «бака» at the start of the next are joined into «сабака». «Санкт-Пецярбург» keeps its hyphen.</string>
+    <string name="rule_dehyphen_hint_be">«са-» at the end of a line and «бака» at the start of the next are joined into «сабака». Hyphenated words like «Санкт-Пецярбург» and «па-беларуску» are left alone.</string>
     <string name="rule_soft_break">Soft line breaks</string>
     <string name="rule_soft_break_hint">A single line break before a lowercase letter (common in text from PDF files) is treated as a space, not as a new paragraph. When off, each line is a separate paragraph.</string>
     <string name="rule_punct">Punctuation cleanup</string>
@@ -504,7 +504,7 @@
     <string name="rule_exclaim_hint_be">«Гэй, вы!», «Бах!» (up to two words ending in «!») are read with emphasis on the last word, otherwise the model says them short and flat. Strength is the same as for word emphasis above.</string>
     <string name="rule_question">Emphasis in a question without a verb</string>
     <string name="rule_question_hint">«Вы барон Гордеев?», «Это правда?»: a yes/no question without a verb is read with emphasis on the last word. Otherwise the model raises the voice on the first word and drops it at the end, and the question sounds like a statement. A question with a verb («Ты придёшь завтра?») is left alone. Strength is the same as for word emphasis above.</string>
-    <string name="rule_question_hint_be">«Гэта праўда?», «Вы з Мінска?»: a yes/no question without a verb is read with emphasis on the last word. Otherwise the model raises the voice on the first word and drops it at the end, and the question sounds like a statement. Strength is the same as for word emphasis above.</string>
+    <string name="rule_question_hint_be">«Гэта праўда?», «Вы з Мінска?»: a yes/no question without a verb is read with emphasis on the last word. Otherwise the model raises the voice on the first word and drops it at the end, and the question sounds like a statement. A question with a verb («Ты прыйдзеш заўтра?») is left alone. Strength is the same as for word emphasis above.</string>
     <string name="rule_pause_semicolon">Pause after semicolons and colons</string>
     <string name="rule_pause_semicolon_hint">The “After a comma” pause from the Pauses tab is also added after semicolons and colons.</string>
     <string name="rule_pause_parens">Pause at parentheses</string>

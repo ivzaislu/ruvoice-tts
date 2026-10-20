@@ -460,7 +460,7 @@
     <string name="analyze_english">英语，由“%1$s”朗读</string>
     <string name="rule_dehyphen">合并断行的单词</string>
     <string name="rule_dehyphen_hint">行尾的 «со-» 和下一行开头的 «бака» 合并为 «собака»。«Санкт-Петербург» 和 «по-русски» 不受影响。</string>
-    <string name="rule_dehyphen_hint_be">行尾的 «са-» 和下一行开头的 «бака» 合并为 «сабака»。«Санкт-Пецярбург» 保留连字符。</string>
+    <string name="rule_dehyphen_hint_be">行尾的 «са-» 和下一行开头的 «бака» 合并为 «сабака»。«Санкт-Пецярбург» 和 «па-беларуску» 不受影响。</string>
     <string name="rule_soft_break">段内换行视为空格</string>
     <string name="rule_soft_break_hint">小写字母前的单个换行（如 PDF 中）视为空格，而不是新段落。关闭时，每行都是单独的段落。</string>
     <string name="rule_punct">标点清理</string>
@@ -505,7 +505,7 @@
     <string name="rule_exclaim_hint_be">«Гэй, вы!»、«Бах!»（以 «!» 结尾、不超过两个词）在最后一个词上加逻辑重音，否则模型会读得短促平淡。强度与上方的逻辑重音相同。</string>
     <string name="rule_question">无动词疑问句中的重音</string>
     <string name="rule_question_hint">«Вы барон Гордеев?»、«Это правда?»：没有动词的一般疑问句在最后一个词上加逻辑重音。否则模型会在第一个词上升调、句尾下降，疑问句听起来像陈述句。带动词的疑问句（«Ты придёшь завтра?»）不受影响。强度与上方的逻辑重音相同。</string>
-    <string name="rule_question_hint_be">«Гэта праўда?»、«Вы з Мінска?»：没有动词的一般疑问句在最后一个词上加逻辑重音。否则模型会在第一个词上升调、句尾下降，疑问句听起来像陈述句。强度与上方的逻辑重音相同。</string>
+    <string name="rule_question_hint_be">«Гэта праўда?»、«Вы з Мінска?»：没有动词的一般疑问句在最后一个词上加逻辑重音。否则模型会在第一个词上升调、句尾下降，疑问句听起来像陈述句。带动词的疑问句（«Ты прыйдзеш заўтра?»）不受影响。强度与上方的逻辑重音相同。</string>
     <string name="rule_pause_semicolon">分号和冒号后停顿</string>
     <string name="rule_pause_semicolon_hint">“停顿”标签页中的“逗号之后”停顿也会加在分号和冒号之后。</string>
     <string name="rule_pause_parens">括号处停顿</string>

@@ -49,11 +49,12 @@ object Marks {
     /** «Вы барон Гордеев?», «— Барон Андрей Николаевич Гордеев?» → «… *Гордеев*?»: в общем вопросе модель ставит подъём на
      * первое-второе слово и роняет хвост; без глагола это звучит утверждением (по F0 эталонной модели, 20.09.2026), фокус на
      * последнем слове переносит подъём туда. С глаголом («Ты придёшь завтра?») подъём и так на нём — не трогаем. Глагол — как
-     * в Stress.verbLike, но слово с заглавной не в начале — имя («Андрей»), не глагол. Тип предложения проверяет вызывающий. */
-    fun question(text: String, morph: Morph? = Normalizer.morph): String {
+     * в Stress.verbLike (у языка слоя — [QuestionLists.verb], его передаёт [verb]), но слово с заглавной не в начале — имя
+     * («Андрей»), не глагол. Тип предложения проверяет вызывающий. */
+    fun question(text: String, morph: Morph? = Normalizer.morph, verb: (String, Morph?) -> Boolean = ::verbLike): String {
         if ('*' in text) return text
         val words = wordRe.findAll(text).map { it.value }.toList()
-        if (words.isEmpty() || words.withIndex().any { (i, w) -> (i == 0 || w[0].isLowerCase()) && verbLike(w.lowercase(), morph) }) return text
+        if (words.isEmpty() || words.withIndex().any { (i, w) -> (i == 0 || w[0].isLowerCase()) && verb(w.lowercase(), morph) }) return text
         return lastWordRe.replace(text) { "*${it.value}*" }
     }
 
