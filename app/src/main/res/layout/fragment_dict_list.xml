@@ -63,6 +63,14 @@
             android:paddingVertical="8dp"
             android:textAppearance="?attr/textAppearanceBodyMedium" />
 
+        <!-- Системный список пака: для каких голосов и как править (DictListFragment.loadLines) -->
+        <TextView
+            android:id="@+id/dictHint"
+            style="@style/SectionHint"
+            android:layout_marginHorizontal="16dp"
+            android:layout_marginBottom="0dp"
+            android:visibility="gone" />
+
         <LinearLayout
             android:orientation="horizontal"
             android:gravity="center_vertical"

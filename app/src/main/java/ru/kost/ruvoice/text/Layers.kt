@@ -21,7 +21,7 @@ interface QuestionLists {
 /**
  * Язык текста: выбирается по полю `lang` пака, которым читается фраза, — а не по сборке приложения.
  * У каждого языка своя подготовка текста (числа, сокращения, латиница) и свои ударения: за ударения
- * отвечает [Stress], которому слой передаётся вместе с поправками пака.
+ * отвечает [Stress], которому слой передаётся вместе со словарём (в нём и системный список пака).
  *
  * Новый язык CIS-модели добавляется ещё одной строкой в [Layers]: пока в таблице только `ru` и `be`.
  */
@@ -44,9 +44,9 @@ interface TextLayer {
     /** Списки для классификации вопроса (см. [QuestionLists]). */
     fun questions(d: SileroData): QuestionLists
 
-    /** Ударения языка: акцентор пака и его поправки поверх словаря пользователя. null — русский конвейер [Stress]
-     * (таблицы, омографы, «ё»). */
-    fun stress(models: StressModels, userDict: Map<String, String>, corrections: Map<String, String>): ((String) -> String)? = null
+    /** Ударения языка: словари (с системным пака) поверх акцентора пака; акцентор — по правилу accentor из [rules].
+     * null — русский конвейер [Stress] (таблицы, омографы, «ё»). */
+    fun stress(models: StressModels, userDict: Map<String, String>, rules: Rules): ((String) -> String)? = null
 
     /** Имя буквы, когда запрос — одна буква (правило letter_name, эхо ввода [LetterEcho]): [lone] — в запросе
      * ничего, кроме буквы, [end] — имя последнее во фразе. null — буквы в таблице языка нет. */
@@ -73,8 +73,9 @@ object BeLayer : TextLayer {
     override val locale = Locale("be", "BY")
     override fun prepare(text: String, allowed: String, rules: Rules): String = BelNormalizer.prepare(text, allowed, rules)
     override fun questions(d: SileroData): QuestionLists = BE_QUESTIONS
-    override fun stress(models: StressModels, userDict: Map<String, String>, corrections: Map<String, String>) =
-        BelStress(models, userDict, corrections)::apply
+    override fun dictWord(w: String): String = w.replace(BelNormalizer.APOSTROPHE, "")
+    override fun stress(models: StressModels, userDict: Map<String, String>, rules: Rules) =
+        BelStress(models, userDict, rules.on("accentor"))::apply
     /** Белорусские имена букв, латиница — как в аббревиатурах [Latin]; «+» перед первой гласной, как у русских.
      * Второе слово («нескладовае») ударение получает от акцентора. */
     override fun letterName(c: Char, lone: Boolean, end: Boolean) = (BE_LETTERS[c.lowercaseChar()] ?: Latin.letterName(c))?.let { n ->

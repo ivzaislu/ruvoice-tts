@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.OpenableColumns
+import androidx.core.os.ConfigurationCompat
 import androidx.core.text.HtmlCompat
 import androidx.core.text.buildSpannedString
 import androidx.core.text.color
@@ -37,14 +38,20 @@ import com.google.android.material.textfield.MaterialAutoCompleteTextView
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
 import java.io.File
+import java.util.Locale
 import ru.kost.ruvoice.text.Replacements
 
-/** Имя списка для показа: встроенные (Dicts.MAIN, SYSTEM, REMOVED, NAMES) на диске по-русски, на экране — на языке интерфейса. */
+/** Имя списка для показа: встроенные (Dicts.MAIN, SYSTEM, REMOVED, NAMES) на диске по-русски, на экране — на языке интерфейса.
+ * Системный пака — «Системный (белорусский)»; тогда и русский, если на телефоне есть пак другого языка, — «Системный (русский)». */
 fun Context.dictLabel(name: String): String = when (name) {
-    Dicts.MAIN -> getString(R.string.dict_main); Dicts.SYSTEM -> getString(R.string.dict_system)
+    Dicts.MAIN -> getString(R.string.dict_main)
+    Dicts.SYSTEM -> if (Packs.installed(filesDir).any { it.lang != "ru" }) getString(R.string.dict_system_lang, langName("ru")) else getString(R.string.dict_system)
     Dicts.REMOVED -> getString(R.string.dict_removed); Dicts.NAMES -> getString(R.string.dict_names)
-    else -> name
+    else -> Dicts.packLang(name)?.let { getString(R.string.dict_system_lang, langName(it)) } ?: name
 }
+
+/** Название языка на языке интерфейса: «белорусский», «Belarusian». */
+fun Context.langName(lang: String): String = Locale(lang).getDisplayLanguage(ConfigurationCompat.getLocales(resources.configuration)[0] ?: Locale.getDefault())
 
 /**
  * Общая часть вкладок «Ударения» и «Замены». У каждой вкладки несколько именных списков
@@ -121,6 +128,7 @@ abstract class DictListFragment(layout: Int) : PageFragment(layout) {
     private lateinit var emptyView: TextView
     private lateinit var nameField: MaterialAutoCompleteTextView
     private lateinit var onSwitch: MaterialSwitch
+    private lateinit var hintView: TextView
     private lateinit var addButton: FloatingActionButton
 
     // Экспорт: байты готовятся до выбора файла, после записи — необязательное продолжение
@@ -177,6 +185,7 @@ abstract class DictListFragment(layout: Int) : PageFragment(layout) {
         }
         v.findViewById<View>(R.id.dictMenu).setOnClickListener { showMenu(it) }
         onSwitch = v.findViewById(R.id.dictOn)
+        hintView = v.findViewById(R.id.dictHint)
         onSwitch.setOnCheckedChangeListener { _, checked ->
             val name = Dicts.name(file)
             val off = prefs.off(kind)
@@ -219,6 +228,11 @@ abstract class DictListFragment(layout: Int) : PageFragment(layout) {
         onSwitch.setText(if (name in off) R.string.dict_off else R.string.dict_on)
         // удалённые в чтении не участвуют никогда — выключать нечего
         onSwitch.visibility = if (name == Dicts.REMOVED) View.GONE else View.VISIBLE
+        val packLang = Dicts.packLang(name)
+        hintView.apply {
+            visibility = if (packLang == null) View.GONE else View.VISIBLE
+            if (packLang != null) text = getString(R.string.dict_pack_hint, context.langName(packLang))
+        }
         emptyView.setText(if (name == Dicts.REMOVED) R.string.removed_empty_hint else emptyHintRes)
         addButton.visibility = if (readOnly) View.GONE else View.VISIBLE
         refresh()
@@ -230,8 +244,10 @@ abstract class DictListFragment(layout: Int) : PageFragment(layout) {
      * не быть (например, Undo в Snackbar сработал после ухода со страницы). */
     protected fun persist() {
         // системный собирается из полной копии без удалённых (Dicts.rebuildSystem); переписывать его
-        // из lines незачем — только сдвинуло бы mtime и заставило заново разбирать 100 тыс. строк
-        if (Dicts.name(file) != Dicts.SYSTEM) file.writeText(lines.joinToString("\n"))
+        // из lines незачем — только сдвинуло бы mtime и заставило заново разбирать 100 тыс. строк. Системный пака —
+        // копия его stress.txt (Dicts.syncPacks), не пишем тоже. «Системный удалённые» пишем: смахивание там правит его
+        val name = Dicts.name(file)
+        if (name != Dicts.SYSTEM && Dicts.packLang(name) == null) file.writeText(lines.joinToString("\n"))
         stamp = diskStamp(); warm()
     }
 
@@ -286,8 +302,10 @@ abstract class DictListFragment(layout: Int) : PageFragment(layout) {
     protected fun rowActions(row: View, list: String?, position: Int) {
         row.clearActions()
         if (list != null) { row.clickLabel(getString(R.string.open_in_list)); return }
-        if (!readOnly) row.clickLabel(getString(R.string.edit))
-        row.action(getString(swipeLabel(Dicts.name(file)))) { shown.getOrNull(position)?.let { deleteLine(it) } }
+        val name = Dicts.name(file)
+        if (!Dicts.isSystem(name)) row.clickLabel(getString(R.string.edit))
+        // у системного пака строки не убираются: список выключается целиком, слово правится в своём списке
+        if (Dicts.packLang(name) == null) row.action(getString(swipeLabel(name))) { shown.getOrNull(position)?.let { deleteLine(it) } }
     }
 
     private fun swipeLabel(name: String) = when (name) { Dicts.SYSTEM -> R.string.system_disable; Dicts.REMOVED -> R.string.system_restore; else -> R.string.delete }
@@ -433,7 +451,8 @@ abstract class DictListFragment(layout: Int) : PageFragment(layout) {
                 name.isEmpty() -> null
                 !Dicts.validName(name) -> getString(R.string.dict_name_bad)
                 // имена системных заняты всегда: «Системный удалённые» появляется только после первого смахивания
-                name != initial && (Dicts.isSystem(name) || name == ctx.dictLabel(Dicts.SYSTEM) || name == ctx.dictLabel(Dicts.REMOVED) || Dicts.file(ctx.filesDir, kind, name).exists()) -> getString(R.string.dict_name_taken)
+                name != initial && (Dicts.isSystem(name) || name == ctx.dictLabel(Dicts.SYSTEM) || name == ctx.dictLabel(Dicts.REMOVED) || Dicts.file(ctx.filesDir, kind, name).exists() ||
+                    prefs.dictFiles(kind).any { ctx.dictLabel(Dicts.name(it)) == name }) -> getString(R.string.dict_name_taken)
                 else -> null
             }
             posButton?.isEnabled = name.isNotEmpty() && name != initial && layout.error == null
@@ -477,7 +496,7 @@ abstract class DictListFragment(layout: Int) : PageFragment(layout) {
         ItemTouchHelper(object : ItemTouchHelper.SimpleCallback(0, ItemTouchHelper.LEFT or ItemTouchHelper.RIGHT) {
             override fun onMove(rv: RecyclerView, vh: RecyclerView.ViewHolder, target: RecyclerView.ViewHolder) = false
             override fun getSwipeDirs(rv: RecyclerView, vh: RecyclerView.ViewHolder) =
-                if (vh.bindingAdapterPosition >= shown.size) 0 else super.getSwipeDirs(rv, vh)
+                if (vh.bindingAdapterPosition >= shown.size || Dicts.packLang(Dicts.name(file)) != null) 0 else super.getSwipeDirs(rv, vh)
             override fun onSwiped(vh: RecyclerView.ViewHolder, direction: Int) {
                 val pos = vh.bindingAdapterPosition
                 if (pos !in shown.indices) { refresh(); return }

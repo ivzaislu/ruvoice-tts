@@ -16,13 +16,13 @@ package ru.kost.ruvoice.text
  *  - слова из словаря пользователя не трогаем — словарь главнее акцентора;
  *  - слова, где «+» уже стоит (из замены, словаря или от руки), не трогаем.
  *
- * [corrections] — поправки из самого пака (stress.txt): слово → слово с «+»; словарь пользователя главнее.
- * Карты не сливаем: их десятки тысяч, а BelStress создаётся на каждый запрос (у TalkBack — на фразу).
+ * [userDict] — слитые списки языка, в нём и поправки пака (список «Системный <lang>», свои списки его перебивают).
+ * [accentor] — правило «Ударения нейросетью»: выключено — модель не зовём, остаются словари, как у русского.
  */
 class BelStress(private val models: StressModels, private val userDict: Map<String, String> = emptyMap(),
-                private val corrections: Map<String, String> = emptyMap()) {
+                private val accentor: Boolean = true) {
 
-    private fun dict(w: String) = userDict[w] ?: corrections[w]
+    private fun dict(w: String) = userDict[w]
 
     // в companion: BelStress создаётся на каждый запрос, регулярка и набор — один раз
     private companion object {
@@ -46,7 +46,7 @@ class BelStress(private val models: StressModels, private val userDict: Map<Stri
             .distinct().toList()
 
         val marked = HashMap<String, String>(words.size * 2)
-        if (words.isNotEmpty()) {
+        if (accentor && words.isNotEmpty()) {
             val probs = models.accentor(words).first
             for ((i, w) in words.withIndex()) {
                 val p = probs.getOrNull(i) ?: continue
@@ -62,7 +62,7 @@ class BelStress(private val models: StressModels, private val userDict: Map<Stri
                 marked[w] = w.substring(0, pos) + "+" + w.substring(pos)
             }
         }
-        if (marked.isEmpty() && userDict.isEmpty() && corrections.isEmpty()) return sentence
+        if (marked.isEmpty() && userDict.isEmpty()) return sentence
 
         val out = StringBuilder(sentence.length + 8)
         var last = 0

@@ -526,6 +526,8 @@
     <string name="tile_pick">Выберите профиль RuVoice</string>
     <string name="dict_main">Основной</string>
     <string name="dict_system">Системный</string>
+    <string name="dict_system_lang">Системный (%s)</string>
+    <string name="dict_pack_hint">Только для голосов языка «%s». Слова, где нейросеть ставит ударение иначе. Чтобы исправить слово, добавьте его в свой список.</string>
     <string name="dict_removed">Системный: отключённые</string>
     <string name="dict_names">Имена</string>
     <string name="err_write_failed">Не удалось записать файл</string>

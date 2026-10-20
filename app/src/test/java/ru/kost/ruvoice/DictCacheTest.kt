@@ -1,5 +1,6 @@
 package ru.kost.ruvoice
 
+import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -64,6 +65,41 @@ class DictCacheTest {
         val files = listOf(Dicts.SYSTEM, Dicts.REMOVED, Dicts.MAIN, Dicts.NAMES).map { File(tmp.root, "$it.txt") }
         assertEquals(files, Dicts.forLang(files, "ru"))
         assertEquals(listOf(Dicts.MAIN, Dicts.NAMES), Dicts.forLang(files, "be").map { Dicts.name(it) })
+    }
+
+    /** Системный список пака и русский пак со stress.txt русскому голосу ничего не меняют: те же файлы, та же карта,
+     * та же подпись в userdict.bin. */
+    @Test fun packListsDoNotTouchRu() {
+        val root = tmp.newFolder("root")
+        val dir = Dicts.dir(root, Dicts.Kind.STRESS).apply { mkdirs() }
+        File(dir, "${Dicts.SYSTEM}.txt").writeText("творог твор+ог\n")
+        File(dir, "${Dicts.MAIN}.txt").writeText("аб'ява аб'+ява\n")
+        val before = Dicts.forLang(Dicts.files(root, Dicts.Kind.STRESS), "ru")
+        val json = JSONObject(File(TestData.root(), "app/src/test/resources/golden_pack.json").readText()).getJSONObject("pack")
+        fun pack(id: String, lang: String) = tmp.newFolder(id).let { d ->
+            File(d, Packs.STRESS).writeText("сталы +сталы\n")
+            Pack(JSONObject(json.toString()).put("id", id).put("format", 3).put("lang", lang).toString(), d)
+        }
+        Dicts.syncPacks(root, listOf(pack("cis_ru", "ru"), pack("cis_be", "be")))
+        assertTrue(File(dir, "Системный be.txt").isFile)
+        val after = Dicts.forLang(Dicts.files(root, Dicts.Kind.STRESS), "ru")
+        assertEquals(before, after)
+        val disk = File(tmp.root, "userdict.bin")
+        // у русского слово как в списке: апостроф снимает только белорусский слой
+        assertEquals(mapOf("творог" to "твор+ог", "аб'ява" to "аб'+ява"), HashMap(DictCache.stress(after, disk = disk)))
+        val tag = RandomAccessFile(disk, "r").channel.use { StressBin.strings(it.map(FileChannel.MapMode.READ_ONLY, 0, it.size())).first }
+        assertEquals(after.joinToString("\n") { "${it.path}|${it.lastModified()}|${it.length()}" }, tag)
+    }
+
+    /** У белорусского ключ и вариант без апострофа (BelNormalizer снимает его до ударений), свой список главнее пака. */
+    @Test fun beDropsApostropheAndOwnBeatsPack() {
+        val root = tmp.newFolder("be")
+        val dir = Dicts.dir(root, Dicts.Kind.STRESS).apply { mkdirs() }
+        File(dir, "${Dicts.SYSTEM}.txt").writeText("сталы стал+ы\n")
+        File(dir, "Системный be.txt").writeText("аб'ява аб'+ява\nсям’я сям’+я\nвераб‘і вераб‘+і\nсталы +сталы\n")
+        File(dir, "${Dicts.MAIN}.txt").writeText("сталы ст+алы\nп`ю п`+ю\n")
+        val m = DictCache.stress(Dicts.forLang(Dicts.files(root, Dicts.Kind.STRESS), "be"), lang = "be")
+        assertEquals(mapOf("абява" to "аб+ява", "сямя" to "сям+я", "верабі" to "вераб+і", "сталы" to "ст+алы", "пю" to "п+ю"), HashMap(m))
     }
 
     @Test fun warmBuildsSnapshotOfItsLanguage() {

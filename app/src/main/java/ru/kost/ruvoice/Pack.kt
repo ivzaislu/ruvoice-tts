@@ -2,7 +2,6 @@ package ru.kost.ruvoice
 
 import android.util.Log
 import org.json.JSONObject
-import ru.kost.ruvoice.text.BelNormalizer
 import ru.kost.ruvoice.text.Layers
 import java.io.EOFException
 import java.io.File
@@ -14,7 +13,7 @@ import java.util.zip.ZipInputStream
 /** Пак голосов: `filesDir/packs/<id>/{pack.json, tts_mel.ptl, backbone.pte, head.ptl}` — та же нарезка,
  * что у штатной модели в assets. Формат — спека 2026-09-18; сверху (по желанию) два файла языка:
  * `accentor.ptl` — акцентор этого языка и `stress.txt` — поправки ударений (слово → слово с «+»; только языкам
- * не ru, см. [corrections]). */
+ * не ru: копия в списке «Системный <lang>», см. Dicts.syncPacks). */
 class Pack(json: String, val dir: File) {
     val id: String
     val title: String
@@ -35,17 +34,6 @@ class Pack(json: String, val dir: File) {
     val defaultVoice: String?
     /** Акцентор лежит в самом паке: тогда язык читается своим акцентором, а не штатным русским. */
     val accentor: Boolean get() = File(dir, Packs.ACCENTOR).isFile
-    /** Поправки ударений пака: слово → слово с «+»; пусто — пак их не принёс. Действуют только у языков не ru
-     * (слой со своим stress, BelStress): у русского RuLayer.stress == null, его конвейер Stress поправок пака не читает.
-     * Апостроф («аб'ява») убираем с обеих сторон: BelNormalizer снимает его до ударений, и слово с ним не нашлось бы. */
-    val corrections: Map<String, String> by lazy {
-        val f = File(dir, Packs.STRESS)
-        // BelNormalizer — только когда поправки есть: русские паки на первой фразе его не инициализируют
-        if (!f.isFile) emptyMap() else HashMap<String, String>().also { out ->
-            val apo = BelNormalizer.APOSTROPHE
-            f.forEachLine { line -> DictLines.parseStress(line)?.let { (w, v) -> out[w.lowercase().replace(apo, "")] = v.replace(apo, "") } }
-        }
-    }
     /** Место на диске: все файлы пака, с акцентором и поправками. */
     val size: Long get() = dir.listFiles()?.sumOf { it.length() } ?: 0L
 
@@ -144,6 +132,7 @@ object Packs {
             if (dest.exists()) dest.deleteRecursively()
             if (!tmp.renameTo(dest)) throw UserError("Не удалось переместить пак в ${dest.name}", R.string.err_pack_move)
             synchronized(this) { snap = null }
+            Dicts.syncPacks(filesDir, installed(filesDir))
             return Pack(text, dest)
         } catch (e: Exception) {
             tmp.deleteRecursively()
@@ -155,5 +144,6 @@ object Packs {
         require(ID_RE.matches(id)) { "Недопустимый id пака: $id" }
         File(dir(filesDir), id).deleteRecursively()
         synchronized(this) { snap = null }
+        Dicts.syncPacks(filesDir, installed(filesDir))
     }
 }

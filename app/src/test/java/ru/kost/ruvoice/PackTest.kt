@@ -45,28 +45,18 @@ class PackTest {
         assertEquals("be", Pack(JSONObject(packJson.toString()).put("lang", "BE").toString(), File(".")).lang)
     }
 
-    @Test fun accentorAndCorrectionsAreOptional() {
+    @Test fun accentorIsOptional() {
         val dir = Files.createTempDirectory("packlang").toFile()
-        // пак без файлов языка: ни акцентора, ни поправок
+        // пак без файлов языка: акцентора нет
         val plain = Pack(packJson.toString(), dir)
         assertFalse(plain.accentor)
-        assertTrue(plain.corrections.isEmpty())
         assertEquals(0L, plain.size)
-        // файлы языка появились — пак отдаёт акцентор и поправки ударений
         File(dir, Packs.ACCENTOR).writeText("x")
-        File(dir, Packs.STRESS).writeText("дзякуй дзя+куй\n\n# комментарий\nсталы +сталы\nодно\n")
+        File(dir, Packs.STRESS).writeText("дзякуй дзя+куй\n")
         val p = Pack(packJson.toString(), dir)
         assertTrue(p.accentor)
-        assertEquals(mapOf("дзякуй" to "дзя+куй", "сталы" to "+сталы"), p.corrections)
         // место на диске — со всеми файлами пака: акцентор весит мегабайты
         assertEquals(1L + File(dir, Packs.STRESS).length(), p.size)
-    }
-
-    @Test fun correctionsWithoutApostrophe() {
-        // BelNormalizer снимает апостроф до ударений: «аб'ява» в тексте приходит как «абява»
-        val dir = Files.createTempDirectory("packapo").toFile()
-        File(dir, Packs.STRESS).writeText("аб'ява аб'+ява\nсям’я сям’+я\nвераб‘і вераб‘+і\nп`ю п`+ю\n")
-        assertEquals(mapOf("абява" to "аб+ява", "сямя" to "сям+я", "верабі" to "вераб+і", "пю" to "п+ю"), Pack(packJson.toString(), dir).corrections)
     }
 
     @Test fun formatsTwoAndThree() {
@@ -115,8 +105,21 @@ class PackTest {
         val extras = mapOf(Packs.ACCENTOR to byteArrayOf(1, 2), Packs.STRESS to "а +а".toByteArray())
         val p = Packs.install(ByteArrayInputStream(zip(packJson.toString(), "tts_mel.ptl", "backbone.pte", "head.ptl", extras = extras)), filesDir)
         assertTrue(File(p.dir, Packs.ACCENTOR).isFile)
-        assertEquals(mapOf("а" to "+а"), p.corrections)
+        assertEquals("а +а", File(p.dir, Packs.STRESS).readText())
+        // русскому паку системный список не заводится
+        assertTrue(Dicts.files(filesDir, Dicts.Kind.STRESS).isEmpty())
         Packs.delete(filesDir, p.id)
+    }
+
+    @Test fun installAndDeleteSyncPackList() {
+        // поставили пак be со stress.txt — появился «Системный be»; удалили — пропал
+        val json = JSONObject(packJson.toString()).put("id", "cis_be").put("format", 3).put("lang", "be").toString()
+        val extras = mapOf(Packs.ACCENTOR to byteArrayOf(1), Packs.STRESS to "сталы +сталы\n".toByteArray())
+        Packs.install(ByteArrayInputStream(zip(json, "tts_mel.ptl", "backbone.pte", "head.ptl", extras = extras)), filesDir)
+        val list = Dicts.file(filesDir, Dicts.Kind.STRESS, "Системный be")
+        assertEquals("сталы +сталы\n", list.readText())
+        Packs.delete(filesDir, "cis_be")
+        assertFalse(list.exists())
     }
 
     @Test fun installsListsDeletes() {

@@ -4,6 +4,7 @@ import java.io.File
 import java.io.RandomAccessFile
 import java.nio.channels.FileChannel
 import ru.kost.ruvoice.bin.StressBin
+import ru.kost.ruvoice.text.Layers
 import ru.kost.ruvoice.text.Replacements
 
 /**
@@ -14,7 +15,7 @@ import ru.kost.ruvoice.text.Replacements
  */
 object DictCache {
     private class Snap<T>(val sig: List<String>, val value: T)
-    // снимок на язык голоса: у не-русского набор файлов без системных, и чередование языков не пересобирало бы
+    // снимок на язык голоса: у не-русского набор файлов без русских системных (со своим системным пака), и чередование языков не пересобирало бы
     // русский (замены — до 0,7 с на A32); под замками ниже
     private val stressSnaps = HashMap<String, Snap<Map<String, String>>>()
     private val replaceSnaps = HashMap<String, Snap<Replacements>>()
@@ -46,10 +47,12 @@ object DictCache {
         } }
         val lines = files.flatMap { it.readLines() }
         val map = HashMap<String, String>(lines.size * 2)
+        // слово так, как его увидит слой после нормализации («аб'ява» у белорусского — «абява»); у русского как есть
+        val layer = Layers.of(lang)
         for ((i, line) in lines.withIndex()) {
             if (onProgress != null && i % 2000 == 0) onProgress(i * 100 / lines.size)
             val (w, v) = DictLines.parseStress(line) ?: continue
-            map[w.lowercase()] = v.lowercase()
+            map[layer.dictWord(w.lowercase())] = layer.dictWord(v.lowercase())
         }
         onProgress?.invoke(100)
         android.util.Log.i("RuVoice", "словари ударений: ${lines.size} строк, ${(System.nanoTime() - t) / 1_000_000} мс")

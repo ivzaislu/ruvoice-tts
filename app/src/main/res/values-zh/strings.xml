@@ -518,6 +518,8 @@
     <string name="tile_pick">选择 RuVoice 方案</string>
     <string name="dict_main">主列表</string>
     <string name="dict_system">系统</string>
+    <string name="dict_system_lang">系统（%s）</string>
+    <string name="dict_pack_hint">仅用于%s语音。这些词的重音与神经网络标注的不同。要修改某个词，请将其添加到您自己的列表中。</string>
     <string name="dict_removed">系统：已停用</string>
     <string name="dict_names">人名</string>
     <string name="err_write_failed">无法写入文件</string>

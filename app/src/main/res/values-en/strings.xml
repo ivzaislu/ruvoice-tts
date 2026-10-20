@@ -517,6 +517,8 @@
     <string name="tile_pick">Choose a RuVoice profile</string>
     <string name="dict_main">Main</string>
     <string name="dict_system">System</string>
+    <string name="dict_system_lang">System (%s)</string>
+    <string name="dict_pack_hint">Only for %s voices. Words where the neural network puts the stress differently. To fix a word, add it to your own list.</string>
     <string name="dict_removed">System: disabled</string>
     <string name="dict_names">Names</string>
     <string name="err_write_failed">Could not write the file</string>

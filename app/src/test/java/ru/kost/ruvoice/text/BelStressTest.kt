@@ -40,19 +40,22 @@ class BelStressTest {
         assertEquals("дз+якуй", stress.apply("дзякуй"))
     }
 
-    @Test fun packCorrectionsApplied() {
-        // поправка пака (stress.txt) — до акцентора
-        val stress = Stress(d, Fake(arrayOf(floatArrayOf(0.1f, 0.9f))), emptyMap(), Rules(), layer = BeLayer,
-            corrections = mapOf("дзякуй" to "дзя+куй"))
-        assertEquals("дзя+куй", stress.apply("дзякуй"))
+    @Test fun dictWordsNotAsked() {
+        // словарь языка (свои списки и «Системный be» из stress.txt пака) — до акцентора, его слова модели не идут
+        val m = Fake(arrayOf(floatArrayOf(0.1f, 0.9f)))
+        val stress = Stress(d, m, mapOf("дзякуй" to "дз+якуй", "сталы" to "+сталы"), Rules(), layer = BeLayer)
+        assertEquals("дз+якуй +сталы", stress.apply("дзякуй сталы"))
+        assertEquals(emptyList<String>(), m.asked)
     }
 
-    @Test fun userDictWinsOverPackCorrections() {
-        val m = Fake(arrayOf(floatArrayOf(0.1f, 0.9f)))
-        val stress = Stress(d, m, mapOf("дзякуй" to "дз+якуй"), Rules(),
-            layer = BeLayer, corrections = mapOf("дзякуй" to "дзя+куй", "сталы" to "+сталы"))
-        assertEquals("дз+якуй +сталы", stress.apply("дзякуй сталы"))
-        assertEquals(emptyList<String>(), m.asked)   // слова из словаря и поправок акцентору не идут
+    @Test fun accentorRuleOffLeavesOnlyDict() {
+        // «Ударения нейросетью» выключены — модель не зовём (заглушка упала бы), словарь работает, как у русского
+        val boom = object : StressModels {
+            override fun accentor(words: List<String>): Pair<Array<FloatArray>, Array<FloatArray>> = throw AssertionError("акцентор: $words")
+            override fun homo(ids: List<LongArray>, starts: LongArray, ends: LongArray): FloatArray = throw AssertionError("homo")
+        }
+        val stress = Stress(d, boom, mapOf("сталы" to "+сталы"), Rules(setOf("accentor")), layer = BeLayer)
+        assertEquals("дзякуй +сталы", stress.apply("дзякуй сталы"))
     }
 
     @Test fun readyPlusKeptWhole() {
@@ -64,9 +67,9 @@ class BelStressTest {
     }
 
     @Test fun hyphenWordWholeThenParts() {
-        // целиком из поправок пака — акцентор не спрашиваем; иначе по частям, регистр у каждой свой
+        // целиком из словаря — акцентор не спрашиваем; иначе по частям, регистр у каждой свой
         val m = Fake(arrayOf(floatArrayOf(0.9f, 0.1f), floatArrayOf(0.9f, 0.1f)))
-        val stress = Stress(d, m, emptyMap(), Rules(), layer = BeLayer, corrections = mapOf("па-беларуску" to "па-белар+уску"))
+        val stress = Stress(d, m, mapOf("па-беларуску" to "па-белар+уску"), Rules(), layer = BeLayer)
         assertEquals("Па-белар+уску", stress.apply("Па-беларуску"))
         assertEquals(emptyList<String>(), m.asked)
         assertEquals("Ч+орна-б+елы", stress.apply("Чорна-белы"))

@@ -314,9 +314,8 @@ class SileroTtsService : TextToSpeechService() {
         val dicts = Thread { runCatching {
             val cur = currentName()
             val lang = cur?.let { Speaker.lang(it, packs()) } ?: "ru"
+            // поправки пака не на русском — в userDict его языка (список «Системный <lang>»)
             prefs.userDict(lang); prefs.replacements(lang)
-            // поправки пака (stress.txt) ленивые: иначе их разбор пришёлся бы на первую фразу; русский их не читает
-            if (lang != "ru") cur?.let { packOf(it)?.corrections }
         }.onFailure { Log.e(SileroModels.TAG, "прогрев", it) } }.apply { start() }
         // греем тройку голоса из настроек, а не штатную: иначе первый запрос перегружает 90 МБ; пак — по имени, без data
         val name = currentName() ?: return   // lite без пака: голосов нет
@@ -622,8 +621,7 @@ class SileroTtsService : TextToSpeechService() {
             models.threads = if (rules.on("fast_cores")) SileroModels.fastCores else Runtime.getRuntime().availableProcessors()
             // Текстовый слой — по языку пака голоса (не по сборке): ru — прежний русский путь, be — белорусский
             val layer = Layers.of(voice.lang)
-            val stress = Stress(d, models, if (noDict) emptyMap() else prefs.userDict(voice.lang), rules, layer = layer,
-                corrections = voice.pack?.corrections ?: emptyMap())
+            val stress = Stress(d, models, if (noDict) emptyMap() else prefs.userDict(voice.lang), rules, layer = layer)
             // вкладка «Проверка»: имена — по исходному тексту сегмента
             val audit = prefs.audit; val known = Audit.known(d, if (noDict) emptyMap() else prefs.userDict(voice.lang))
             val replacements = prefs.replacements(voice.lang)

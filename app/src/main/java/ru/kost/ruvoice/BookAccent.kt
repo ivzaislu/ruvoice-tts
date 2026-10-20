@@ -270,8 +270,7 @@ object BookAccent {
             fun Set<String>.set(key: String, on: Boolean) = if (on == (key in Rules.DEFAULT_OFF)) this + key else this - key
             // без аббревиатур «КП» не читается по буквам и доходит до книги как есть (сокращения «г.», «т. е.» — правило abbrev — раскрываются)
             val rules = Rules(r.off.set("hard_e", hardE).let { if (abbr) it else it.set("spell_cyr", false).set("spell_lat", false) }, r.maxLen, r.focus)
-            val stress = Stress(d, models, prefs.userDict(lang), rules, layer = layer,
-                corrections = speaker?.pack?.corrections ?: emptyMap())
+            val stress = Stress(d, models, prefs.userDict(lang), rules, layer = layer)
             val replacements = prefs.replacements(lang)
             // модели — до первого абзаца: иначе 10–30 с загрузки висят на «0 %», будто всё застыло
             models.ensureStress(speaker?.pack)
