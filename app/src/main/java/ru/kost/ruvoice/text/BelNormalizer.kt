@@ -137,22 +137,21 @@ object BelNormalizer {
      * дзевяноста восьмы» (в годах без «адна»), 2000 → «двухтысячны». */
     fun ordinal(n: Long, form: Form = Form.NOM): String {
         if (n == 0L) return pick(ORD_NOM[0], ORD_GEN[0], ORD_LOC[0], form)
-        // порядковые от миллиона в тексте не встречаются (годы — до четырёх цифр): количественным, без падения
-        if (n >= 1_000_000) return cardinal(n)
+        // от миллиарда — по цифрам, как у количественного; круглые миллионы — одним словом («мільённы», «двухмільённы»),
+        // прочее — миллионы количественным, порядковым остаток: «адзін мільён пяты»
+        if (n >= BIG) return cardinal(n)
+        if (n >= 1_000_000) {
+            val millions = (n / 1_000_000).toInt()
+            val rest = n % 1_000_000
+            return if (rest == 0L) compoundStem(millions) + pick("мільённы", "мільённага", "мільённым", form)
+            else cardinal(n - rest) + " " + ordinal(rest, form)
+        }
         val head = StringBuilder()
         fun add(s: String) { if (s.isNotEmpty()) { if (head.isNotEmpty()) head.append(' '); head.append(s) } }
         val thousands = (n / 1000).toInt()
         val rest = (n % 1000).toInt()
-        if (rest == 0) {
-            // круглые тысячи — одним словом: 1000 → «тысячны», 2000 → «двухтысячны» (основа как у «двухсоты»)
-            // ponytail: от 10 тысяч основа не выводится, оставлено «дзесяць тысячны»; форма не проверена носителем
-            val stem = when (thousands) {
-                1 -> ""
-                in 2..9 -> HUNDREDS_ORD.getValue(thousands * 100).first.removeSuffix("соты")
-                else -> under1000(thousands, fem = true) + " "
-            }
-            return stem + pick("тысячны", "тысячнага", "тысячным", form)
-        }
+        // круглые тысячи — одним словом: 1000 → «тысячны», 2000 → «двухтысячны», 10000 → «дзесяцітысячны»
+        if (rest == 0) return compoundStem(thousands) + pick("тысячны", "тысячнага", "тысячным", form)
         if (thousands == 1) add("тысяча")
         else if (thousands > 0) add(under1000(thousands, fem = true) + " " + thousandWord(thousands))
         val h = rest / 100
@@ -180,6 +179,25 @@ object BelNormalizer {
         }
         // у составного числительного порядковым становится только последнее слово
         return (head.toString() + " " + tail).trim()
+    }
+
+    /** Первая часть сложного слова от числа — каждое слово в родным склоне, слитно, как в GrammarDB «двухтысячны»,
+     * «дваццаціпяцітысячны», «стотысячны»: 2 → «двух», 10 → «дзесяці», 25 → «дваццаціпяці», 100 → «сто», 300 → «трохсот»;
+     * 1 — пусто («тысячны»). ponytail: «дзесяцітысячны», «саракатысячны», единица внутри («дваццаціадна…») и сотни от
+     * двухсот («двухсоттысячны») — по аналогии, в GrammarDB нет; не проверено носителем. */
+    private fun compoundStem(n: Int): String {
+        if (n == 1) return ""
+        val (units, tens) = BelNumbers.CARD_GEN
+        fun unit(u: Int) = if (u == 1) "адна" else units[u - 1]
+        val h = n / 100
+        val r = n % 100
+        val hs = when (h) { 0 -> ""; 1 -> "сто"; else -> unit(h) + "сот" }
+        val rs = when {
+            r == 0 -> ""
+            r < 20 -> unit(r)
+            else -> tens[r / 10 - 2] + (if (r % 10 == 0) "" else unit(r % 10))
+        }
+        return hs + rs
     }
 
     private fun pickOrd(v: Int, form: Form): String =
