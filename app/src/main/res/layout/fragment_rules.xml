@@ -13,13 +13,15 @@
         android:layout_height="wrap_content">
 
         <!-- Вкладки языков голосов (RulesFragment.loadTabs): только если на телефоне голоса двух языков и больше,
-             с пояснением под ними (rulesHint ниже остаётся). Без ViewPager: вкладка перестраивает список ниже. -->
+             с пояснением под ними (rulesHint ниже остаётся). Без ViewPager: вкладка перестраивает список ниже.
+             fixed, а не auto: при шрифте 200 % auto делает полосу прокручиваемой и вторая вкладка уходит за край,
+             в fixed подпись переносится на две строки. ponytail: на трёх языках и больше проверить снова. -->
         <com.google.android.material.tabs.TabLayout
             android:id="@+id/rulesTabs"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:visibility="gone"
-            app:tabMode="auto"
+            app:tabMode="fixed"
             app:tabGravity="fill" />
         <TextView
             android:id="@+id/rulesLangHint"
