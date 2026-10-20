@@ -266,15 +266,21 @@ object BelNormalizer {
         """(?:км/г|тыс|млрд|млн|трлн|руб|кап|км|см|мм|кг|мл|мг|га|шт|гг|(?<!\.\d\d[ \x{A0}]?)г|м|л|т)""" +
         // только там, где [WORD_ABBR] их развернёт: иначе точка осталась бы двойной
         """|(?<=(?<!\p{L})і\s{1,3}г\.\s{0,3})д|(?<=(?<!\p{L})і\s{1,3})інш|(?<=(?<!\p{L})н\.\s{0,3})э)\.(?=\s+\p{Lu}|\s*$)""")
-    /** Символ частной области Unicode: в обычном тексте его не бывает. */
+    /** Символ частной области Unicode. В тексте он бывает разве что значком шрифта — такой [prepare] сразу делает пробелом,
+     * как сделал бы фильтр. */
     private val ABBR_DOT = Char(0xE000)
     private val ABBR_DOT_KEPT_RE = Regex("\\.\\s*$ABBR_DOT")
-    /** Омоглифы: латинская буква-двойник вплотную к кириллице — опечатка раскладки («cок», «Мiнск»), [Latin] прочёл бы её
-     * латиницей («кок»). Кусок латиницы меняем, только если двойники все его буквы: «файлmicrosoft» не трогаем. */
+    /** Омоглифы: латинская буква-двойник в кириллическом слове — опечатка раскладки («cок», «Мiнск»), [Latin] прочёл бы её
+     * латиницей («кок»). Слово меняем, только если вся латиница в нём — двойники и кириллицы не меньше: «файлmicrosoft» и
+     * марку с окончанием «TOYOTAўскі» не трогаем. */
     private val HOMOGLYPHS = "aceopxyiABCEHIKMOPTXY".zip("асеорхуіАВСЕНІКМОРТХУ").toMap()
-    private val GLUED_LATIN_RE = Regex("(?<=[а-яёіўА-ЯЁІЎ])[A-Za-z]+|[A-Za-z]+(?=[а-яёіўА-ЯЁІЎ])")
-    private fun homoglyphs(text: String) = GLUED_LATIN_RE.replace(text) { m ->
-        if (m.value.all { it in HOMOGLYPHS }) m.value.map(HOMOGLYPHS::getValue).joinToString("") else m.value
+    private val LETTERS_RE = Regex("\\p{L}+")
+    private fun homoglyphs(text: String) = LETTERS_RE.replace(text) { m ->
+        val w = m.value
+        val lat = w.count { it in 'a'..'z' || it in 'A'..'Z' }
+        val cyr = w.count { it in 'а'..'я' || it in 'А'..'Я' || it in "ёіўЁІЎ" }
+        if (lat == 0 || cyr < lat || w.any { (it in 'a'..'z' || it in 'A'..'Z') && it !in HOMOGLYPHS }) w
+        else w.map { HOMOGLYPHS[it] ?: it }.joinToString("")
     }
     /** Начало фразы до «г.»/«гг.»: предлог и год (или два года, или десятилетие на «-х») — «У 1941 », «З 1941–1945 »,
      * «У 1990-х », «У 90-х ». Не «Нарадзіўся ў 1990 г. Яго…»: там слова перед предлогом, и это конец предложения. */
@@ -302,8 +308,11 @@ object BelNormalizer {
      * что у русского слоя (их нет у слоя в [BeLayer.unsupported]); служебное (знак ударения, невидимые символы, регистр,
      * апостроф, «!», «+» не перед гласной, фильтр) — всегда. */
     fun prepare(text: String, allowed: String, rules: Rules = Rules()): String {
-        var s = COMBINING_ACUTE_RE.replace(text) { "+" + it.groupValues[1] }.replace(ZERO_WIDTH_RE, "")
+        var s = COMBINING_ACUTE_RE.replace(text) { "+" + it.groupValues[1] }.replace(ZERO_WIDTH_RE, "").replace(ABBR_DOT, ' ')
         fun step(key: String, f: (String) -> String) { if (rules.on(key)) s = f(s) }
+        // «·», «→» между словами — пауза: при symbol_names (у чтеца — sr_symbols) Splitter их оставляет, а имён знаков у
+        // белорусского нет, ключ скрыт ([BeLayer.unsupported])
+        s = Normalizer.symbolPauses(s)
         s = OTHER_DIGIT_RE.replace(s) { Character.digit(it.value.codePointAt(0), 10).toString() }
         // «°C» латиницей — до Latin, иначе она делает из «C» «к» и единица не находится
         s = CELSIUS_RE.replace(s, "°с")

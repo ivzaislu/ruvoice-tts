@@ -195,12 +195,12 @@ object Normalizer {
         s = spacedDashRe.replace(s, "–")
         s = multiDashRe.replace(s, "–")
         // с symbol_names знаки называются по имени в symbols(), паузой их не подменяем
-        if (!rules.on("symbol_names")) {
-            s = midDotRe.replace(s, ", ")
-            s = arrowRe.replace(s, " – ")
-        }
+        if (!rules.on("symbol_names")) s = symbolPauses(s)
         return s
     }
+
+    /** «·» и «→» между словами — пауза ([midDotRe], [arrowRe]). Белорусский слой знаки по имени не называет: у него всегда. */
+    fun symbolPauses(s: String) = arrowRe.replace(midDotRe.replace(s, ", "), " – ")
 
     // «Минус» перед числом — только если дефис не приклеен к букве/цифре слева (review final-fix
     // п.1): иначе диапазоны через дефис («10-15», «2-3») и составные слова («Ту-154») ошибочно

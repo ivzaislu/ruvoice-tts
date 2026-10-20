@@ -62,14 +62,22 @@ class BelRulesTest {
         assertTrue(read.keys.none { it in BeLayer.unsupported })
     }
 
+    /** Путь сервиса: Splitter (его Normalizer.punctuation читает общие ключи, symbol_names) и слой. */
+    private fun full(t: String, r: Rules) = Splitter.sentences(t, r).joinToString(" | ") { prep(it, r) }
+
     @Test fun unsupportedKeysDoNotChangeOutput() {
         assertTrue(BeLayer.unsupported.all { it in Rules.KEYS })
         // акцентор белорусский тоже читает (BelStress), он не в списке
         assertFalse("accentor" in BeLayer.unsupported)
         for (k in BeLayer.unsupported) {
             val flipped = Rules().with(k, !Rules().on(k))
-            for (t in samples) assertEquals("$k: $t", prep(t), prep(t, flipped))
+            for (t in samples) {
+                assertEquals("$k: $t", full(t, Rules()), full(t, flipped))
+                // у чтеца sr_symbols включает symbol_names
+                assertEquals("$k, чтец: $t", full(t, Rules().screenReader()), full(t, flipped.screenReader()))
+            }
         }
+        assertEquals("вось — там, а тут, далей", full("Вось → там, а тут · далей", Rules().screenReader()))
     }
 
     @Test fun romanOff() {
@@ -94,6 +102,8 @@ class BelRulesTest {
         assertEquals("тры км", prep("3 км", off("units")))
         assertEquals("тры кіламетры, два рублі.", prep("3 км, 2 руб.", off("degrees")))
         assertEquals("дваццаць с", prep("20 °C", off("degrees")))
+        // «%» — правило numbers, как у русского
+        assertEquals("пяць працэнтаў", prep("5 %", off("units")))
         // «тыс.», «млн» — сокращения: правило abbrev
         assertEquals("пяць тыс. рублёў. тэлефон ёсць.", prep("Кошт 5 тыс. руб. Тэлефон ёсць.", off("abbrev")).removePrefix("кошт "))
         // «г.» за числом без единиц — не «горад»
@@ -109,6 +119,8 @@ class BelRulesTest {
                 "Падзея адбылася ў 2024 г. Цяпер там музей.", "Пачатак 1990-х гг.", "Курган III ст. н. э. Потым"))
             for (k in listOf("units", "currency", "abbrev", "years", "numbers", "roman"))
                 assertFalse("$k: $t", ".." in prep(t, off(k)))
+        // тот же символ частной области в самом тексте (значок шрифта) — не точка
+        assertEquals("тут там", prep("Тут ${Char(0xE000)} там"))
     }
 
     @Test fun numberKeys() {
@@ -134,8 +146,9 @@ class BelRulesTest {
         assertEquals("нельга", prep("Hельга"))
         assertEquals("хельга", prep("Hельга", off("homoglyphs")))
         assertEquals("стоп таксі", prep("Cтоп TаксI"))
-        // кусок не из одних двойников и отдельное латинское слово — латиница, как было
-        assertEquals(prep("файлmicrosoft", off("homoglyphs")), prep("файлmicrosoft"))
+        assertEquals("мы на", prep("Mы Hа"))
+        // латиница не из одних двойников, её больше кириллицы, отдельное латинское слово — латиница, как было
+        for (t in listOf("файлmicrosoft", "TOYOTAўскі", "TAXIст", "cool")) assertEquals(t, prep(t, off("homoglyphs")), prep(t))
         assertEquals("кул", prep("cool"))
     }
 

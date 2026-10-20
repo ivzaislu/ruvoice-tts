@@ -180,12 +180,13 @@ object BelNumbers {
         UNITS[k]?.takeIf { rules.on(unitKey(k)) }?.let { "${m.groupValues[1]} ${it.third}" } ?: m.value
     }
 
-    /** Правило «Правил» для единицы (ключ [UNITS]): деньги — currency, «°с» — degrees, «тыс.», «млн» — abbrev, прочее —
-     * units. Те же ключи, что у русского нормализатора. */
+    /** Правило «Правил» для единицы (ключ [UNITS]): деньги — currency, «°с» — degrees, «тыс.», «млн» — abbrev, «%» —
+     * numbers, прочее — units. Те же ключи, что у русского нормализатора. */
     fun unitKey(u: String) = when (u) {
         "руб", "кап", "₽", "$", "€" -> "currency"
         "°с" -> "degrees"
         "тыс", "млн", "млрд", "трлн" -> "abbrev"
+        "%" -> "numbers"
         else -> "units"
     }
 
