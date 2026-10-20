@@ -23,9 +23,11 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.materialswitch.MaterialSwitch
 import com.google.android.material.slider.Slider
 import com.google.android.material.snackbar.Snackbar
+import com.google.android.material.tabs.TabLayout
 import com.google.android.material.textfield.MaterialAutoCompleteTextView
 import com.google.android.material.textfield.TextInputLayout
 import ru.kost.ruvoice.text.English
+import ru.kost.ruvoice.text.Layers
 import ru.kost.ruvoice.text.Rules
 
 /**
@@ -253,8 +255,53 @@ class RulesFragment : PageFragment(R.layout.fragment_rules) {
     private val english get() = arguments?.getBoolean(ARG_ENGLISH) == true
     /** Тумблеры этой страницы: остальные ключи rulesOff сохраняются как были. */
     private val shownKeys = HashSet<String>()
+    /** Язык вкладки (код пака): какие правила видны и чьи подсказки. Нигде не хранится — при открытии язык голоса. */
+    private var lang = "ru"
 
     override fun load(v: View) {
+        val tabs = !english && loadTabs(v)
+        for (id in listOf(R.id.chunkBlock, R.id.rulesFilterBox)) v.findViewById<View>(id).visibility = if (english) View.GONE else View.VISIBLE
+        v.findViewById<View>(R.id.rulesHint).visibility = if (english || tabs) View.GONE else View.VISIBLE
+        v.findViewById<EditText>(R.id.maxLen).setText(prefs.maxLen.toString())
+        v.findViewById<EditText>(R.id.srMaxLen).setText(prefs.srMaxLen.toString())
+        v.findViewById<View>(R.id.quoteBlock).visibility = if (english) View.GONE else View.VISIBLE
+        if (!english) loadQuote(v)
+        // слушатель — один на окно: fill() при смене вкладки его не добавляет
+        v.findViewById<EditText>(R.id.rulesFilter).doAfterTextChanged { filter(v, it?.toString().orEmpty()) }
+        fill(v)
+    }
+
+    /** Вкладки языков голосов, установленных на телефоне, — только если языков два и больше: иначе экран прежний,
+     * а правила — языка голоса. Выбрана вкладка языка текущего голоса. true — вкладки показаны. */
+    private fun loadTabs(v: View): Boolean {
+        val builtin = SileroModels.speakers(v.context)
+        lang = Speaker.currentName(prefs.voice, builtin, packs)?.let { Speaker.lang(it, packs) } ?: "ru"
+        val langs = Speaker.langs(builtin, packs)
+        if (langs.size < 2) return false
+        v.findViewById<View>(R.id.rulesLangHint).visibility = View.VISIBLE
+        v.findViewById<TabLayout>(R.id.rulesTabs).apply {
+            visibility = View.VISIBLE
+            for (code in langs) addTab(newTab().setText(langLabel(code)).setTag(code), code == lang)
+            // до перестройки — сохранить тумблеры прежней вкладки; фокус остаётся на вкладке, TalkBack скажет «выбрано»
+            addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
+                override fun onTabSelected(tab: TabLayout.Tab) { saveNow(); lang = tab.tag as String; fill(v) }
+                override fun onTabUnselected(tab: TabLayout.Tab) {}
+                override fun onTabReselected(tab: TabLayout.Tab) {}
+            })
+        }
+        return true
+    }
+
+    /** «Русские голоса», «Белорусские голоса»; языку без своей строки — название языка. */
+    private fun langLabel(code: String): String = res("rules_lang_$code").takeIf { it != 0 }?.let(::getString)
+        ?: requireContext().uiLocale.let { ui -> Locale(code).getDisplayLanguage(ui).replaceFirstChar { it.titlecase(ui) } }
+
+    /** Подпись правила на вкладке: своя для языка (rule_<key>_hint_be — примеры по-белорусски), иначе общая. LocaleSpan
+     * на примерах нет: TalkBack попросил бы белорусский голос и перегружал модель на каждой подписи. */
+    private fun hint(key: String) = res("rule_${key}_hint_$lang").takeIf { it != 0 } ?: res("rule_${key}_hint")
+
+    /** Список правил вкладки [lang] заново (Rules.rows): заголовок раздела — над первой видимой строкой. */
+    private fun fill(v: View) {
         val list = v.findViewById<LinearLayout>(R.id.rulesList)
         list.removeAllViews()
         entries.clear()
@@ -262,12 +309,9 @@ class RulesFragment : PageFragment(R.layout.fragment_rules) {
         var group = -1
         val rules = Rules(prefs.rulesOff)
         val inflater = LayoutInflater.from(v.context)
-        var section = ""
-        for (key in Rules.KEYS) {
-            section = Rules.SECTIONS[key] ?: section
-            if ((section == "english") != english) continue
+        for ((key, head) in Rules.rows(Layers.of(lang), english)) {
             shownKeys += key
-            Rules.SECTIONS[key]?.let { section ->
+            head?.let { section ->
                 val header = TextView(v.context, null, 0, R.style.Section).apply { setText(res("rules_section_$section")); asHeading() }
                 list.addView(header,
                     LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
@@ -283,8 +327,8 @@ class RulesFragment : PageFragment(R.layout.fragment_rules) {
             }
             val row = inflater.inflate(R.layout.item_rule, list, false)
             row.findViewById<TextView>(R.id.title).setText(res("rule_$key"))
-            row.findViewById<TextView>(R.id.hint).setText(res("rule_${key}_hint"))
-            val rowText = getString(res("rule_$key")) + " " + getString(res("rule_${key}_hint"))
+            row.findViewById<TextView>(R.id.hint).setText(hint(key))
+            val rowText = getString(res("rule_$key")) + " " + getString(hint(key))
             fun extra(block: View, text: String) { list.addView(block); entries += Entry(block, "$rowText $text", group, false) }
             val toggle = row.findViewById<MaterialSwitch>(R.id.toggle)
             toggle.tag = key
@@ -336,22 +380,15 @@ class RulesFragment : PageFragment(R.layout.fragment_rules) {
                 findViewById<EditText>(R.id.focusLevel).setText(prefs.focusLevel.toString())
             }, getString(R.string.focus_level) + " " + getString(R.string.focus_level_hint))
         }
-        for (id in listOf(R.id.chunkBlock, R.id.rulesHint, R.id.rulesFilterBox)) v.findViewById<View>(id).visibility = if (english) View.GONE else View.VISIBLE
-        v.findViewById<EditText>(R.id.maxLen).setText(prefs.maxLen.toString())
-        v.findViewById<EditText>(R.id.srMaxLen).setText(prefs.srMaxLen.toString())
-        v.findViewById<View>(R.id.quoteBlock).visibility = if (english) View.GONE else View.VISIBLE
         if (!english) {
-            loadQuote(v)
             // в поиске — своя секция: заголовок с подписью и сами настройки
             group++
             entries += Entry(v.findViewById(R.id.quoteHead), getString(R.string.section_quote), group, true)
             entries += Entry(v.findViewById(R.id.quoteBody), listOf(R.string.section_quote_hint, R.string.quote_on, R.string.quote_voice,
                 R.string.quote_rate_a11y, R.string.quote_pitch_a11y).joinToString(" ") { getString(it) }, group, false)
         }
-        v.findViewById<EditText>(R.id.rulesFilter).apply {
-            doAfterTextChanged { filter(v, it?.toString().orEmpty()) }
-            filter(v, text.toString())
-        }
+        // поиск — внутри вкладки; «Найдено N» живой области обновится и на новой вкладке
+        filter(v, v.findViewById<EditText>(R.id.rulesFilter).text.toString())
     }
 
     // Прямая речь (перенесена с вкладки «Голос»): голос из того же движка, что основной (prefs.voice —

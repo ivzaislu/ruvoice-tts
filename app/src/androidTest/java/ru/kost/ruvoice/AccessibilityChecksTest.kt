@@ -100,6 +100,32 @@ class AccessibilityChecksTest {
             .putExtra(RulesActivity.EXTRA_ENGLISH, true)).use { assertKeyboardReachable() }
     }
 
+    /** Вкладки языков на «Правилах» — только с паком второго языка (cis_be), иначе пропуск. На каждой вкладке: она
+     * выбрана, список начинается с заголовка, поиск ищет внутри вкладки и «Найдено» — живая область. */
+    @Test fun rulesLanguageTabs() {
+        val packs = Packs.installed(ctx.filesDir)
+        val langs = Speaker.langs(SileroModels.speakers(ctx), packs)
+        org.junit.Assume.assumeTrue("голоса одного языка", langs.size >= 2)
+        ActivityScenario.launch(RulesActivity::class.java).use {
+            for (code in langs.reversed() + langs.first()) {
+                val label = ctx.getString(ctx.resources.getIdentifier("rules_lang_$code", "string", ctx.packageName))
+                onView(allOf(withText(label), isDescendantOfA(withId(R.id.rulesTabs)))).perform(click()).check { v, _ ->
+                    assertTrue("вкладка «$label» не выбрана", v.isSelected)
+                }
+                onView(withId(R.id.rulesList)).check { v, _ ->
+                    assertTrue("первая строка — не заголовок", androidx.core.view.ViewCompat.isAccessibilityHeading((v as ViewGroup).getChildAt(0)))
+                }
+                onView(withId(R.id.rulesFilter)).perform(replaceText("пауза"), closeSoftKeyboard())
+                onView(withId(R.id.rulesFound)).check { v, _ ->
+                    assertTrue("«Найдено» скрыто", v.isShown)
+                    assertEquals(View.ACCESSIBILITY_LIVE_REGION_POLITE, v.accessibilityLiveRegion)
+                }
+                onView(withId(R.id.rulesFilter)).perform(clearText(), closeSoftKeyboard())
+                assertKeyboardReachable()
+            }
+        }
+    }
+
     /** Путь незрячего на странице «Английский»: строка «Голос для английского» — кнопка с понятным действием,
      * в окне пункт выбирается, «Прослушать» играет и окно не закрывает, «Выбрать» сохраняет. Проверки ATF — на
      * каждом нажатии, в том числе в окне. Настройки пользователя возвращаются как были. */
