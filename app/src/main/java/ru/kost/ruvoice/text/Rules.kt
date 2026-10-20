@@ -74,5 +74,18 @@ class Rules(val off: Set<String> = emptySet(), val maxLen: Int = MAX_LEN_DEFAULT
         /** Ключ, с которого начинается новая секция → её заголовок (rules_section_<имя> в strings.xml). */
         val SECTIONS = mapOf("sr_fast_start" to "talkback", "symbol_names" to "misc", "phones" to "numbers", "abbrev" to "abbrev", "en_proxy_books" to "english", "dehyphen" to "split",
             "gram" to "stress", "pause_semicolon" to "audio", "verbose_log" to "debug")
+
+        /** Строки экрана правил на вкладке языка [layer]: ключ и раздел, если ключ в нём первый видимый (заголовок —
+         * над ним), иначе null. Ключей [TextLayer.unsupported] нет; [english] — страница «Английский» из меню ⋮, только
+         * её раздел (в «Настройках» его нет). */
+        fun rows(layer: TextLayer, english: Boolean = false): List<Pair<String, String?>> {
+            var section = ""
+            var shown = ""
+            return KEYS.mapNotNull { key ->
+                section = SECTIONS[key] ?: section
+                if ((section == "english") != english || key in layer.unsupported) null
+                else key to section.takeIf { it != shown }?.also { shown = it }
+            }
+        }
     }
 }

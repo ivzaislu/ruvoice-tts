@@ -99,6 +99,21 @@ class LargeTextTest {
         ActivityScenario.launch<RulesActivity>(english()).use { assertNoClippedText() }
     }
 
+    /** Вкладки языков на «Правилах» — только с паком второго языка (cis_be), иначе пропуск: подписи вкладок
+     * и пояснение под ними не обрезаны, каждая вкладка — тоже. */
+    @Test fun rulesLanguageTabs() {
+        val packs = Packs.installed(ctx.filesDir)
+        val langs = Speaker.langs(SileroModels.speakers(ctx), packs)
+        org.junit.Assume.assumeTrue("голоса одного языка", langs.size >= 2)
+        ActivityScenario.launch(RulesActivity::class.java).use {
+            for (code in langs) {
+                val label = ctx.getString(ctx.resources.getIdentifier("rules_lang_$code", "string", ctx.packageName))
+                onView(allOf(withText(label), isDescendantOfA(withId(R.id.rulesTabs)))).perform(click())
+                assertNoClippedText()
+            }
+        }
+    }
+
     @Test fun helperScreens() {
         ActivityScenario.launch(TroubleshootActivity::class.java).use { assertNoClippedText() }
         ActivityScenario.launch(AboutActivity::class.java).use { assertNoClippedText() }

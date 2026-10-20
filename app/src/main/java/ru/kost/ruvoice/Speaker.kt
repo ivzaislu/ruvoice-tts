@@ -64,6 +64,10 @@ class Speaker(val name: String, val pack: Pack?, val id: Int, val sym: Symbols, 
         fun names(builtinNames: Set<String>, packs: List<Pack>): List<String> =
             (if (builtin) builtinNames.sorted() else emptyList()) + packs.flatMap { p -> p.speakers.keys.sorted().map { packName(p, it) } }
 
+        /** Языки голосов на телефоне, русский первым: вкладки «Правил». */
+        fun langs(builtinNames: Set<String>, packs: List<Pack>): List<String> =
+            names(builtinNames, packs).map { lang(it, packs) }.distinct().sortedBy { it != "ru" }
+
         /** Голоса того же движка, что [main] — для прямой речи: в памяти одна тройка моделей,
          * перегружать 90 МБ на каждую реплику нельзя. */
         fun sameEngine(main: Speaker, d: SileroData, packs: List<Pack>): List<String> =
