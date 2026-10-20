@@ -32,6 +32,12 @@ interface TextLayer {
     /** Язык и страна голосов в TTS API: ISO-3 из неё система спрашивает язык и выбирает голос. */
     val locale: Locale
 
+    /** Ключи [Rules], которые слой не читает: в «Правилах» на вкладке этого языка их нет. Пусто — читает все. */
+    val unsupported: Set<String> get() = emptySet()
+
+    /** Слово словаря (ключ и значение) так, как его увидит слой после [prepare]: белорусский снимает апостроф. */
+    fun dictWord(w: String): String = w
+
     /** Текст запроса к модели: числа, сокращения, латиница, знаки — и фильтр по символам модели [allowed]. */
     fun prepare(text: String, allowed: String, rules: Rules): String
 
