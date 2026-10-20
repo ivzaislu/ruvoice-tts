@@ -57,7 +57,11 @@ android {
         // silero_ru.json и eyo_safe.txt в APK не нужны: приложение читает собранный из них stress.bin (задача stressBin)
         ignoreAssetsPattern = "!.svn:!.git:!.ds_store:!*.scc:.*:<dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~:!silero_ru.json:!eyo_safe.txt"
     }
-    testOptions { unitTests.isReturnDefaultValues = true }
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+        // перезапись эталона RuPathSnapshotTest: ./gradlew … -Druvoice.snapshot.write=true
+        unitTests.all { t -> System.getProperty("ruvoice.snapshot.write")?.let { t.systemProperty("ruvoice.snapshot.write", it) } }
+    }
     // libfbjni/libc++_shared есть и в pytorch_android_lite, и в executorch; из lite годятся обоим
     packaging { jniLibs.useLegacyPackaging = false; jniLibs.pickFirsts += listOf("lib/*/libfbjni.so", "lib/*/libc++_shared.so") }
 }
