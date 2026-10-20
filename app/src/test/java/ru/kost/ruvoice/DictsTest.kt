@@ -102,7 +102,7 @@ class DictsTest {
     }
 
     @Test fun packListsNotExported() {
-        // данные пака (CC BY-SA) в экспорт настроек не идут и из импорта не берутся
+        // данные пака (CC BY-SA) в экспорт настроек не идут; такое имя из импорта — под свободным (Prefs.importJson)
         assertFalse(Dicts.portable("Системный be")); assertFalse(Dicts.portable(" Системный be "))
         assertTrue(Dicts.portable(Dicts.SYSTEM)); assertTrue(Dicts.portable(Dicts.REMOVED)); assertTrue(Dicts.portable(Dicts.MAIN))
     }
@@ -141,6 +141,38 @@ class DictsTest {
         assertFalse(list.exists())
         assertEquals("сталы ст+алы\n", own.readText())
         assertEquals(listOf(Dicts.MAIN), Dicts.files(root, Dicts.Kind.STRESS).map { Dicts.name(it) })
+    }
+
+    @Test fun syncPacksKeepsUserListsWithPackNames() {
+        // «Системный be» и «Системный uk» пользователя (имя было свободно) — не копии пака: ни перезаписи, ни удаления
+        val root = tmp.newFolder("root")
+        val json = JSONObject(TestData.root().resolve("app/src/test/resources/golden_pack.json").readText()).getJSONObject("pack")
+        val be = tmp.newFolder("cis_be").let { d ->
+            d.resolve(Packs.STRESS).writeText("сталы +сталы\n")
+            Pack(JSONObject(json.toString()).put("id", "cis_be").put("format", 3).put("lang", "be").toString(), d)
+        }
+        fun f(kind: Dicts.Kind, name: String) = Dicts.file(root, kind, name)
+        fun names(kind: Dicts.Kind) = Dicts.files(root, kind).map { Dicts.name(it) }
+        f(Dicts.Kind.STRESS, "Системный be").apply { parentFile!!.mkdirs(); writeText("мой м+ой\n") }
+        f(Dicts.Kind.STRESS, "Системный uk").writeText("кіт к+іт\n")
+        f(Dicts.Kind.REPLACE, "Системный be").apply { parentFile!!.mkdirs(); writeText("кот = к+от\n") }
+        Dicts.syncPacks(root, listOf(be))
+        assertEquals("сталы +сталы\n", f(Dicts.Kind.STRESS, "Системный be").readText())
+        assertEquals("мой м+ой\n", f(Dicts.Kind.STRESS, "Системный be (2)").readText())
+        assertEquals("кіт к+іт\n", f(Dicts.Kind.STRESS, "Системный uk (2)").readText())
+        assertEquals("кот = к+от\n", f(Dicts.Kind.REPLACE, "Системный be (2)").readText())
+        assertEquals(listOf("Системный be", "Системный be (2)", "Системный uk (2)"), names(Dicts.Kind.STRESS))
+        assertEquals(listOf("Системный be (2)"), names(Dicts.Kind.REPLACE))
+        // пак сняли — убрана только своя копия
+        Dicts.syncPacks(root, emptyList())
+        assertEquals(listOf("Системный be (2)", "Системный uk (2)"), names(Dicts.Kind.STRESS))
+        // копия от сборки без учёта (та же, что в паке) — своя: не переименована, со снятием пака уходит
+        val old = tmp.newFolder("old")
+        Dicts.file(old, Dicts.Kind.STRESS, "Системный be").apply { parentFile!!.mkdirs(); writeText("сталы +сталы\n") }
+        Dicts.syncPacks(old, listOf(be))
+        assertEquals(listOf("Системный be"), Dicts.files(old, Dicts.Kind.STRESS).map { Dicts.name(it) })
+        Dicts.syncPacks(old, emptyList())
+        assertTrue(Dicts.files(old, Dicts.Kind.STRESS).isEmpty())
     }
 
     /** Свои списки перебивают системный: он первый в порядке слияния, а при совпадении побеждает поздний. */

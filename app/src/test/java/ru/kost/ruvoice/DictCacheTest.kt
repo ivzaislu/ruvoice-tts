@@ -102,6 +102,14 @@ class DictCacheTest {
         assertEquals(mapOf("абява" to "аб+ява", "сямя" to "сям+я", "верабі" to "вераб+і", "сталы" to "ст+алы", "пю" to "п+ю"), HashMap(m))
     }
 
+    @Test fun beCacheBeforeDictWordRebuilt() {
+        // userdict-be.bin сборки до Layers.dictWord (апостроф в ключах, в подписи только файлы) не подходит — пересобирается
+        val list = file("be_own.txt", "аб'ява аб'+ява\n")
+        val disk = File(tmp.root, "userdict-be.bin")
+        disk.writeBytes(StressBin.writeStrings("${list.path}|${list.lastModified()}|${list.length()}", mapOf("аб'ява" to "аб'+ява")))
+        assertEquals(mapOf("абява" to "аб+ява"), HashMap(DictCache.stress(listOf(list), disk = disk, lang = "be")))
+    }
+
     @Test fun warmBuildsSnapshotOfItsLanguage() {
         // прогрев после правки у белорусского голоса пересобирает его снимок, а русский не трогает
         val ru = file("warm_ru.txt", "кот = к+от\n"); val be = file("warm_be.txt", "кот = к+от\n")

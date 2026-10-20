@@ -303,7 +303,8 @@ abstract class DictListFragment(layout: Int) : PageFragment(layout) {
         row.clearActions()
         if (list != null) { row.clickLabel(getString(R.string.open_in_list)); return }
         val name = Dicts.name(file)
-        if (!Dicts.isSystem(name)) row.clickLabel(getString(R.string.edit))
+        // у списка только для чтения тап ничего не делает: «Изменить» от строки своего списка не оставляем
+        row.clickLabel(if (Dicts.isSystem(name)) null else getString(R.string.edit))
         // у системного пака строки не убираются: список выключается целиком, слово правится в своём списке
         if (Dicts.packLang(name) == null) row.action(getString(swipeLabel(name))) { shown.getOrNull(position)?.let { deleteLine(it) } }
     }

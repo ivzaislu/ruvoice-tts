@@ -75,8 +75,9 @@ fun View.clearActions() {
     (getTag(R.id.a11y_actions) as? MutableList<Int>)?.let { ids -> for (id in ids) ViewCompat.removeAccessibilityAction(this, id); ids.clear() }
 }
 
-/** Подпись к двойному тапу: «Дважды нажмите, чтобы изменить» вместо безликого «активировать». */
-fun View.clickLabel(label: CharSequence) =
+/** Подпись к двойному тапу: «Дважды нажмите, чтобы изменить» вместо безликого «активировать»; null — снять (строка
+ * списка переиспользуется, и подпись прошлой привязки осталась бы). */
+fun View.clickLabel(label: CharSequence?) =
     ViewCompat.replaceAccessibilityAction(this, AccessibilityActionCompat.ACTION_CLICK, label, null)
 
 /** Чип выбора ударной гласной. Видно: ударная буква заглавной, жирной, цветом акцента и со знаком

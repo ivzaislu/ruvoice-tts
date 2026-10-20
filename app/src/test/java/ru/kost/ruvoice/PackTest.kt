@@ -122,6 +122,21 @@ class PackTest {
         assertFalse(list.exists())
     }
 
+    @Test fun packListFailureKeepsInstall() {
+        // копия не легла (место временного файла занято каталогом) — пак всё равно стоит, недописанного списка нет
+        val json = JSONObject(packJson.toString()).put("id", "cis_be").put("format", 3).put("lang", "be").toString()
+        val list = Dicts.file(filesDir, Dicts.Kind.STRESS, "Системный be")
+        File(list.path + ".tmp", "x").apply { parentFile!!.mkdirs(); writeText("x") }
+        val extras = mapOf(Packs.ACCENTOR to byteArrayOf(1), Packs.STRESS to "сталы +сталы\n".toByteArray())
+        Packs.install(ByteArrayInputStream(zip(json, "tts_mel.ptl", "backbone.pte", "head.ptl", extras = extras)), filesDir)
+        assertNotNull(Packs.find(filesDir, "cis_be"))
+        assertFalse(list.exists())
+        // помеха ушла — следующая сверка список кладёт
+        File(list.path + ".tmp").deleteRecursively()
+        Dicts.syncPacks(filesDir, Packs.installed(filesDir))
+        assertEquals("сталы +сталы\n", list.readText())
+    }
+
     @Test fun installsListsDeletes() {
         File(filesDir, "packs/.tmp-old").mkdirs(); File(filesDir, "packs/.tmp-old/x").writeText("x")
         val p = Packs.install(ByteArrayInputStream(full), filesDir)

@@ -264,8 +264,10 @@ class Prefs(private val context: Context) {
         (prefsMap["audit_dict_names"] as? String)?.let { setAuditDict(Audit.Kind.NAMES, it) }
         (prefsMap["audit_dict_replace"] as? String)?.let { auditReplaceDict = it }
         parsed.audit?.forEach { (k, text) -> Audit.Kind.values().firstOrNull { it.name.equals(k, ignoreCase = true) }?.let { audit.load(it, text) } }
+        // «Системный be» в файле — свой список из версии, где имя было свободно (наш экспорт списков паков не пишет): под свободным именем
         fun write(kind: Dicts.Kind, dicts: Map<String, String>?) = dicts?.forEach { (name, body) ->
-            if (Dicts.validName(name) && Dicts.portable(name)) Dicts.file(context.filesDir, kind, name.trim()).also { it.parentFile!!.mkdirs() }.writeText(body)
+            if (Dicts.validName(name)) Dicts.file(context.filesDir, kind, name.trim().let { if (Dicts.portable(it)) it else Dicts.freeName(context.filesDir, kind, it) })
+                .also { it.parentFile!!.mkdirs() }.writeText(body)
         }
         write(Dicts.Kind.STRESS, parsed.stress); write(Dicts.Kind.REPLACE, parsed.replace)
         // системный из файла — чужой версии и со своими удалёнными: пересобрать по нашей полной копии

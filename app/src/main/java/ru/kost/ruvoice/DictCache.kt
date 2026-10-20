@@ -36,7 +36,8 @@ object DictCache {
         val t = System.nanoTime()
         // Разобранное — ещё и на диске (disk): системный словарь — 100 тыс. строк, ~1,5–2,5 с разбора на A32 в
         // первой фразе после запуска процесса; с диска — mmap и бинарный поиск. Подпись в файле — та же sig.
-        val tag = s.joinToString("\n")
+        // у не-русского в подписи и язык: кэш до Layers.dictWord (апостроф в ключах) иначе подошёл бы к тем же файлам
+        val tag = (if (lang == "ru") "" else "$lang dictWord\n") + s.joinToString("\n")
         disk?.takeIf { it.exists() }?.let { f -> runCatching {
             val (fileTag, map) = StressBin.strings(RandomAccessFile(f, "r").channel.use { it.map(FileChannel.MapMode.READ_ONLY, 0, it.size()) })
             if (fileTag == tag) {

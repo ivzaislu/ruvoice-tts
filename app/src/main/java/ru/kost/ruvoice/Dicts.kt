@@ -1,6 +1,8 @@
 package ru.kost.ruvoice
 
+import android.util.Log
 import java.io.File
+import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.charset.CharacterCodingException
 import java.nio.charset.Charset
@@ -50,7 +52,8 @@ object Dicts {
     fun langOf(name: String): String? = if (name == SYSTEM || name == REMOVED) "ru" else packLang(name)
     /** Списки для голоса на языке [lang]: свои всем, системные — только своему языку. */
     fun forLang(files: List<File>, lang: String) = files.filter { langOf(name(it)).let { l -> l == null || l == lang } }
-    /** Идёт ли список в экспорт настроек и берётся ли из импорта: системные паков — данные пака (CC BY-SA), не наши. */
+    /** Идёт ли список в экспорт настроек: системные паков — данные пака (CC BY-SA), не наши; из импорта такое имя
+     * ложится под свободным (Prefs.importJson). */
     fun portable(name: String) = packLang(name.trim()) == null
     /** Системный список целиком, как в assets: из него Системный.txt пересобирается без удалённых строк. */
     private fun fullFile(root: File, kind: Kind): File = File(dir(root, kind), "$SYSTEM.full")
@@ -102,21 +105,34 @@ object Dicts {
 
     /** Системные списки паков: `Системный <lang>.txt` — копия stress.txt первого по id пака языка (не ru; русским
      * пакам свои поправки ни к чему — у русского свой Системный). Копируем, если копии нет, у источника другой размер
-     * или он новее (переставили пак); списки языков, чей пак удалён, убираем. Свои списки не трогаем. */
-    @Synchronized fun syncPacks(root: File, packs: List<Pack>) {
+     * или он новее (переставили пак); списки языков, чей пак удалён, убираем.
+     * Переписываем и убираем только свои копии — языки в учёте `Системный.packs`. Список пользователя с таким именем
+     * (заведён, пока имя было свободно; любого вида) уходит под свободное имя «Системный be (2)»: иначе копия пака
+     * его перезаписала бы, снятие пака удалило, а пока он зовётся так — он только для чтения и не в экспорте.
+     * Ошибка диска установку и удаление пака не роняет: в журнал; копия через временный файл, прежняя остаётся целой. */
+    @Synchronized fun syncPacks(root: File, packs: List<Pack>) { try {
         val src = packs.filter { it.lang != "ru" }.sortedBy { it.id }
             .mapNotNull { p -> File(p.dir, Packs.STRESS).takeIf { it.isFile }?.let { p.lang to it } }.distinctBy { it.first }.toMap()
-        dir(root, Kind.STRESS).listFiles()?.forEach { f -> if (f.name.endsWith(".txt") && packLang(name(f)).let { it != null && it !in src }) f.delete() }
+        val rec = File(dir(root, Kind.STRESS), "$SYSTEM.packs")
+        val owned = (if (rec.isFile) rec.readLines() else emptyList()).filterTo(HashSet()) { it.isNotEmpty() }
+        for (kind in Kind.values()) for (f in files(root, kind)) {
+            val lang = packLang(name(f)) ?: continue
+            // копия от сборки без учёта — байт в байт stress.txt пака — тоже наша
+            if (kind == Kind.STRESS && (lang in owned || src[lang]?.readBytes()?.contentEquals(f.readBytes()) == true)) owned += lang
+            else if (!f.renameTo(file(root, kind, freeName(root, kind, name(f))))) throw IOException("не переименован ${f.path}")
+        }
+        for (lang in owned - src.keys) if (file(root, Kind.STRESS, packName(lang)).let { !it.exists() || it.delete() }) owned -= lang
         for ((lang, s) in src) {
             val dst = file(root, Kind.STRESS, packName(lang))
+            owned += lang
             if (dst.isFile && dst.length() == s.length() && dst.lastModified() >= s.lastModified()) continue
-            // через временный файл, как DictCache: сервис в это время мог читать прежнюю копию
+            // через временный файл, как DictCache: сервис в это время мог читать прежнюю копию; недописанный — не оставляем
             dst.parentFile!!.mkdirs()
             val tmp = File(dst.path + ".tmp")
-            s.copyTo(tmp, overwrite = true)
-            if (!tmp.renameTo(dst)) tmp.delete()
+            try { s.copyTo(tmp, overwrite = true); if (!tmp.renameTo(dst)) throw IOException("не переименован ${tmp.path}") } finally { tmp.delete() }
         }
-    }
+        rec.parentFile!!.mkdirs(); rec.writeText(owned.joinToString("\n"))
+    } catch (e: Exception) { Log.e(SileroModels.TAG, "списки паков не обновлены", e) } }
 
     /** Однократный переезд со старых user_stress.txt / user_replace.txt в списки «Основной».
      * Если замен не было вовсе — «Основной» с предустановками, как раньше при первом запуске. */
