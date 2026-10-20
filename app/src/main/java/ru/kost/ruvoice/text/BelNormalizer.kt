@@ -202,9 +202,11 @@ object BelNormalizer {
      * «1.10.2» или IP-адреса. */
     private val DECIMAL_RE = Regex("""(?<![\d.,]|\d[ \x{A0}\x{202F}])(\d{1,3}(?:[ \x{A0}\x{202F}]\d{3})+|\d+)[.,](\d+)(?![.,]?\d)""")
 
-    /** Число словами: до 999 999 999, длиннее — по цифрам; с годом — порядковым и в нужном падеже; дробь — [BelNumbers.decimal]. */
-    fun numberWords(text: String): String {
+    /** Число словами: до 999 999 999, длиннее — по цифрам; с годом — порядковым и в нужном падеже; дробь — [BelNumbers.decimal].
+     * Год — правило years, остальное — numbers. */
+    fun numberWords(text: String, rules: Rules = Rules()): String {
         var s = YEAR_RE.replace(text) { m ->
+            if (!rules.on("years")) return@replace m.value
             val n = m.groupValues[1].toLongOrNull() ?: return@replace m.value
             val word = m.groupValues[2].lowercase()
             val form = when (word) {
@@ -214,6 +216,7 @@ object BelNormalizer {
             }
             ordinal(n, form) + " " + word
         }
+        if (!rules.on("numbers")) return s
         // дробь без единицы: «3,14», «1.5»; «12.05» сюда не доходит — его уже прочли датой
         s = DECIMAL_RE.replace(s) { m -> BelNumbers.decimal(m.groupValues[1].filter { it.isDigit() }, m.groupValues[2]) }
         s = DIGIT_GROUP_RE.replace(s) { m ->
@@ -256,11 +259,29 @@ object BelNormalizer {
     private val WS_RE = Regex("\\s+")
     /** Точка сокращения, закрывшая предложение: единица или год за числом («2024 г. Цяпер», «7,5 руб.» в конце текста),
      * «гг.» за «-х» («Пачатак 1990-х гг.»), «і г. д.», «і інш.», «н. э.». Splitter после них не режет, а разворот точку съедает —
-     * ставим за ней вторую, отдельным знаком: она переживает разворот. «г.» за «дд.мм» — горад («15.06 г. Мінск»), регистр — до lowercase. */
+     * ставим за ней вторую, отдельным знаком: она переживает разворот. «г.» за «дд.мм» — горад («15.06 г. Мінск»), регистр — до lowercase.
+     * Вторая точка до конца разворотов — меткой [ABBR_DOT]: сокращение не развернулось (его правило выключено) — точка его
+     * осталась, и метка уходит без следа, иначе было бы «км..». */
     private val ABBR_END_RE = Regex("""(?:(?<=\d-х[ \x{A0}])гг|(?<=\d[ \x{A0}]?|\d-я[ \x{A0}]|(?:тыс|млн|млрд)\.?[ \x{A0}])""" +
         """(?:км/г|тыс|млрд|млн|трлн|руб|кап|км|см|мм|кг|мл|мг|га|шт|гг|(?<!\.\d\d[ \x{A0}]?)г|м|л|т)""" +
         // только там, где [WORD_ABBR] их развернёт: иначе точка осталась бы двойной
         """|(?<=(?<!\p{L})і\s{1,3}г\.\s{0,3})д|(?<=(?<!\p{L})і\s{1,3})інш|(?<=(?<!\p{L})н\.\s{0,3})э)\.(?=\s+\p{Lu}|\s*$)""")
+    /** Символ частной области Unicode. В тексте он бывает разве что значком шрифта — такой [prepare] сразу делает пробелом,
+     * как сделал бы фильтр. */
+    private val ABBR_DOT = Char(0xE000)
+    private val ABBR_DOT_KEPT_RE = Regex("\\.\\s*$ABBR_DOT")
+    /** Омоглифы: латинская буква-двойник в кириллическом слове — опечатка раскладки («cок», «Мiнск»), [Latin] прочёл бы её
+     * латиницей («кок»). Слово меняем, только если вся латиница в нём — двойники и кириллицы не меньше: «файлmicrosoft» и
+     * марку с окончанием «TOYOTAўскі» не трогаем. */
+    private val HOMOGLYPHS = "aceopxyiABCEHIKMOPTXY".zip("асеорхуіАВСЕНІКМОРТХУ").toMap()
+    private val LETTERS_RE = Regex("\\p{L}+")
+    private fun homoglyphs(text: String) = LETTERS_RE.replace(text) { m ->
+        val w = m.value
+        val lat = w.count { it in 'a'..'z' || it in 'A'..'Z' }
+        val cyr = w.count { it in 'а'..'я' || it in 'А'..'Я' || it in "ёіўЁІЎ" }
+        if (lat == 0 || cyr < lat || w.any { (it in 'a'..'z' || it in 'A'..'Z') && it !in HOMOGLYPHS }) w
+        else w.map { HOMOGLYPHS[it] ?: it }.joinToString("")
+    }
     /** Начало фразы до «г.»/«гг.»: предлог и год (или два года, или десятилетие на «-х») — «У 1941 », «З 1941–1945 »,
      * «У 1990-х », «У 90-х ». Не «Нарадзіўся ў 1990 г. Яго…»: там слова перед предлогом, и это конец предложения. */
     private val YEAR_LEAD_RE = Regex("""\P{L}*(?:у|ў|з|да|ад|па|пасля|каля|перад)\s+(?:\d{4}(?:\s*[–—-]\s*\d{4})?|\d{2,4}-х)[ \x{A0}]?""",
@@ -283,34 +304,43 @@ object BelNormalizer {
     /** Скобки — пауза запятой (pause_parens, как у русского); кавычки — без паузы, их выкидывает фильтр. */
     private val PARENS_RE = Regex("[()\\[\\]]")
 
-    /** Итоговая подготовка: латиница, числа, знаки, фильтр по таблице символов модели. */
+    /** Итоговая подготовка: латиница, числа, знаки, фильтр по таблице символов модели. Чтение — под ключами [Rules], теми же,
+     * что у русского слоя (их нет у слоя в [BeLayer.unsupported]); служебное (знак ударения, невидимые символы, регистр,
+     * апостроф, «!», «+» не перед гласной, фильтр) — всегда. */
     fun prepare(text: String, allowed: String, rules: Rules = Rules()): String {
-        var s = COMBINING_ACUTE_RE.replace(text) { "+" + it.groupValues[1] }.replace(ZERO_WIDTH_RE, "")
+        var s = COMBINING_ACUTE_RE.replace(text) { "+" + it.groupValues[1] }.replace(ZERO_WIDTH_RE, "").replace(ABBR_DOT, ' ')
+        fun step(key: String, f: (String) -> String) { if (rules.on(key)) s = f(s) }
+        // «·», «→» между словами — пауза: при symbol_names (у чтеца — sr_symbols) Splitter их оставляет, а имён знаков у
+        // белорусского нет, ключ скрыт ([BeLayer.unsupported])
+        s = Normalizer.symbolPauses(s)
         s = OTHER_DIGIT_RE.replace(s) { Character.digit(it.value.codePointAt(0), 10).toString() }
         // «°C» латиницей — до Latin, иначе она делает из «C» «к» и единица не находится
         s = CELSIUS_RE.replace(s, "°с")
-        s = BYN_RE.replace(s, " руб")                 // «1,20 BYN» — рубли единицей, а не «бэ-уай-эн»; тоже до Latin
-        s = BelNumbers.roman(s)                       // «XX стагоддзе» — до Latin, иначе «экс-экс»
+        step("currency") { BYN_RE.replace(it, " руб") }   // «1,20 BYN» — рубли единицей, а не «бэ-уай-эн»; тоже до Latin
+        s = BelNumbers.roman(s, rules)                // «XX стагоддзе» — до Latin, иначе «экс-экс»
+        step("homoglyphs", ::homoglyphs)              // «cок» латинской «c» — до Latin, иначе «кок»
         // латиницы в таблице символов модели нет вовсе — «FilmBell» раньше просто выпадало
+        step("latin") { Latin.translate(it, rules) }
         // точка сокращения в конце предложения — после латиницы («5kg.» — уже «5 кг.»), но до lowercase
-        val lat = Latin.translate(s)
+        val lat = s
         s = ABBR_END_RE.replace(lat) { m ->
             // «У 1941 г. Германія…»: перед годом только предлог — середина предложения, не конец
             val mid = m.value.startsWith("г") && lat.substring(m.range.last + 1).isNotBlank() && YEAR_LEAD_RE.matches(lat.substring(0, m.range.first))
-            if (mid) m.value else m.value + " ."
+            if (mid) m.value else "${m.value} $ABBR_DOT"
         }.lowercase()
         s = s.replace(APOSTROPHE, "")
-        for ((re, rep) in WORD_ABBR) s = re.replace(s, rep)    // до «г.» — «горад» и до года
-        s = MINUS_NUMBER_RE.replace(PLUS_NUMBER_RE.replace(s, " плюс "), " мінус ")
-        s = phones(s)
+        step("abbrev") { WORD_ABBR.fold(it) { t, (re, rep) -> re.replace(t, rep) } }   // до «г.» — «горад» и до года
+        step("numbers") { MINUS_NUMBER_RE.replace(PLUS_NUMBER_RE.replace(it, " плюс "), " мінус ") }
+        step("phones", ::phones)
         // даты и время — до единиц: у них внутри цифры со знаками (12.05.2026, 21:30); время раньше: «а 10.05» — не дата
-        s = BelNumbers.times(s)
-        s = BelNumbers.dates(s)
-        s = BelNumbers.ordinals(s)                    // «1-га верасня», «5-ы клас», «1990-я»
-        s = BelNumbers.abbreviations(s)               // «1999 г.» → «1999 год»
-        s = BelNumbers.units(s)                       // «3 км» → «тры кіламетры»
-        s = BelNumbers.standalone(s)                  // «руб.» без числа
-        s = numberWords(s)
+        step("times", BelNumbers::times)
+        s = BelNumbers.dates(s, rules)
+        s = BelNumbers.ordinals(s, rules)             // «1-га верасня», «5-ы клас», «1990-я»
+        step("years", BelNumbers::abbreviations)      // «1999 г.» → «1999 год»
+        s = BelNumbers.units(s, rules)                // «3 км» → «тры кіламетры»
+        s = BelNumbers.standalone(s, rules)           // «руб.» без числа
+        s = numberWords(s, rules)
+        s = ABBR_DOT_KEPT_RE.replace(s, ".").replace(ABBR_DOT, '.')
         s = QUEST_EXCL_RE.replace(s, "?").replace('!', '.')   // «!» модель не получает (служебный символ)
         if (rules.on("pause_parens")) s = PARENS_RE.replace(s, ", ")
         // тире — то, что знает модель: у cis-пака только «—», а Splitter делает из « - » «–»; на «—» и пауза тире

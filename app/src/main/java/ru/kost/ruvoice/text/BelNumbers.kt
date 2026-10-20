@@ -54,8 +54,8 @@ object BelNumbers {
     /** 12.05.2026 → «дванаццатага мая дзве тысячы дваццаць шостага года»; 3.09 → «трэцяга верасня».
      * Без года — только «дд.мм» через точку: «1.5 кг», «1/2 шклянкі», «24/7» — не даты, их читают числа.
      * Первая группа у всех трёх — «па» перед датой: день тогда вінавальны ніякага роду, «з 1 па 5 мая» → «з першага па
-     * пятае мая» (не проверено носителем). */
-    fun dates(text: String): String {
+     * пятае мая» (не проверено носителем). Цифровые даты — правило dates, месяц словом и диапазон дней — day_month. */
+    fun dates(text: String, rules: Rules = Rules()): String {
         fun date(m: MatchResult, dRaw: String, moRaw: String, yearRaw: String): String {
             val d = dRaw.toInt(); val mo = moRaw.toInt()
             if (d !in 1..31 || mo !in 1..12) return m.value
@@ -70,8 +70,12 @@ object BelNumbers {
             }
             return sb.toString()
         }
-        var s = DATE.replace(text) { m -> date(m, m.groupValues[2], m.groupValues[4], m.groupValues[5]) }
-        s = DAY_MONTH.replace(s) { m -> date(m, m.groupValues[2], m.groupValues[3], "") }
+        var s = text
+        if (rules.on("dates")) {
+            s = DATE.replace(s) { m -> date(m, m.groupValues[2], m.groupValues[4], m.groupValues[5]) }
+            s = DAY_MONTH.replace(s) { m -> date(m, m.groupValues[2], m.groupValues[3], "") }
+        }
+        if (!rules.on("day_month")) return s
         // первый день диапазона — тем же родительным: «15-16 мая» → «пятнаццатага — шаснаццатага мая», «з 1 па 5 мая»
         s = DAY_RANGE.replace(s) { m ->
             val d = m.groupValues[1].toLong()
@@ -160,17 +164,31 @@ object BelNumbers {
 
     /** «3 км» → «тры кіламетры», «5 %» → «пяць працэнтаў», «2 руб.» → «два рублі», «2 т» → «дзве тоны»;
      * «1,5 кг» → «адзін коска пяць кілаграма» ([decimal]). Валюта перед числом — как после: «$65 000» → «… долараў».
-     * Единица после «тыс.», «млн», «млрд» — родны мн.: «1,2 тыс. км» → «… тысячы кіламетраў». */
-    fun units(text: String): String = MULT_UNIT.replace(NUMBER_UNIT.replace(currencyAfter(text)) { m ->
+     * Единица после «тыс.», «млн», «млрд» — родны мн.: «1,2 тыс. км» → «… тысячы кіламетраў».
+     * Каждая единица — под своим правилом ([unitKey]), перенос валюты вперёд — под currency. */
+    fun units(text: String, rules: Rules = Rules()): String = MULT_UNIT.replace(NUMBER_UNIT.replace(if (rules.on("currency")) currencyAfter(text) else text) { m ->
         val raw = m.groupValues[1].replace("\u00A0", "").replace(" ", "")
         val n = raw.toLongOrNull() ?: return@replace m.value
         val rest = m.groupValues[3].lowercase()
-        val u = UNITS[rest] ?: return@replace m.value
+        val u = UNITS[rest]?.takeIf { rules.on(unitKey(rest)) } ?: return@replace m.value
         if (m.groupValues[2].isNotEmpty()) return@replace "${decimal(raw, m.groupValues[2])} ${UNITS_FRAC[rest] ?: u.third}"
         // единицы женского рода: «дзве тоны», «дзве капейкі», «дзве штукі», «дзве тысячы», а не «два»
         val num = if (rest in FEM_UNITS) BelNormalizer.cardinalFem(n) else BelNormalizer.cardinal(n)
         "$num ${plural(n, u.first, u.second, u.third)}"
-    }) { m -> UNITS[m.groupValues[2].lowercase()]?.let { "${m.groupValues[1]} ${it.third}" } ?: m.value }
+    }) { m ->
+        val k = m.groupValues[2].lowercase()
+        UNITS[k]?.takeIf { rules.on(unitKey(k)) }?.let { "${m.groupValues[1]} ${it.third}" } ?: m.value
+    }
+
+    /** Правило «Правил» для единицы (ключ [UNITS]): деньги — currency, «°с» — degrees, «тыс.», «млн» — abbrev, «%» —
+     * numbers, прочее — units. Те же ключи, что у русского нормализатора. */
+    fun unitKey(u: String) = when (u) {
+        "руб", "кап", "₽", "$", "€" -> "currency"
+        "°с" -> "degrees"
+        "тыс", "млн", "млрд", "трлн" -> "abbrev"
+        "%" -> "numbers"
+        else -> "units"
+    }
 
     /** «$5» → «5 $» ([CURRENCY_BEFORE]) с пробелом впереди: «US$5» — не «у-эспяць», «$1,$2» — число не за запятой
      * ([NUMBER_UNIT]). После дефиса или тире за цифрой — без пробела: «$5-$10» — не «долараў- дзесяць». */
@@ -193,10 +211,12 @@ object BelNumbers {
      * только четырёхзначное, кроме 1000: «10-я кніга» не трогаем, «у 2000-я» — «двухтысячныя», 1000 — ж. р. («1000-я
      * старонка» → «тысячная»). «2-х»…«4-х» — количественное: «двух», «трох», «чатырох» (род не знаем, «дзвюх» не
      * бывает). «-й» — русский суффикс: число без него («2-й» → «два»). Прочее («5-я» — «пятая»?, «5-х») не трогаем. Не проверено носителем. */
-    fun ordinals(text: String): String = ORD_SUFFIX.replace(text) { m ->
+    fun ordinals(text: String, rules: Rules = Rules()): String = ORD_SUFFIX.replace(text) { m ->
         val raw = m.groupValues[1]
         val n = raw.toLongOrNull() ?: return@replace m.value
         val sfx = m.groupValues[2].lowercase()
+        // «2-х»…«4-х» — правило gen_suffix, остальные суффиксы — numbers
+        if (!rules.on(if (sfx == "х" && n in 2..4) "gen_suffix" else "numbers")) return@replace m.value
         val decade = n % 10 == 0L && (raw.length == 2 || raw.length == 4)
         val thousand = n == 1000L
         when {
@@ -218,11 +238,11 @@ object BelNumbers {
      * тоже: так часто набирают. «ст.», «стст.» — тоже стагоддзе, падеж по предлогу, как у года: «у XX ст.» → «у
      * дваццатым стагоддзі», «XIX–XX стст.» → «дзевятнаццатае — дваццатае стагоддзі». После имени с заглавной — порядковое
      * имени: «Пётр I» → «пётр першы», «Кацярына II» → «… другая». Остальную латиницу не трогаем. Средний род, «ст.»,
-     * род по имени — не проверено носителем. */
-    fun roman(text: String): String {
+     * род по имени — не проверено носителем. Век — правило roman, после имени — roman_name. */
+    fun roman(text: String, rules: Rules = Rules()): String {
         var s = ROMAN.replace(text) { m ->
             // кириллическое «І» одно — союз: «І веку не хапіла»
-            if (m.groupValues[1] == "І") return@replace m.value
+            if (m.groupValues[1] == "І" || !rules.on("roman")) return@replace m.value
             val n = romanValue(m.groupValues[1])
             val noun = m.groupValues[2]
             val word = when (noun.lowercase()) {
@@ -236,7 +256,7 @@ object BelNumbers {
         val st = s
         s = ROMAN_ST.replace(st) { m ->
             val nums = listOf(m.groupValues[2], m.groupValues[4]).filter { it.isNotEmpty() }
-            if (nums == listOf("І")) return@replace m.value
+            if (nums == listOf("І") || !rules.on("roman")) return@replace m.value
             // без предлога I–IV — скорее ступень («ордэн … II ст.», «Дыплом I ст.»): не трогаем; с «н. э.» за ним — век
             // («Курган III ст. да н. э.»)
             if (m.groupValues[1].isEmpty() && m.groupValues[7].isEmpty() && nums.all { romanValue(it) <= 4 }) return@replace m.value
@@ -271,7 +291,7 @@ object BelNumbers {
             val name = m.groupValues[1]
             val r = m.groupValues[2]
             val next = m.groupValues[3]
-            if (name in NOT_NAMES) return@replace m.value
+            if (name in NOT_NAMES || !rules.on("roman_name")) return@replace m.value
             if (r.length == 1 && (r[0] !in "IІ" || name.last().code < 128 ||
                     r == "І" && (next == "." || next.lastOrNull()?.isUpperCase() == true)))
                 return@replace m.value
@@ -358,19 +378,22 @@ object BelNumbers {
     private val GG_GEN = Regex("""(?<!\p{L})(\p{L}+ых\s+)гг\.?""", RegexOption.IGNORE_CASE)
 
     /** Сокращение без числа: «руб.» после «5 тыс.» или «г.» перед названием города. Только отдельным словом:
-     * «капуста», «рубель» и уже развёрнутое единицами «два рублі» не трогаем. */
-    fun standalone(text: String): String = STANDALONE.fold(text) { s, (re, rep) -> re.replace(s, rep) }
+     * «капуста», «рубель» и уже развёрнутое единицами «два рублі» не трогаем. «г.» — правило abbrev, единицы — правилом
+     * единицы ([unitKey]): иначе с выключенной валютой «5 руб.» читалось бы здесь «пяць рублёў». */
+    fun standalone(text: String, rules: Rules = Rules()): String =
+        STANDALONE.fold(text) { s, (re, rep, key) -> if (rules.on(key)) re.replace(s, rep) else s }
 
     private val STANDALONE = listOf(
-        Regex("""(?<!\p{L})г\.(?=\s)""") to "горад ",
+        // за числом «г.» — граммы или год, не горад: «100 г.» с выключенными единицами остаётся как есть
+        Triple(Regex("""(?<!\p{L})(?<!\d\s?)г\.(?=\s)"""), "горад ", "abbrev"),
         // «цана ў руб.» — месны мн.; не проверено носителем
-        Regex("""(?<!\p{L})([уў])\s+руб\.?(?!\p{L})""") to "$1 рублях",
-        Regex("""(?<![\p{L}\d])руб\.?(?!\p{L})""") to "рублёў",
-        Regex("""(?<![\p{L}\d])кап\.?(?!\p{L})""") to "капеек",
-        Regex("""(?<![\p{L}\d])тыс\.(?!\p{L})""") to "тысяч",
-        Regex("""(?<![\p{L}\d])млрд(?!\p{L})""") to "мільярдаў",
-        Regex("""(?<![\p{L}\d])млн(?!\p{L})""") to "мільёнаў",
-        Regex("""(?<![\p{L}\d])шт\.(?!\p{L})""") to "штук")
+        Triple(Regex("""(?<!\p{L})([уў])\s+руб\.?(?!\p{L})"""), "$1 рублях", unitKey("руб")),
+        Triple(Regex("""(?<![\p{L}\d])руб\.?(?!\p{L})"""), "рублёў", unitKey("руб")),
+        Triple(Regex("""(?<![\p{L}\d])кап\.?(?!\p{L})"""), "капеек", unitKey("кап")),
+        Triple(Regex("""(?<![\p{L}\d])тыс\.(?!\p{L})"""), "тысяч", unitKey("тыс")),
+        Triple(Regex("""(?<![\p{L}\d])млрд(?!\p{L})"""), "мільярдаў", unitKey("млрд")),
+        Triple(Regex("""(?<![\p{L}\d])млн(?!\p{L})"""), "мільёнаў", unitKey("млн")),
+        Triple(Regex("""(?<![\p{L}\d])шт\.(?!\p{L})"""), "штук", unitKey("шт")))
 
     /** С годом: «12.05.2026», «12/05/26»; не после цифры и знака — иначе кусок большого числа. Хвост «г.» съедаем:
      * «года» дата уже говорит, иначе «…года горад». */
