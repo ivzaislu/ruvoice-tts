@@ -348,11 +348,15 @@ abstract class DictListFragment(layout: Int) : PageFragment(layout) {
         val handler = Handler(Looper.getMainLooper())
         val show = Runnable { row.visibility = View.VISIBLE }
         handler.postDelayed(show, 150)
-        DictCache.warm(prefs.enabledDictFiles(kind), kind,
+        // снимок языка голоса, которым читает сервис (пустой или удалённый голос — по умолчанию): у белорусского свой,
+        // без системных списков
+        val packs = Packs.installed(v.context.filesDir)
+        val lang = Speaker.currentName(prefs.voice, SileroModels.speakers(v.context), packs)?.let { Speaker.lang(it, packs) } ?: "ru"
+        DictCache.warm(prefs.langDictFiles(kind, lang), kind,
             // фрагмент могли закрыть, пока грелось — getString без контекста упадёт
             { pct -> handler.post { if (isAdded) { bar.progress = pct; text.text = getString(R.string.dict_cache, pct) } } },
             { handler.post { handler.removeCallbacks(show); row.visibility = View.GONE } },
-            if (kind == Dicts.Kind.REPLACE) prefs.enabledDictFiles(Dicts.Kind.STRESS) else emptyList())
+            if (kind == Dicts.Kind.REPLACE) prefs.langDictFiles(Dicts.Kind.STRESS, lang) else emptyList(), lang)
     }
 
     // ---- меню списка ----

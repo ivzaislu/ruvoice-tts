@@ -14,19 +14,24 @@ import ru.kost.ruvoice.text.Replacements
  */
 object DictCache {
     private class Snap<T>(val sig: List<String>, val value: T)
-    @Volatile private var stressSnap: Snap<Map<String, String>>? = null
-    @Volatile private var replaceSnap: Snap<Replacements>? = null
+    // снимок на язык голоса: у не-русского набор файлов без системных, и чередование языков не пересобирало бы
+    // русский (замены — до 0,7 с на A32); под замками ниже
+    private val stressSnaps = HashMap<String, Snap<Map<String, String>>>()
+    private val replaceSnaps = HashMap<String, Snap<Replacements>>()
 
     private fun sig(files: List<File>) = files.map { "${it.path}|${it.lastModified()}|${it.length()}" }
+
+    /** Файл разобранных ударений в cacheDir: у русского имя прежнее — кэш после обновления не пересобирается. */
+    fun diskName(lang: String) = if (lang == "ru") "userdict.bin" else "userdict-$lang.bin"
 
     // у ударений и замен свои замки: прогрев сервиса разбирает их параллельно
     private val stressLock = Any()
     private val replaceLock = Any()
 
     /** Слияние включённых списков ударений: при одинаковом слове побеждает более поздний файл. */
-    fun stress(files: List<File>, onProgress: ((Int) -> Unit)? = null, disk: File? = null): Map<String, String> = synchronized(stressLock) {
+    fun stress(files: List<File>, onProgress: ((Int) -> Unit)? = null, disk: File? = null, lang: String = "ru"): Map<String, String> = synchronized(stressLock) {
         val s = sig(files)
-        stressSnap?.takeIf { it.sig == s }?.let { return it.value }
+        stressSnaps[lang]?.takeIf { it.sig == s }?.let { return it.value }
         val t = System.nanoTime()
         // Разобранное — ещё и на диске (disk): системный словарь — 100 тыс. строк, ~1,5–2,5 с разбора на A32 в
         // первой фразе после запуска процесса; с диска — mmap и бинарный поиск. Подпись в файле — та же sig.
@@ -36,7 +41,7 @@ object DictCache {
             if (fileTag == tag) {
                 android.util.Log.i("RuVoice", "словари ударений с диска: ${map.size} слов, ${(System.nanoTime() - t) / 1_000_000} мс")
                 onProgress?.invoke(100)
-                return map.also { stressSnap = Snap(s, it) }
+                return map.also { stressSnaps[lang] = Snap(s, it) }
             }
         } }
         val lines = files.flatMap { it.readLines() }
@@ -49,7 +54,7 @@ object DictCache {
         onProgress?.invoke(100)
         android.util.Log.i("RuVoice", "словари ударений: ${lines.size} строк, ${(System.nanoTime() - t) / 1_000_000} мс")
         disk?.let { f -> runCatching { File(f.path + ".tmp").apply { writeBytes(StressBin.writeStrings(tag, map)) }.renameTo(f) } }
-        return map.also { stressSnap = Snap(s, it) }
+        return map.also { stressSnaps[lang] = Snap(s, it) }
     }
 
     private val wordRe = Regex("[\\p{L}\\d]+")
@@ -69,9 +74,9 @@ object DictCache {
      * stress — включённые списки ударений: строка системных замен, в ключе которой слово из своего списка ударений
      * или своей однословной замены, выбрасывается — иначе «потом = п+отом» ставит «+», и словарь ударений слово
      * пропускает, а длинная системная фраза срабатывает раньше короткой своей замены. */
-    fun replacements(files: List<File>, onProgress: ((Int) -> Unit)? = null, stress: List<File> = emptyList()): Replacements = synchronized(replaceLock) {
+    fun replacements(files: List<File>, onProgress: ((Int) -> Unit)? = null, stress: List<File> = emptyList(), lang: String = "ru"): Replacements = synchronized(replaceLock) {
         val s = sig(files) + sig(stress)
-        replaceSnap?.takeIf { it.sig == s }?.let { return it.value }
+        replaceSnaps[lang]?.takeIf { it.sig == s }?.let { return it.value }
         // 62k строк: ~80 мс чтение + ~350–700 мс разбор на среднем телефоне (аллокации на ART)
         val t = System.nanoTime()
         val user = userWords(files, stress)
@@ -84,14 +89,15 @@ object DictCache {
         }
         val r = Replacements.parse(lines, onProgress?.let { cb -> { done -> cb(if (lines.isEmpty()) 100 else done * 100 / lines.size) } })
         android.util.Log.i("RuVoice", "словари замен: ${lines.size} строк, ${(System.nanoTime() - t) / 1_000_000} мс")
-        return r.also { replaceSnap = Snap(s, it) }
+        return r.also { replaceSnaps[lang] = Snap(s, it) }
     }
 
-    /** Пересобрать снимок в фоне; колбэки зовутся из фонового потока. Возвращает поток —
+    /** Пересобрать снимок языка [lang] в фоне; колбэки зовутся из фонового потока. Возвращает поток —
      * тестам есть что join-ить, UI это не нужно. */
-    fun warm(files: List<File>, kind: Dicts.Kind, onProgress: (Int) -> Unit, onDone: () -> Unit, stressFiles: List<File> = emptyList()): Thread =
+    fun warm(files: List<File>, kind: Dicts.Kind, onProgress: (Int) -> Unit, onDone: () -> Unit, stressFiles: List<File> = emptyList(),
+             lang: String = "ru"): Thread =
         Thread {
-            try { if (kind == Dicts.Kind.STRESS) stress(files, onProgress) else replacements(files, onProgress, stressFiles) }
+            try { if (kind == Dicts.Kind.STRESS) stress(files, onProgress, lang = lang) else replacements(files, onProgress, stressFiles, lang) }
             catch (e: Exception) { /* битый файл — сервис получит то же исключение при синтезе, тут молчим */ }
             onDone()
         }.apply { start() }

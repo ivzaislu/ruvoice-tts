@@ -41,6 +41,7 @@
     <string name="audit_scan_pick">Выбрать файл</string>
     <string name="audit_scan_help">Файл книги (txt, fb2, fb2.zip, epub) читается без озвучки, имена собираются так же, как при чтении вслух: слова с заглавной буквы не в начале предложения, в которых хотя бы две гласные.\n\nНе берутся слова, которые модель и так знает: из её словарей и таблицы морфологии (Паук, Верхушка, Москва), из ваших списков ударений, включая системный, и уже скрытые здесь свайпом. Ударение в каждом имени такое, как его угадала модель, проверять на слух.\n\nСобранное добавляется к списку, не заменяя его, всего до двух тысяч записей. Ход разбора показывается в процентах; его можно прервать, собранное до этого места останется.</string>
     <string name="audit_scan_done">Новых имён: %d</string>
+    <string name="audit_scan_not_ru">Имена из книги собираются только для русских голосов: словари и правила проверки русские. Выберите русский голос на вкладке «Голос».</string>
     <string name="accent_book">Книга с ударениями</string>
     <string name="accent_book_caption">Расстановка ударений по всей книге</string>
     <string name="accent_book_go">Книга с ударениями…</string>
@@ -260,7 +261,8 @@
     <!-- Паки голосов -->
     <string name="voice_packs">Дополнительные голоса…</string>
     <string name="packs_title">Дополнительные голоса</string>
-    <string name="packs_hint">Пак — zip-файл с моделью Silero и её голосами (80–85 МБ). Голоса пака появляются в списке на вкладке «Голос». У паков с другими моделями (например, cis_ru) нет интонации вопросов и восклицаний и логического ударения.\n\nПаки лежат в отдельном релизе «Паки голосов»:\nhttps://github.com/kost-t-human/ruvoice-tts/releases/tag/packs</string>
+    <string name="packs_hint">Пак — zip-файл с моделью Silero и её голосами (80–95 МБ). Голоса пака появляются в списке на вкладке «Голос». У паков с другими моделями (например, cis_ru) нет интонации вопросов и восклицаний и логического ударения. В белорусском паке (cis_be) вопрос и восклицание приложение делает само, повышением тона.\n\nПаки лежат в отдельном релизе «Паки голосов»:\nhttps://github.com/kost-t-human/ruvoice-tts/releases/tag/packs</string>
+    <string name="pack_lang">язык: %1$s</string>
     <string name="packs_none">Голосов нет: в этой версии приложения модель не встроена. Установите пак ruvoice-pack-ru.zip (штатные голоса, около 85 МБ) или любой другой пак.</string>
     <string name="packs_install">Установить из файла…</string>
     <string name="packs_installing">Установка пака…</string>
@@ -530,6 +532,8 @@
     <string name="err_pack_format">Пак собран для другой версии приложения (формат %1$s)</string>
     <string name="err_not_pack">Это не пак RuVoice</string>
     <string name="err_pack_no_voices">В паке нет голосов</string>
+    <string name="err_pack_lang">Язык пака «%1$s» эта версия приложения не знает</string>
+    <string name="err_pack_accentor">В паке на языке «%1$s» нет акцентора (accentor.ptl)</string>
     <string name="err_pack_move">Не удалось установить пак: нет места или нет доступа к памяти</string>
     <string name="err_settings_json">Файл повреждён или это не JSON: %1$s</string>
     <string name="err_not_settings">Это не файл настроек RuVoice TTS</string>

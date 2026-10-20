@@ -2,6 +2,8 @@ package ru.kost.ruvoice
 
 import android.util.Log
 import org.json.JSONObject
+import ru.kost.ruvoice.text.BelNormalizer
+import ru.kost.ruvoice.text.Layers
 import java.io.EOFException
 import java.io.File
 import java.io.IOException
@@ -10,7 +12,9 @@ import java.util.zip.ZipException
 import java.util.zip.ZipInputStream
 
 /** Пак голосов: `filesDir/packs/<id>/{pack.json, tts_mel.ptl, backbone.pte, head.ptl}` — та же нарезка,
- * что у штатной модели в assets. Формат — спека 2026-09-18. */
+ * что у штатной модели в assets. Формат — спека 2026-09-18; сверху (по желанию) два файла языка:
+ * `accentor.ptl` — акцентор этого языка и `stress.txt` — поправки ударений (слово → слово с «+»; только языкам
+ * не ru, см. [corrections]). */
 class Pack(json: String, val dir: File) {
     val id: String
     val title: String
@@ -23,11 +27,32 @@ class Pack(json: String, val dir: File) {
     val bases: Map<String, String>
     /** forward с type_ids и focus_mask (13 аргументов, v5_5_ru); false — 11, как у v5_ru и cis. */
     val types: Boolean
-    val size: Long get() = Packs.MODEL_FILES.sumOf { File(dir, it).length() }
+    /** Язык текста пака: `ru` (умолчание — у старых паков поля нет), `be` и другие коды CIS-модели. */
+    val lang: String
+    /** Поле `format` (Packs.FORMATS): пак не на русском ставится только с 3. */
+    val format: Int
+    /** Голос пака по умолчанию (поле `default`): его система получает, когда просит язык пака. null — поля нет. */
+    val defaultVoice: String?
+    /** Акцентор лежит в самом паке: тогда язык читается своим акцентором, а не штатным русским. */
+    val accentor: Boolean get() = File(dir, Packs.ACCENTOR).isFile
+    /** Поправки ударений пака: слово → слово с «+»; пусто — пак их не принёс. Действуют только у языков не ru
+     * (слой со своим stress, BelStress): у русского RuLayer.stress == null, его конвейер Stress поправок пака не читает.
+     * Апостроф («аб'ява») убираем с обеих сторон: BelNormalizer снимает его до ударений, и слово с ним не нашлось бы. */
+    val corrections: Map<String, String> by lazy {
+        val f = File(dir, Packs.STRESS)
+        // BelNormalizer — только когда поправки есть: русские паки на первой фразе его не инициализируют
+        if (!f.isFile) emptyMap() else HashMap<String, String>().also { out ->
+            val apo = BelNormalizer.APOSTROPHE
+            f.forEachLine { line -> DictLines.parseStress(line)?.let { (w, v) -> out[w.lowercase().replace(apo, "")] = v.replace(apo, "") } }
+        }
+    }
+    /** Место на диске: все файлы пака, с акцентором и поправками. */
+    val size: Long get() = dir.listFiles()?.sumOf { it.length() } ?: 0L
 
     init {
         val o = JSONObject(json)
-        if (o.optInt("format") != Packs.FORMAT) o.optString("format").let { throw UserError("Пак собран для другой версии приложения (формат $it)", R.string.err_pack_format, it) }
+        format = o.optInt("format")
+        if (format !in Packs.FORMATS) o.optString("format").let { throw UserError("Пак собран для другой версии приложения (формат $it)", R.string.err_pack_format, it) }
         id = o.getString("id")
         require(Packs.ID_RE.matches(id)) { "Недопустимый id пака: $id" }
         title = o.optString("title", id); license = o.optString("license", ""); source = o.optString("source", "")
@@ -35,13 +60,21 @@ class Pack(json: String, val dir: File) {
         speakers = o.getJSONObject("speakers").let { j -> j.keys().asSequence().associateWith { j.getInt(it) } }
         if (speakers.isEmpty()) throw UserError("В паке нет голосов", R.string.err_pack_no_voices)
         types = o.optBoolean("types", false)
+        lang = o.optString("lang", "ru").lowercase()
+        defaultVoice = o.optString("default").takeIf { it in speakers }
         bases = o.optJSONObject("bases")?.let { j -> j.keys().asSequence().associateWith { j.getString(it) } } ?: emptyMap()
     }
 }
 
 object Packs {
-    const val FORMAT = 2
+    /** 3 — пак не на русском (поле lang): приложения до него такой пак не примут и не станут читать его по-русски. */
+    val FORMATS = 2..3
     val MODEL_FILES = listOf("tts_mel.ptl", "backbone.pte", "head.ptl")
+    /** Файлы языка в паке: нужны не всем, поэтому необязательные. */
+    const val ACCENTOR = "accentor.ptl"
+    const val STRESS = "stress.txt"
+    /** Необязательные файлы пака: копируем, если пришли; обязательными не считаем. */
+    private val EXTRA_FILES = listOf(ACCENTOR, STRESS)
     val ID_RE = Regex("[a-z0-9_]{1,40}")
     const val NOT_A_PACK = "Это не пак RuVoice"
     private fun notAPack(cause: Throwable? = null) = UserError(NOT_A_PACK, R.string.err_not_pack, cause = cause)
@@ -88,7 +121,7 @@ object Packs {
                         val e = z.nextEntry ?: break
                         when (e.name) {
                             "pack.json" -> json = z.readBytes().decodeToString()
-                            in MODEL_FILES -> File(tmp, e.name).outputStream().use { z.copyTo(it) }
+                            in MODEL_FILES, in EXTRA_FILES -> File(tmp, e.name).outputStream().use { z.copyTo(it) }
                         }
                         z.closeEntry()
                     }
@@ -101,6 +134,11 @@ object Packs {
             val text = json ?: throw notAPack()
             if (MODEL_FILES.any { !File(tmp, it).isFile }) throw notAPack()
             val pack = try { Pack(text, tmp) } catch (e: IllegalArgumentException) { throw e } catch (e: Exception) { throw notAPack() }
+            // язык без своего слоя читался бы русским нормализатором, а без своего акцентора — русским акцентором
+            if (!Layers.has(pack.lang)) throw UserError("Язык пака «${pack.lang}» приложение не знает", R.string.err_pack_lang, pack.lang)
+            // формат 2 приложения до 1.1 принимают и читали бы такой пак русским слоем: не на русском — только 3
+            if (pack.lang != "ru" && pack.format < 3) throw UserError("Пак собран для другой версии приложения (формат ${pack.format})", R.string.err_pack_format, pack.format.toString())
+            if (pack.lang != "ru" && !pack.accentor) throw UserError("В паке на языке «${pack.lang}» нет акцентора $ACCENTOR", R.string.err_pack_accentor, pack.lang)
             File(tmp, "pack.json").writeText(text)
             val dest = File(packs, pack.id)
             if (dest.exists()) dest.deleteRecursively()

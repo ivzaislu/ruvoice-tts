@@ -1,6 +1,7 @@
 package ru.kost.ruvoice.text
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 import ru.kost.ruvoice.TestData
 
@@ -27,5 +28,15 @@ class SentenceTypeTest {
 
     @Test fun orInsideWordIsNotAlternative() {
         assertEquals("general_q", SentenceType.classify("Ты пилила доску?", d))
+    }
+
+    @Test fun russianHasNoBelarusianQuestionRules() {
+        // notWhRe — только белорусский: у русских данных его нет, типы как до него
+        assertNull(d.notWhRe)
+        assertEquals("wh_q", SentenceType.classify("Знаешь ли ты, что завтра праздник?", d))
+        assertEquals("wh_q", SentenceType.classify("Скажите, пожалуйста, как пройти к вокзалу?", d))
+        assertEquals("wh_q", SentenceType.classify("А когда ты придёшь?", d))
+        assertEquals("general_q", SentenceType.classify("Ну ты придёшь?", d))
+        assertEquals("alternative_q", SentenceType.classify("А чай или кофе?", d))
     }
 }

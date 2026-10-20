@@ -123,7 +123,11 @@ class AuditFragment : PageFragment(R.layout.fragment_audit) {
         sortAlpha.setOnClickListener { prefs.auditSortAlpha = !prefs.auditSortAlpha; tintSort(); refresh() }
         v.findViewById<View>(R.id.scan).setOnClickListener {
             bodyDialog(R.string.audit_scan, getString(R.string.audit_scan_help), emptyList(),
-                R.string.cancel to {}, R.string.audit_scan_pick to { scanLauncher.launch(arrayOf("*/*")) },
+                R.string.cancel to {}, R.string.audit_scan_pick to {
+                    // имена ищутся по русским словарям и морфологии: голосу другого языка собирать нечем
+                    if (voiceLang(requireContext()) != "ru") Snackbar.make(requireView(), R.string.audit_scan_not_ru, Snackbar.LENGTH_LONG).show()
+                    else scanLauncher.launch(arrayOf("*/*"))
+                },
                 extra = Triple(R.string.accent_book_caption, R.string.accent_book_go) { accentDialog() })
         }
         filterField = v.findViewById(R.id.filter)
@@ -172,6 +176,7 @@ class AuditFragment : PageFragment(R.layout.fragment_audit) {
             val result = try {
                 val text = Book.text(ctx.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: throw IllegalStateException(res.getString(R.string.err_open_file)))
                 val d = SileroModels.data(ctx)
+                // голос — русский (кнопка не пускает другие): словари, морфология и акцентор русские
                 val userDict = prefs.userDict()
                 val r = prefs.rules()
                 val stress = Stress(d, models, userDict, Rules(r.off + setOf("gram", "homo"), r.maxLen, r.focus))
@@ -206,6 +211,12 @@ class AuditFragment : PageFragment(R.layout.fragment_audit) {
                 if (view != null) { refresh(); Snackbar.make(requireView(), result, Snackbar.LENGTH_LONG).show() }
             }
         }.start()
+    }
+
+    /** Язык голоса из настроек — им читается книга; голосов нет — «ru». Без SileroModels.data: зовётся с главного потока. */
+    private fun voiceLang(ctx: Context): String {
+        val packs = Packs.installed(ctx.filesDir)
+        return Speaker.currentName(prefs.voice, SileroModels.speakers(ctx), packs)?.let { Speaker.lang(it, packs) } ?: "ru"
     }
 
     private fun accentDialog() {

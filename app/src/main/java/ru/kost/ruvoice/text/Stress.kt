@@ -21,10 +21,13 @@ internal fun verbLike(t: String, morph: Morph?) = t.isNotEmpty() && (morph == nu
     !participleAny.matches(t) && !genVerb.matches(t) && t !in notVerb
 
 /** morph — таблица морфологии для согласования с прилагательным в gramPass; null — правило выключено. По умолчанию та же,
- * что у нормализатора (SileroModels.data() ставит её раз на процесс; в JVM-тестах без ассета — null). */
+ * что у нормализатора (SileroModels.data() ставит её раз на процесс; в JVM-тестах без ассета — null).
+ * layer — язык текста (по полю lang пака): у белорусского ударения ставит [BelStress] по акцентору пака и его
+ * поправкам [corrections]; русский конвейер (таблицы, омографы, «ё», акцентор) остаётся как был. */
 class Stress(private val d: SileroData, private val models: StressModels, private val userDict: Map<String, String> = emptyMap(),
              private val rules: Rules = Rules(), private val morph: Morph? = Normalizer.morph, private val yo: YoDict? = YoDict.shared,
-             private val hardE: HardE? = HardE.shared) {
+             private val hardE: HardE? = HardE.shared, val layer: TextLayer = Layers.RU,
+             private val corrections: Map<String, String> = emptyMap()) {
     private val vowels = "аоуыэиеяёю"
     private val tok = BertTokenizer(d)
     private val homoWordRe = Regex("(?=.*[а-яё])[а-яё+]+", RegexOption.IGNORE_CASE)
@@ -35,12 +38,21 @@ class Stress(private val d: SileroData, private val models: StressModels, privat
     private val nonCyr = Regex("[^А-Яа-яёЁ]")
     private val wordRe = Regex("[а-яё+]+", RegexOption.IGNORE_CASE)
 
+    /** Ударения языка слоя (у белорусского — акцентор пака и его поправки); null — русский конвейер ниже. */
+    private val own = layer.stress(models, userDict, corrections)
+
     /** source — текст сегмента до нормализации: нормализатор опускает регистр, а правилу «самого + Имя» нужна заглавная
      * следующего слова. По умолчанию — сам sentence (тесты, аудит). */
     /** «Разбор»: не null — сюда пишется текст после каждого прохода и вероятности акцентора по словам. */
     var trace: MutableList<String>? = null
 
     fun apply(sentence: String, source: String = sentence): String {
+        val own = own ?: return ruApply(sentence, source)
+        trace?.add("input: $sentence")
+        return own(sentence).also { trace?.add("${layer.code}: $it") }
+    }
+
+    private fun ruApply(sentence: String, source: String): String {
         var s = sentence
         fun step(name: String, next: String) { trace?.add("$name: $next"); s = next }
         trace?.add("input: $sentence")
@@ -492,12 +504,14 @@ class Stress(private val d: SileroData, private val models: StressModels, privat
         if (rules.on("end_oxy") && oxy && t.endsWith(".") && !t.endsWith("..")) return t.dropLast(1) to false
         return accented to false
     }
-    /** Последнее слово: есть гласная до ударной, после ударной — только согласные. */
-    private val oxytoneEndRe = Regex("[аеёиоуыэюя]\\S*\\+[аеёиоуыэюя][^\\sаеёиоуыэюя]*$", RegexOption.IGNORE_CASE)
+    /** Последнее слово: есть гласная до ударной, после ударной — только согласные. «і» — белорусская гласная
+     * («дар+огі» не ударное на конце); в русском тексте её нет. */
+    private val oxytoneEndRe = Regex("[аеёиоуыэюяі]\\S*\\+[аеёиоуыэюяі][^\\sаеёиоуыэюяі]*$", RegexOption.IGNORE_CASE)
     /** Кусок из одного слова в 2–3 буквы с единственной гласной на конце («— Да.», «Кто?», «Всё.»): последней букве куска
      * модель всегда даёт 13 кадров (162 мс, symb_durs и durs_rate не действуют), при ускорении от «да» остаётся «д'».
      * Сдвоенная гласная — 255–330 мс, на слух лучше (30.09.2026). После ёфикации, длину меняет: tokens/подсветка — по accented. */
-    private val shortWordRe = Regex("^([^\\p{L}]*[бвгджзйклмнпрстфхцчшщ]{1,2}\\+?)([аеёиоуыэюя])(?=[.!?…][^\\p{L}]*$)", RegexOption.IGNORE_CASE)
+    // «ў» и «і» — белорусские («ўсё», «ці»), в русском тексте их нет
+    private val shortWordRe = Regex("^([^\\p{L}]*[бвгджзйклмнпрстфхцчшщў]{1,2}\\+?)([аеёиоуыэюяі])(?=[.!?…][^\\p{L}]*$)", RegexOption.IGNORE_CASE)
     /** «пишут см+и.»: то же на конце куска после других слов — только для «СМИ» (жалоба «И глотается», 30.09.2026). */
     private val smiEndRe = Regex("(?<![\\p{L}+])(см\\+)(и)(?=[.!?…][^\\p{L}]*$)", RegexOption.IGNORE_CASE)
     fun stretchShort(accented: String) =
@@ -582,7 +596,8 @@ class Stress(private val d: SileroData, private val models: StressModels, privat
             var setStress = passedStress && !haveStress
             val yoPred = yp.indices.maxByOrNull { yp[it] } ?: 0
             val yoVowelIds = listOf(yoPred)
-            val setYo = yp[yoPred] > 0.5f && cleanWord !in userDict   // «бытие быти+е» в словаре: модель не ставит «ё», иначе словарь слово не найдёт
+            // акцентор без второго выхода (пак bel/ukr) отдаёт пустые строки «ё»
+            val setYo = yp.isNotEmpty() && yp[yoPred] > 0.5f && cleanWord !in userDict   // «бытие быти+е» в словаре: модель не ставит «ё», иначе словарь слово не найдёт
             if (haveStress) stressedVowelIds = lower.split("+").map { part -> part.count { it in vowels } }
             val pos = positions(lower, stressedVowelIds, yoVowelIds)
             if (pos.numVowels == 0) { out.append(rawWord); continue }

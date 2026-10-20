@@ -62,6 +62,20 @@ class SpanSayTest {
         assertEquals("пять дюймов", say("measure", "number" to "5", "unit" to "inches"))
     }
 
+    @Test fun notRussianVoiceGetsNoRussianWords() {
+        // белорусскому голосу русские слова не годятся: текст спана, число, цифры по одной; остальное — исходный текст
+        fun be(type: String, vararg a: Pair<String, Any?>) = SpanSay.say(type, mapOf(*a), "be")
+        assertEquals("коска", be("text", "text" to "коска"))
+        assertEquals("15", be("cardinal", "number" to "15"))
+        assertEquals("4 8 2", be("digits", "digits" to "482"))
+        assertNull(be("telephone", "number_parts" to "29 123-45-67"))
+        assertNull(be("time", "hours" to "21", "minutes" to "30"))
+        assertNull(be("money", "integer_part" to "5", "currency" to "BYN"))
+        assertNull(be("verbatim", "verbatim" to "Б2"))
+        // русский — как был
+        assertEquals("четыре восемь два", SpanSay.say("digits", mapOf("digits" to "482"), "ru"))
+    }
+
     @Test fun spelling() {
         assertEquals("четыре восемь два", say("digits", "digits" to "482"))
         assertEquals("б+э два, д+э", say("verbatim", "verbatim" to "Б2 Д"))

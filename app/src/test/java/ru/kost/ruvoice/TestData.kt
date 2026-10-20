@@ -1,6 +1,7 @@
 package ru.kost.ruvoice
 
 import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 
 object TestData {
@@ -11,4 +12,8 @@ object TestData {
     }
     fun data(): SileroData = SileroData(File(root(), "app/src/main/assets/silero/silero_ru.json").readText())
     fun golden(): JSONArray = JSONArray(File(root(), "app/src/test/resources/golden.json").readText())
+    /** Символы входа cis-пака (golden_pack.json; у cis_be набор тот же, что у cis_ru): тесты слоя видят то же, что пак. */
+    val cisAllowed: String by lazy {
+        Symbols.fromJson(JSONObject(File(root(), "app/src/test/resources/golden_pack.json").readText()).getJSONObject("pack")).allowed
+    }
 }

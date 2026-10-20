@@ -7,6 +7,7 @@ import android.util.Log
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.*
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
@@ -46,6 +47,29 @@ class ServiceSmokeTest {
         }
         tts.shutdown()
         assertEquals(0, errors)
+    }
+
+    /** Голос клиента после подключения и после setLanguage(ru-RU) — текущий голос из настроек (регресс: система клала
+     * в запросы первый голос по алфавиту). Без пака be белорусский не заявлен. Настройки не меняет. */
+    @Test fun defaultVoiceIsCurrent() {
+        val ctx = InstrumentationRegistry.getInstrumentation().targetContext
+        val packs = Packs.installed(ctx.filesDir)
+        val current = Speaker.currentName(Prefs(ctx).voice, SileroModels.speakers(ctx), packs)
+        assumeTrue("нет русского текущего голоса: $current", current != null && Speaker.lang(current, packs) == "ru")
+        val expected = Speaker.ttsName(current!!, packs)
+        val ready = CountDownLatch(1); var status = -1
+        val tts = TextToSpeech(ctx, { s -> status = s; ready.countDown() }, "ru.kost.ruvoice")
+        try {
+            assertTrue("engine bind timeout", ready.await(60, TimeUnit.SECONDS))
+            assertEquals(TextToSpeech.SUCCESS, status)
+            // после подключения — голос языка из настроек синтеза; при английском языке там законна прослойка
+            val initial = tts.voice?.name
+            Log.i("RuVoiceTest", "голос после init: $initial, ожидаем $expected")
+            if (initial != SileroTtsService.EN_VOICE) assertEquals("после init", expected, initial)
+            assertEquals(TextToSpeech.LANG_COUNTRY_AVAILABLE, tts.setLanguage(Locale("ru", "RU")))
+            assertEquals("после setLanguage(ru-RU)", expected, tts.voice?.name)
+            if (packs.none { it.lang == "be" }) assertEquals(TextToSpeech.LANG_NOT_SUPPORTED, tts.isLanguageAvailable(Locale("be", "BY")))
+        } finally { tts.shutdown() }
     }
 
     /** Бенч потоков forward: `-e threads N` (по умолчанию как выставит сервис по правилу fast_cores);

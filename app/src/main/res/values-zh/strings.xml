@@ -40,6 +40,7 @@
     <string name="audit_scan_pick">选择文件</string>
     <string name="audit_scan_help">书籍文件（txt、fb2、fb2.zip、epub）只读取、不朗读，人名的收集方式与朗读时相同：首字母大写、不在句首、至少含两个元音的单词。\n\n模型已经认识的词不会收集：它的词典和词形表中的词（Паук“蜘蛛”、Верхушка“顶端”、Москва“莫斯科”），您的重音列表（包括系统列表）中的词，以及在这里已滑动隐藏的词。每个名字的重音都是模型猜的，需要试听核对。\n\n收集结果会追加到列表中，不会替换原有内容，总共最多两千条。处理进度以百分比显示，可以随时中断，已收集的内容会保留。</string>
     <string name="audit_scan_done">新人名：%d</string>
+    <string name="audit_scan_not_ru">只有俄语语音才能从书中收集人名：所用的词典和检查规则都是俄语的。请在“语音”标签页选择俄语语音。</string>
     <string name="accent_book">带重音标记的书</string>
     <string name="accent_book_caption">为整本书标注重音</string>
     <string name="accent_book_go">带重音标记的书…</string>
@@ -255,13 +256,14 @@
     <!-- 语音包 -->
     <string name="voice_packs">更多语音…</string>
     <string name="packs_title">更多语音</string>
-    <string name="packs_hint">语音包是一个 zip 文件，内含 Silero 模型及其语音（80 至 85 MB）。语音包中的语音会出现在“语音”标签页的列表中。使用其他模型的语音包（例如 cis_ru）没有疑问句和感叹句语调，也没有逻辑重音。\n\n语音包在单独的发布页“Паки голосов”（语音包）中：\nhttps://github.com/kost-t-human/ruvoice-tts/releases/tag/packs</string>
+    <string name="packs_hint">语音包是一个 zip 文件，内含 Silero 模型及其语音（80 至 95 MB）。语音包中的语音会出现在“语音”标签页的列表中。使用其他模型的语音包（例如 cis_ru）没有疑问句和感叹句语调，也没有逻辑重音。白俄罗斯语语音包（cis_be）的疑问句和感叹句由程序自己抬高音调来表现。\n\n语音包在单独的发布页“Паки голосов”（语音包）中：\nhttps://github.com/kost-t-human/ruvoice-tts/releases/tag/packs</string>
     <string name="packs_none">没有语音：此版本的应用未内置模型。请安装语音包 ruvoice-pack-ru.zip（标准语音，约 85 MB）或其他任意语音包。</string>
     <string name="packs_install">从文件安装…</string>
     <string name="packs_installing">正在安装语音包…</string>
     <string name="packs_installing_hint">正在将语音复制到手机存储，最多可能需要一分钟。窗口会自动关闭。</string>
     <string name="pack_installed">语音包已安装：%1$s</string>
     <string name="pack_delete">删除</string>
+    <string name="pack_lang">语言：%1$s</string>
     <string name="pack_delete_named">删除“%s”</string>
     <string name="pack_delete_title">删除语音包？</string>
     <string name="pack_delete_confirm">删除语音包“%1$s”？模型文件将被清除；如果当前选中的是它的语音，语音选择会被重置。</string>
@@ -522,6 +524,8 @@
     <string name="err_pack_format">此语音包适用于其他版本的应用（格式 %1$s）</string>
     <string name="err_not_pack">这不是 RuVoice 语音包</string>
     <string name="err_pack_no_voices">语音包中没有语音</string>
+    <string name="err_pack_lang">此版本的应用不支持语音包的语言“%1$s”</string>
+    <string name="err_pack_accentor">语言为“%1$s”的语音包中没有重音模型（accentor.ptl）</string>
     <string name="err_pack_move">无法安装语音包：空间不足或无法访问存储</string>
     <string name="err_settings_json">文件已损坏或不是 JSON 格式：%1$s</string>
     <string name="err_not_settings">这不是 RuVoice TTS 设置文件</string>

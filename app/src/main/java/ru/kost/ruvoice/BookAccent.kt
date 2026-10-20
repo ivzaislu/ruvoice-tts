@@ -1,6 +1,7 @@
 package ru.kost.ruvoice
 
 import android.content.Context
+import ru.kost.ruvoice.text.Layers
 import ru.kost.ruvoice.text.Marks
 import ru.kost.ruvoice.text.Rules
 import ru.kost.ruvoice.text.Stress
@@ -256,7 +257,11 @@ object BookAccent {
         try {
             val d = SileroModels.data(ctx)
             val packs = Packs.installed(ctx.filesDir)
-            val allowed = (Speaker.resolve(prefs.voice, d, packs) ?: Speaker.default(d, packs))?.sym?.allowed ?: d.sym.allowed
+            // книгу озвучит выбранный голос — значит и текстовый слой, и фильтр символов его пака
+            val speaker = Speaker.resolve(prefs.voice, d, packs) ?: Speaker.default(d, packs)
+            val allowed = speaker?.sym?.allowed ?: d.sym.allowed
+            val lang = speaker?.lang ?: "ru"
+            val layer = Layers.of(lang)
             val r = prefs.rules()
             // твёрдое [э] — своей галочкой: в книге «кафэ» нужно не всем, кто её слушает
             val hardE = prefs.accentBookHardE
@@ -265,16 +270,18 @@ object BookAccent {
             fun Set<String>.set(key: String, on: Boolean) = if (on == (key in Rules.DEFAULT_OFF)) this + key else this - key
             // без аббревиатур «КП» не читается по буквам и доходит до книги как есть (сокращения «г.», «т. е.» — правило abbrev — раскрываются)
             val rules = Rules(r.off.set("hard_e", hardE).let { if (abbr) it else it.set("spell_cyr", false).set("spell_lat", false) }, r.maxLen, r.focus)
-            val stress = Stress(d, models, prefs.userDict(), rules)
-            val replacements = prefs.replacements()
+            val stress = Stress(d, models, prefs.userDict(lang), rules, layer = layer,
+                corrections = speaker?.pack?.corrections ?: emptyMap())
+            val replacements = prefs.replacements(lang)
             // модели — до первого абзаца: иначе 10–30 с загрузки висят на «0 %», будто всё застыло
-            models.ensureStress()
-            // омографы — слова, которым конвейер выбирает ударение по контексту: BERT, грамматика, фразы
-            val homo = if (!prefs.accentBookHomoOnly) null else { w: String ->
+            models.ensureStress(speaker?.pack)
+            // омографы — слова, которым конвейер выбирает ударение по контексту: BERT, грамматика, фразы. Это русские
+            // словари: у голоса другого языка галочку не применяем, иначе в книге не осталось бы ни одного ударения
+            val homo = if (!prefs.accentBookHomoOnly || lang != "ru") null else { w: String ->
                 w.replace('ё', 'е').let { e -> listOf(w, e).any { it in d.homodict || it in d.gram || it in d.phrases } }
             }
             return fb2(source(bytes, title), if (prefs.accentBookPlus) Mode.PLUS else Mode.ACUTE, hardE, prefs.accentBookAbbr, progress, homo) { p ->
-                Pipeline.plan(p, d, 0, 0, replacements, rules).map { Pipeline.accent(it.text, d, stress, allowed, rules) }
+                Pipeline.plan(p, d, 0, 0, replacements, rules, layer = layer, allowed = allowed).map { Pipeline.accent(it.text, d, stress, allowed, rules) }
             }
         } finally { models.release() }
     }
@@ -287,7 +294,8 @@ object BookAccent {
 
     private const val MAX_CELLS = 4_000_000L   // 16 МБ на абзац; длиннее — редкость (сплошной текст без абзацев)
     private const val MAX_ALIGN = 1_000_000L
-    private const val VOWELS = "аеёиоуыэюя"
+    // «і» — белорусская гласная (книга белорусским голосом), в русском тексте её нет
+    private const val VOWELS = "аеёиоуыэюяі"
     private const val KEEP = ".,;:!?…–—-«»\"'„“”()[]{}*"
     private val wordRe = Regex("\\S+")
     private val plusRe = Regex("\\+(.)")

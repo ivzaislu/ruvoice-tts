@@ -31,6 +31,11 @@ class SplitterTest {
             Splitter.paragraphs("Он шёл\nдомой.\n\nНовый абзац."))
     }
 
+    @Test fun singleNewlineBeforeBelarusianLowercaseIsSpace() {
+        // перенос строки перед «і …», «ўсё» в белорусской книге — не абзац
+        assertEquals(listOf("Ён прыйшоў і сеў, ўсё."), Splitter.paragraphs("Ён прыйшоў\nі сеў,\nўсё."))
+    }
+
     @Test fun singleNewlineBeforeUppercaseIsParagraphBreak() {
         assertEquals(listOf("Он шёл", "Домой"), Splitter.paragraphs("Он шёл\nДомой"))
     }
@@ -63,6 +68,9 @@ class SplitterTest {
         assertEquals(listOf("Л. Н. Толстой родился в 1828 г. в Ясной Поляне.", "Он писал."),
             Splitter.sentences("Л. Н. Толстой родился в 1828 г. в Ясной Поляне. Он писал."))
         assertEquals(listOf("Раз.", "Два!"), Splitter.sentences("Раз. Два!"))
+        // белорусский инициал «І.» — тоже не конец предложения
+        assertEquals(listOf("Акадэмік І. Шамякін напісаў раман.", "Далей."),
+            Splitter.sentences("Акадэмік І. Шамякін напісаў раман. Далей."))
     }
 
     @Test fun keepsAbbreviationStopWordsTogether() {
@@ -71,6 +79,28 @@ class SplitterTest {
         assertEquals(listOf("Он ушёл.", "Она осталась."), Splitter.sentences("Он ушёл. Она осталась."))
         // сокращение за скобкой — тоже не конец предложения
         assertEquals(listOf("Текст [прим. ред.] конец."), Splitter.sentences("Текст [прим. ред.] конец."))
+    }
+
+    @Test fun belarusianStreetAbbrevKeepsSentence() {
+        // белорусское «вул.» (вуліца) — не конец предложения
+        assertEquals(listOf("Музей на вул. Леніна, 5 адкрыўся.", "Далей."), Splitter.sentences("Музей на вул. Леніна, 5 адкрыўся. Далей."))
+        // русскому тексту не мешает: формы «вул» в морфологии AOT нет, «вулкан.» — конец предложения
+        assertEquals(0, Morph.open(java.io.File(TestData.root(), "app/src/main/assets/morph.bin")).tags("вул"))
+        assertEquals(listOf("Там был вулкан.", "Он спал."), Splitter.sentences("Там был вулкан. Он спал."))
+        // «г. зн.», «і інш.», «т. зв.» — тоже; «і», «ў» в классе букв сокращения русскому не мешают: в русском их нет,
+        // а «зн», «зв» словами AOT не бывают
+        assertEquals(listOf("Праз тыдзень, г. зн. у панядзелак."), Splitter.sentences("Праз тыдзень, г. зн. у панядзелак."))
+        assertEquals(listOf("Кнігі і інш. выданні."), Splitter.sentences("Кнігі і інш. выданні."))
+        assertEquals(listOf("Гэта т. зв. рэжым."), Splitter.sentences("Гэта т. зв. рэжым."))
+        val morph = Morph.open(java.io.File(TestData.root(), "app/src/main/assets/morph.bin"))
+        assertEquals(0, morph.tags("зн")); assertEquals(0, morph.tags("зв"))
+        assertEquals(listOf("Он знал.", "Она звала."), Splitter.sentences("Он знал. Она звала."))
+        assertEquals(listOf("Смотри стр. 5 и рис. 2.", "Дальше."), Splitter.sentences("Смотри стр. 5 и рис. 2. Дальше."))
+        // «зн», «інш», «зв» — только строчными: русские «Зв.» (зиверт) и «ЗВ.» — конец предложения
+        assertEquals(listOf("Пороговая доза примерно 0,25 Зв.", "Порог толерантности индивидуален."),
+            Splitter.sentences("Пороговая доза примерно 0,25 Зв. Порог толерантности индивидуален."))
+        assertEquals(listOf("Как Дисней поглумится над вселенной ЗВ.", "Интересно, как?"),
+            Splitter.sentences("Как Дисней поглумится над вселенной ЗВ. Интересно, как?"))
     }
 
     @Test fun okIsNotAnAbbreviationStopWord() {

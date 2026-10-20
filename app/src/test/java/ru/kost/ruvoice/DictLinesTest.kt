@@ -99,6 +99,9 @@ class DictLinesTest {
         assertEquals(0 until 6, DictLines.wordRangeAt("старый замок", 6))
         assertEquals(null, DictLines.wordRangeAt("{pause:300} слово", 3))
         assertEquals(null, DictLines.wordRangeAt("", 0))
+        // белорусские «і», «ў» — буквы слова, и заглавные тоже
+        assertEquals(5 until 10, DictLines.wordRangeAt("мова ўс+ім", 7))
+        assertEquals(0 until 4, DictLines.wordRangeAt("Іван", 2))
     }
 
     @Test fun setWordStressMovesPlusAndClears() {

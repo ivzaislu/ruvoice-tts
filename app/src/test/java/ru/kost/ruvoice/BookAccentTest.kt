@@ -14,6 +14,12 @@ class BookAccentTest {
                 "х+агрид, — сказ+ал +он в т+ысяча девятьс+от семн+адцатом г+оду,", "+и всё. всё +ёлка?"))
     }
 
+    @Test fun belarusianStressOnI() {
+        // книга белорусским голосом: «і» — гласная, ударение на ней встаёт
+        assertEquals("с+іні", plus("сіні", "с+іні"))
+        assertEquals("сі́ні", BookAccent.apply("сіні", BookAccent.edits("сіні", listOf("с+іні")), BookAccent.Mode.ACUTE))
+    }
+
     @Test fun hyphenAndSeveralStresses() {
         // «кт+о-то»: в слове две гласные — знак ставится
         assertEquals("с+еверо-з+апад, кт+о-то", plus("северо-запад, кто-то", "с+еверо-з+апад, кт+о-то"))

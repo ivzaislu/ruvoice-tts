@@ -20,6 +20,17 @@ import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
+/** Prefs ровно как в снимке [m] (`HashMap(p.all)` до теста): лишние ключи убираются. */
+internal fun restorePrefs(p: SharedPreferences, m: Map<String, *>) {
+    val e = p.edit().clear()
+    for ((k, v) in m) when (v) {
+        is String -> e.putString(k, v); is Int -> e.putInt(k, v); is Long -> e.putLong(k, v)
+        is Float -> e.putFloat(k, v); is Boolean -> e.putBoolean(k, v)
+        is Set<*> -> e.putStringSet(k, v.map { it.toString() }.toSet())
+    }
+    e.commit()
+}
+
 /**
  * Новое за 27–28.09 на телефоне, через сервис как у читалки: профили и привязка к голосу, «Системный удалённые»,
  * мягкий перенос, «Подробный журнал», громкость до ×3. Prefs «ruvoice», «ruvoice_profiles» и файлы
@@ -40,19 +51,9 @@ class NewFeaturesDeviceTest {
     }
 
     @After fun restore() {
-        put(live, liveSaved); put(store, storeSaved)
+        restorePrefs(live, liveSaved); restorePrefs(store, storeSaved)
         for ((f, t) in removedSaved) if (t == null) f.delete() else f.writeText(t)
         for (kind in Dicts.Kind.values()) Dicts.rebuildSystem(ctx.filesDir, kind)
-    }
-
-    private fun put(p: SharedPreferences, m: Map<String, *>) {
-        val e = p.edit().clear()
-        for ((k, v) in m) when (v) {
-            is String -> e.putString(k, v); is Int -> e.putInt(k, v); is Long -> e.putLong(k, v)
-            is Float -> e.putFloat(k, v); is Boolean -> e.putBoolean(k, v)
-            is Set<*> -> e.putStringSet(k, v.map { it.toString() }.toSet())
-        }
-        e.commit()
     }
 
     /** Профиль с другой громкостью привязан к голосу: читалка сменила голос — профиль включился, prefs его;

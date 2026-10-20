@@ -40,6 +40,7 @@
     <string name="audit_scan_pick">Choose file</string>
     <string name="audit_scan_help">The book file (txt, fb2, fb2.zip, epub) is scanned silently, and names are picked the same way as while reading aloud: capitalized words, not at the start of a sentence, with at least two vowels.\n\nWords the model already knows are left out: those in its dictionaries and morphology table (Паук “spider”, Верхушка “top”, Москва “Moscow”), in your stress lists including the system one, and words you already hid here by swiping. The stress shown for each name is the model\'s guess, check it by ear.\n\nNew names are added to the list, not replacing it, up to 2,000 entries in total. Progress is shown in percent. You can stop at any time, and the names found so far are kept.</string>
     <string name="audit_scan_done">New names: %d</string>
+    <string name="audit_scan_not_ru">Names from a book are collected only for Russian voices: the dictionaries and checks are Russian. Choose a Russian voice on the Voice tab.</string>
     <string name="accent_book">Book with stress marks</string>
     <string name="accent_book_caption">Add stress marks to a whole book</string>
     <string name="accent_book_go">Book with stress marks…</string>
@@ -254,13 +255,14 @@
     <!-- Voice packs -->
     <string name="voice_packs">More voices…</string>
     <string name="packs_title">More voices</string>
-    <string name="packs_hint">A voice pack is a zip file with a Silero model and its voices (80 to 85 MB). Voices from a pack appear in the list on the Voice tab. Packs with other models (for example, cis_ru) have no question or exclamation intonation and no word emphasis.\n\nPacks are in a separate release, “Паки голосов” (voice packs):\nhttps://github.com/kost-t-human/ruvoice-tts/releases/tag/packs</string>
+    <string name="packs_hint">A voice pack is a zip file with a Silero model and its voices (80 to 95 MB). Voices from a pack appear in the list on the Voice tab. Packs with other models (for example, cis_ru) have no question or exclamation intonation and no word emphasis. In the Belarusian pack (cis_be), the app makes questions and exclamations itself by raising the pitch.\n\nPacks are in a separate release, “Паки голосов” (voice packs):\nhttps://github.com/kost-t-human/ruvoice-tts/releases/tag/packs</string>
     <string name="packs_none">No voices: this version of the app comes without a built-in model. Install the ruvoice-pack-ru.zip pack (the standard voices, about 85 MB) or any other pack.</string>
     <string name="packs_install">Install from file…</string>
     <string name="packs_installing">Installing pack…</string>
     <string name="packs_installing_hint">The voices are being copied to the phone storage, this can take up to a minute. The window will close by itself.</string>
     <string name="pack_installed">Pack installed: %1$s</string>
     <string name="pack_delete">Delete</string>
+    <string name="pack_lang">language: %1$s</string>
     <string name="pack_delete_named">Delete “%s”</string>
     <string name="pack_delete_title">Delete pack?</string>
     <string name="pack_delete_confirm">Delete the pack “%1$s”? The model files will be erased. If one of its voices was selected, the default voice will be used instead.</string>
@@ -521,6 +523,8 @@
     <string name="err_pack_format">This pack was built for a different app version (format %1$s)</string>
     <string name="err_not_pack">This is not a RuVoice pack</string>
     <string name="err_pack_no_voices">The pack has no voices</string>
+    <string name="err_pack_lang">This app version does not know the pack language “%1$s”</string>
+    <string name="err_pack_accentor">The pack in “%1$s” has no accentor (accentor.ptl)</string>
     <string name="err_pack_move">Could not install the pack: not enough space or no storage access</string>
     <string name="err_settings_json">The file is damaged or is not JSON: %1$s</string>
     <string name="err_not_settings">This is not a RuVoice TTS settings file</string>

@@ -1,0 +1,177 @@
+// SPDX-License-Identifier: CC-BY-NC-SA-4.0
+// Белорусский текстовый слой для RuVoice TTS (см. LICENSE репозитория).
+package ru.kost.ruvoice.text
+
+/**
+ * Латиница → белорусские буквы.
+ *
+ * Зачем: в таблице символов модели латиницы нет вообще (в алфавите только кириллица и
+ * служебный «h»), поэтому английское слово раньше просто выпадало из фразы — «FilmBell»
+ * не читалось. Теперь слово переводится в белорусскую запись и читается голосом.
+ *
+ * Порядок: сначала словарь известных слов (iphone → айфон), потом аббревиатура капсом по
+ * буквам (USB → у-эс-бэ), потом английские диграфы (sh, ch, oo…), потом по буквам.
+ * Это не фонетический разбор английского, а приближение — как в русском RuVoice.
+ */
+object Latin {
+
+    /** Известные слова: так их и зовут по-белорусски. */
+    private val WORDS = mapOf(
+        "iphone" to "айф+он",
+        "ipad" to "айп+ад",
+        "android" to "андр+оід",
+        "google" to "гугл",
+        "youtube" to "ют+уб",
+        "telegram" to "тэлегр+ам",
+        "whatsapp" to "вац+ап",
+        "viber" to "в+айбер",
+        "facebook" to "фэйсб+ук",
+        "instagram" to "інстагр+ам",
+        "tiktok" to "цікт+ок",
+        "twitter" to "твіт+эр",
+        "windows" to "вінд+оўз",
+        "linux" to "л+інукс",
+        "excel" to "экс+эль",
+        "word" to "в+орд",
+        "wifi" to "вайф+ай",
+        "bluetooth" to "блут+уз",
+        "sms" to "эс-эм-эс",
+        "pdf" to "пэ-дэ-эф",
+        "gps" to "джы-пі-эс",
+        "tv" to "тэ-вэ",
+        "ok" to "ок+ей",
+        "film" to "ф+ільм",
+        "filmbell" to "фільмб+ел",
+        "netflix" to "нэтфл+ікс",
+        "amazon" to "амаз+он",
+        "microsoft" to "майкрас+офт",
+        "email" to "ім+эйл",
+        "online" to "анл+айн",
+        "internet" to "інтэрн+эт",
+        "site" to "с+айт",
+        "web" to "в+эб",
+        "podcast" to "п+одкаст",
+        "chrome" to "хр+ом",
+        "chromium" to "хр+оміум",
+        "photoshop" to "фоташ+оп",
+        "zoom" to "з+ум",
+        "spotify" to "спат+ыфай",
+        "github" to "гітх+аб",
+        "chatgpt" to "чэтджып+іці",
+        "ai" to "+эй-ай",
+        "blog" to "бл+ог",
+        "chat" to "ч+ат",
+        "link" to "л+інк",
+        "live" to "л+айв",
+        "team" to "ц+ім",
+        "video" to "в+ідэа",
+        "audio" to "+аўдыё",
+        "photo" to "ф+ота",
+        "media" to "м+едыя",
+        "forum" to "ф+орум",
+        "login" to "л+огін",
+        "password" to "пар+оль",
+        "download" to "даўнл+оўд",
+        "covid" to "к+овід",          // не проверено носителем
+    )
+    /** Диграфы: длинные раньше коротких. */
+    private val DIGRAPHS = listOf(
+        "tch" to "ч", "sch" to "ш", "igh" to "ай", "tion" to "шн", "sion" to "жн",
+        "ph" to "ф", "th" to "т", "sh" to "ш", "chr" to "кр", "chl" to "кл", "chn" to "кн",
+        "ch" to "ч", "ck" to "к", "qu" to "кв",
+        "oo" to "у", "ee" to "і", "ea" to "і", "ai" to "эй", "ay" to "эй", "ey" to "эй",
+        "oi" to "ой", "oy" to "ой", "ou" to "аў", "ow" to "оў", "oa" to "оў", "ie" to "і",
+        "wh" to "ў", "ng" to "нг", "kn" to "н", "wr" to "р",
+    )
+
+    private val LETTERS = mapOf(
+        'a' to "а", 'b' to "б", 'c' to "к", 'd' to "д", 'e' to "е", 'f' to "ф", 'g' to "г",
+        'h' to "х", 'i' to "і", 'j' to "дж", 'k' to "к", 'l' to "л", 'm' to "м", 'n' to "н",
+        'o' to "о", 'p' to "п", 'q' to "к", 'r' to "р", 's' to "с", 't' to "т", 'u' to "у",
+        'v' to "в", 'w' to "ў", 'x' to "кс", 'y' to "ы", 'z' to "з",
+    )
+
+    /** Имена латинских букв — для аббревиатур капсом. */
+    private val NAMES = mapOf(
+        'a' to "а", 'b' to "бэ", 'c' to "цэ", 'd' to "дэ", 'e' to "е", 'f' to "эф", 'g' to "гэ",
+        'h' to "аш", 'i' to "і", 'j' to "джэй", 'k' to "ка", 'l' to "эл", 'm' to "эм", 'n' to "эн",
+        'o' to "о", 'p' to "пэ", 'q' to "кю", 'r' to "эр", 's' to "эс", 't' to "тэ", 'u' to "у",
+        'v' to "вэ", 'w' to "дабл-ю", 'x' to "экс", 'y' to "уай", 'z' to "зэт",
+    )
+
+    /** Имя одной латинской буквы — запрос из одной буквы ([BeLayer.letterName]). */
+    fun letterName(c: Char): String? = NAMES[c.lowercaseChar()]
+
+    private const val VOWELS = "аеёіоуыэюя"
+    private const val EN_VOWELS = "aeiou"
+
+    /** Одно латинское слово в белорусской записи. */
+    fun word(raw: String): String {
+        val low = raw.lowercase()
+        WORDS[low]?.let { return it }
+        if (raw.length in 2..5 && raw.all { it.isUpperCase() || !it.isLetter() } && raw.all { !it.isLetter() || it.isUpperCase() }) {
+            return low.mapNotNull { NAMES[it] ?: LETTERS[it] }.joinToString("-")
+        }
+        val out = StringBuilder()
+        var i = 0
+        while (i < low.length) {
+            var matched = false
+            for ((d, r) in DIGRAPHS) {
+                if (low.startsWith(d, i)) {
+                    if ((d == "kn" || d == "wr") && i > 0) continue
+                    out.append(r); i += d.length; matched = true; break
+                }
+            }
+            if (matched) continue
+            val c = low[i]
+            when (c) {
+                'c' -> out.append(if (i + 1 < low.length && low[i + 1] in "eiy") "с" else "к")
+                'y' -> out.append(if (i == 0 || low[i - 1] in EN_VOWELS) "й" else "ы")
+                else -> LETTERS[c]?.let { out.append(it) }
+            }
+            i++
+        }
+        var res = out.toString()
+        // конечная «y» после согласной звучит [і]: galaxy → галаксі
+        if (low.length > 1 && low.endsWith("y") && low[low.length - 2] !in EN_VOWELS && res.endsWith("ы")) {
+            res = res.dropLast(1) + "і"
+        }
+        // двойные согласные схлопываем
+        val clean = StringBuilder(res.length)
+        for (ch in res) {
+            if (clean.isNotEmpty() && clean[clean.length - 1] == ch && ch !in VOWELS) continue
+            clean.append(ch)
+        }
+        return clean.toString()
+    }
+
+    /** Все латинские вставки в тексте → белорусские буквы; остальное не трогаем. Вплотную к цифрам — через пробел, а одна
+     * заглавная буква — именем, как у русского «пять джи»: «5G» — «5 гэ», «S24» — «эс 24», «MP3» — «эм-пэ 3» (капс — по буквам и так);
+     * иначе число склеивалось с буквой, а «г», «м», «т» читались единицами («пяць грамаў»). Слово через дефис сначала
+     * ищется в словаре целиком: «Wi-Fi» — «вайфай», а не «ўі-фі». */
+    fun translate(text: String): String {
+        fun latin(k: Int) = k < text.length && text[k].code < 128 && text[k].isLetter()
+        val out = StringBuilder(text.length + 8)
+        var i = 0
+        while (i < text.length) {
+            if (!latin(i)) { out.append(text[i]); i++; continue }
+            var j = i
+            while (latin(j)) j++
+            if (j < text.length && text[j] == '-' && latin(j + 1)) {
+                var k = j + 1
+                while (latin(k)) k++
+                val whole = WORDS[(text.substring(i, j) + text.substring(j + 1, k)).lowercase()]
+                if (whole != null) { out.append(whole); i = k; continue }
+            }
+            val digitBefore = i > 0 && text[i - 1].isDigit()
+            val digitAfter = j < text.length && text[j].isDigit()
+            if (digitBefore) out.append(' ')
+            // строчные g, m, l, t — единицы, как были («5m», «500g», «2l»); заглавные («5G», «10T») и прочие («2x») — именем
+            val name = (digitBefore || digitAfter) && j - i == 1 && (text[i].isUpperCase() || text[i] !in "gmlt")
+            out.append(if (name) NAMES.getValue(text[i].lowercaseChar()) else word(text.substring(i, j)))
+            if (digitAfter) out.append(' ')
+            i = j
+        }
+        return out.toString()
+    }
+}

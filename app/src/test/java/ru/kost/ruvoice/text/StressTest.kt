@@ -316,6 +316,16 @@ class StressTest {
         assertEquals("ист+ёкший +и ист+екший", Stress(d, yo).apply("истекший и ист+екший"))
     }
 
+    @Test fun accentorWithoutYoOutput() {
+        // пак lang=ru с акцентором bel/ukr: «ё» — пустые строки (accentorOut), индекс по ним падал
+        val noYo = object : StressModels {
+            override fun accentor(words: List<String>) = Pair(
+                Array(words.size) { FloatArray(10).also { it[1] = 1f } }, Array(words.size) { FloatArray(0) })
+            override fun homo(ids: List<LongArray>, starts: LongArray, ends: LongArray) = FloatArray(ids.size) { 0.9f }
+        }
+        assertEquals("аф+ера", Stress(d, noYo).apply("афера"))
+    }
+
     @Test fun surnameByCapitalInSource() {
         val s = Stress(d, firstVowel)
         fun full(src: String) = s.apply(Normalizer.prepare(src, d.allowed), src)

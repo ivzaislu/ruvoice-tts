@@ -42,6 +42,8 @@ object Dicts {
     fun name(file: File): String = file.name.removeSuffix(".txt")
     /** Системный или его удалённые: не правятся, не переименовываются, в «Проверку» не предлагаются. */
     fun isSystem(name: String) = name == SYSTEM || name == REMOVED
+    /** Списки для голоса на языке [lang]: системные ударения и замены русские, голосу другого языка — только свои. */
+    fun forLang(files: List<File>, lang: String) = files.filter { lang == "ru" || !isSystem(name(it)) }
     /** Системный список целиком, как в assets: из него Системный.txt пересобирается без удалённых строк. */
     private fun fullFile(root: File, kind: Kind): File = File(dir(root, kind), "$SYSTEM.full")
 

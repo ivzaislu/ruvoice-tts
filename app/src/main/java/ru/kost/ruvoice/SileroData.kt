@@ -2,6 +2,7 @@ package ru.kost.ruvoice
 
 import org.json.JSONObject
 import ru.kost.ruvoice.bin.StressBin
+import ru.kost.ruvoice.text.QuestionLists
 import java.nio.ByteBuffer
 
 /** Словарь из stress.bin (StressBin): по ключу, без разбора в память. Его и используют только так — get, in, isEmpty. */
@@ -13,8 +14,10 @@ class Lookup<V>(private val t: StressBin.Table, private val decode: (StressBin.T
     val size get() = t.size
 }
 
-/** Данные штатной модели и ударений: stress.bin — mmap ассета в приложении, в JVM-тестах собран в памяти из json. */
-class SileroData(bin: StressBin.File) {
+/** Данные штатной модели и ударений: stress.bin — mmap ассета в приложении, в JVM-тестах собран в памяти из json.
+ * Списки вопроса (wh_forms, leading_fillers, tag_patterns) отдаёт как [QuestionLists] — это русские данные модели;
+ * у другого языка они живут в его слое ([Layers]). */
+class SileroData(bin: StressBin.File) : QuestionLists {
     /** Из silero_ru.json (тесты): stress.bin в памяти, без словаря «ё». */
     constructor(json: String) : this(StressBin.File(ByteBuffer.wrap(StressBin.write(json, emptySequence()))))
 
@@ -41,9 +44,12 @@ class SileroData(bin: StressBin.File) {
     val bertHomoStart: Int
     val bertHomoEnd: Int
     val type2id: Map<String, Int>
-    val whForms: Set<String>
-    val leadingFillers: Set<String>
-    val tagRe: Regex
+    override val whForms: Set<String>
+    override val leadingFillers: Set<String>
+    override val tagRe: Regex
+    // \b в java.util.regex зависит от JDK (unicode-aware ≤18, ASCII-only 19+) — не полагаемся
+    // на него для кириллицы, используем явные lookaround по классу букв.
+    override val altRe = Regex("(?<![а-яё])или(?![а-яё])")
 
     init {
         val o = JSONObject(bin.head)

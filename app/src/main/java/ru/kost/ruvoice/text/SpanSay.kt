@@ -12,9 +12,17 @@ package ru.kost.ruvoice.text
  * нормализатора или уже слова; null — спан не разобран, остаётся исходный текст.
  */
 object SpanSay {
-    fun say(type: String, a: Map<String, Any?>): String? {
+    /** [lang] — язык голоса (поле lang пака): слова ниже русские, голосу другого языка отдаём только текст спана,
+     * число и цифры по одной, остальное — null (остаётся исходный текст, его читает слой языка: BelNumbers). */
+    fun say(type: String, a: Map<String, Any?>, lang: String = "ru"): String? {
         fun s(k: String) = a[k]?.toString()?.trim()?.takeIf { it.isNotEmpty() }
         fun i(k: String) = s(k)?.toIntOrNull()
+        if (lang != "ru") return when (type) {
+            "text" -> s("text")
+            "cardinal" -> s("number")
+            "digits" -> s("digits")?.toList()?.joinToString(" ")
+            else -> null
+        }?.takeIf { it.isNotBlank() }
         return when (type) {
             "text" -> s("text")
             "cardinal" -> s("number")
