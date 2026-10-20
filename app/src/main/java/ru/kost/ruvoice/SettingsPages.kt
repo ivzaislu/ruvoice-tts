@@ -257,6 +257,11 @@ class RulesFragment : PageFragment(R.layout.fragment_rules) {
     private val shownKeys = HashSet<String>()
     /** Язык вкладки (код пака): какие правила видны и чьи подсказки. Нигде не хранится — при открытии язык голоса. */
     private var lang = "ru"
+    /** Вкладка до пересоздания окна (поворот): та же, а не снова язык голоса. */
+    private var savedLang: String? = null
+
+    override fun onCreate(state: Bundle?) { super.onCreate(state); savedLang = state?.getString(KEY_LANG) }
+    override fun onSaveInstanceState(out: Bundle) { super.onSaveInstanceState(out); out.putString(KEY_LANG, lang) }
 
     override fun load(v: View) {
         val tabs = !english && loadTabs(v)
@@ -275,8 +280,9 @@ class RulesFragment : PageFragment(R.layout.fragment_rules) {
      * а правила — языка голоса. Выбрана вкладка языка текущего голоса. true — вкладки показаны. */
     private fun loadTabs(v: View): Boolean {
         val builtin = SileroModels.speakers(v.context)
-        lang = Speaker.currentName(prefs.voice, builtin, packs)?.let { Speaker.lang(it, packs) } ?: "ru"
         val langs = Speaker.langs(builtin, packs)
+        lang = savedLang?.takeIf { langs.size > 1 && it in langs }
+            ?: Speaker.currentName(prefs.voice, builtin, packs)?.let { Speaker.lang(it, packs) } ?: "ru"
         if (langs.size < 2) return false
         v.findViewById<View>(R.id.rulesLangHint).visibility = View.VISIBLE
         v.findViewById<TabLayout>(R.id.rulesTabs).apply {
@@ -704,6 +710,7 @@ class RulesFragment : PageFragment(R.layout.fragment_rules) {
 
     companion object {
         const val ARG_ENGLISH = "english"
+        private const val KEY_LANG = "rules_lang"
     }
 }
 
