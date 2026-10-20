@@ -205,9 +205,14 @@ object BelNormalizer {
     /** Число словами: до 999 999 999, длиннее — по цифрам; с годом — порядковым и в нужном падеже; дробь — [BelNumbers.decimal].
      * Год — правило years, остальное — numbers. */
     fun numberWords(text: String, rules: Rules = Rules()): String {
-        var s = YEAR_RE.replace(text) { m ->
-            if (!rules.on("years")) return@replace m.value
-            val n = m.groupValues[1].toLongOrNull() ?: return@replace m.value
+        // буква вплотную к числу — через пробел: «8к74», «3тамы» иначе слипались в «восемксемдзесят», «трытамы»
+        fun Regex.words(src: String, f: (MatchResult) -> String) = replace(src) { m ->
+            (if (src.getOrNull(m.range.first - 1)?.isLetter() == true) " " else "") + f(m) +
+                (if (src.getOrNull(m.range.last + 1)?.isLetter() == true) " " else "")
+        }
+        var s = YEAR_RE.words(text) { m ->
+            if (!rules.on("years")) return@words m.value
+            val n = m.groupValues[1].toLongOrNull() ?: return@words m.value
             val word = m.groupValues[2].lowercase()
             val form = when (word) {
                 "годзе" -> Form.LOC
@@ -218,8 +223,8 @@ object BelNormalizer {
         }
         if (!rules.on("numbers")) return s
         // дробь без единицы: «3,14», «1.5»; «12.05» сюда не доходит — его уже прочли датой
-        s = DECIMAL_RE.replace(s) { m -> BelNumbers.decimal(m.groupValues[1].filter { it.isDigit() }, m.groupValues[2]) }
-        s = DIGIT_GROUP_RE.replace(s) { m ->
+        s = DECIMAL_RE.words(s) { m -> BelNumbers.decimal(m.groupValues[1].filter { it.isDigit() }, m.groupValues[2]) }
+        s = DIGIT_GROUP_RE.words(s) { m ->
             val raw = m.value.filter { it.isDigit() }
             // нуль в начале трёх и больше цифр — код («8-029-123», «007»): читаем, как в телефоне ([group]); «05» — месяц, минуты
             if (raw.length > 2 && raw[0] == '0') group(raw) else raw.toLongOrNull()?.let { cardinal(it) } ?: digits(raw)
@@ -283,6 +288,20 @@ object BelNormalizer {
         if (lat == 0 || cyr < lat || w.any { (it in 'a'..'z' || it in 'A'..'Z') && it !in HOMOGLYPHS }) w
         else w.map { HOMOGLYPHS[it] ?: it }.joinToString("")
     }
+    /** Код кириллицей заглавными — буквы и цифры, можно через дефис: «8К74», «2А3», «Т-34» (как русский cyrCodes). Смешанный
+     * регистр («Ту-154», «МіГ-29») — слово, не трогаем. */
+    private val CYR_CODE_RE = Regex("""(?<![\p{L}\d-])(?=[А-ЯЁІЎ\d-]*[А-ЯЁІЎ])(?=[А-ЯЁІЎ\d-]*\d)[А-ЯЁІЎ\d]+(?:-[А-ЯЁІЎ\d]+)*(?![\p{L}\d]|-[\p{L}\d])""")
+    private val CODE_RUN_RE = Regex("""[А-ЯЁІЎ]+|\d+|-""")
+    /** Одна буква в коде — именем, отдельным словом: «8К74» → «восем к+а семдзесят чатыры», «Т-34» → «т+э-трыццаць чатыры»;
+     * несколько букв подряд — словом, как было. Число с единицей вплотную («5Т») и суффикс порядкового капсом («5-Ы») не трогаем. */
+    private fun cyrCodes(text: String) = CYR_CODE_RE.replace(text) { m ->
+        val runs = CODE_RUN_RE.findAll(m.value).map { it.value }.toList()
+        if (runs[0][0].isDigit() && (runs.size == 2 && runs[1].lowercase() in BelNumbers.UNITS || runs.size == 3 && runs[1] == "-"))
+            return@replace m.value
+        runs.withIndex().joinToString("") { (i, r) ->
+            (if (i > 0 && r != "-" && runs[i - 1] != "-") " " else "") + (if (r.length == 1 && r[0].isLetter()) BeLayer.letterName(r[0]) ?: r else r)
+        }
+    }
     /** Начало фразы до «г.»/«гг.»: предлог и год (или два года, или десятилетие на «-х») — «У 1941 », «З 1941–1945 »,
      * «У 1990-х », «У 90-х ». Не «Нарадзіўся ў 1990 г. Яго…»: там слова перед предлогом, и это конец предложения. */
     private val YEAR_LEAD_RE = Regex("""\P{L}*(?:у|ў|з|да|ад|па|пасля|каля|перад)\s+(?:\d{4}(?:\s*[–—-]\s*\d{4})?|\d{2,4}-х)[ \x{A0}]?""",
@@ -322,6 +341,7 @@ object BelNormalizer {
         step("homoglyphs", ::homoglyphs)              // «cок» латинской «c» — до Latin, иначе «кок»
         // латиницы в таблице символов модели нет вовсе — «FilmBell» раньше просто выпадало
         step("latin") { Latin.translate(it, rules) }
+        step("letter_digit", ::cyrCodes)              // до lowercase: код узнаём по заглавным
         // точка сокращения в конце предложения — после латиницы («5kg.» — уже «5 кг.»), но до lowercase
         val lat = s
         s = ABBR_END_RE.replace(lat) { m ->

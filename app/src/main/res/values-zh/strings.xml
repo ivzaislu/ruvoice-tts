@@ -368,7 +368,7 @@
     <string name="rule_dates_hint_be">«12.05.2026» 读作 «дванаццатага мая дзве тысячы дваццаць шостага года»，«3.09» 读作 «трэцяга верасня»。</string>
     <string name="rule_day_month">日和月</string>
     <string name="rule_day_month_hint">«20 июня» 读作 «двадцатого июня»，«к 1 сентября» 读作 «к первому сентября»。</string>
-    <string name="rule_day_month_hint_be">«20 чэрвеня» 读作 «дваццатага чэрвеня»，«да 1 верасня» 读作 «да першага верасня»。</string>
+    <string name="rule_day_month_hint_be">«20 чэрвеня» 读作 «дваццатага чэрвеня»，«да 1 верасня» 读作 «да першага верасня»，«на 1 верасня» 读作 «на першае верасня»。</string>
     <string name="rule_years">年份</string>
     <string name="rule_years_hint">«в 1917 году» 读作 «в тысяча девятьсот семнадцатом»，«1941–1945 гг.»，«в 90-х»，«490 г. до н. э.»。</string>
     <string name="rule_years_hint_be">«у 1812 г.» 读作 «у тысяча восемсот дванаццатым годзе»，«у 1990-х гадах» 读作 «у тысяча дзевяцьсот дзевяностых гадах»，以及 «1941-1945 гады»。</string>
@@ -395,7 +395,7 @@
     <string name="rule_spoons_hint">«2 ч. л.» 读作 «две чайные ложки»，«1 ст. л.» 读作 «одна столовая ложка»。</string>
     <string name="rule_gen_suffix">后缀 «5-ти»、«2-х»</string>
     <string name="rule_gen_suffix_hint">«5-ти» 读作 «пяти»，«2-ух» 读作 «двух»，«3-х» 读作 «трёх»。</string>
-    <string name="rule_gen_suffix_hint_be">«2-х» 读作 «двух»，«3-х» 读作 «трох»，«4-х» 读作 «чатырох»。</string>
+    <string name="rule_gen_suffix_hint_be">«2-х» 读作 «двух»，«3-х» 读作 «трох»，«5-ці» 读作 «пяці»，«2-ма» 读作 «двума»。</string>
     <string name="rule_sections">章节编号</string>
     <string name="rule_sections_hint">«2.10.3» 读作 «два точка десять точка три»。用点隔开的两个数（«1.2»）仍按小数或日期处理。</string>
     <string name="rule_arith">算术</string>
@@ -414,7 +414,7 @@
     <string name="rule_spell_lat_hint_be">逐字母读出：«FBI» 读作 «эф-бэ-і»，«LTE» 读作 «эл-тэ-е»。</string>
     <string name="rule_letter_digit">数字旁的字母</string>
     <string name="rule_letter_digit_hint">读作字母名称：«5800X» 读作 «пять тысяч восемьсот экс»，«5800X3D» 读作 «… экс три ди»，«GPT-4o» 读作 «… четыре оу»，«1080p» 读作 «… пи»。西里尔字母代码：«Р-9» 读作 «эр девять»，«8К74» 读作 «восемь ка семьдесят четыре»。</string>
-    <string name="rule_letter_digit_hint_be">读作字母名称：«5800X» 读作 «пяць тысяч восемсот экс»，«5800X3D» 读作 «… экс тры дэ»，«1080p» 读作 «… пэ»，«5G» 读作 «пяць гэ»。</string>
+    <string name="rule_letter_digit_hint_be">读作字母名称：«5800X» 读作 «пяць тысяч восемсот экс»，«5800X3D» 读作 «… экс тры дэ»，«1080p» 读作 «… пэ»，«5G» 读作 «пяць гэ»。西里尔字母代码：«8К74» 读作 «восем ка семдзесят чатыры»。</string>
     <string name="rule_latin">拉丁字母单词</string>
     <string name="rule_latin_hint">音译：«iphone» 读作 «айфон»，«sherlock» 读作 «шерлок»。关闭时，拉丁字母会从朗读中消失。</string>
     <string name="rule_latin_hint_be">按白俄罗斯语音译：«Wi-Fi» 读作 «вайфай»，«Then I went» 读作 «тен і ўент»。</string>

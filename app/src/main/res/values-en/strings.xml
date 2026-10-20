@@ -367,7 +367,7 @@
     <string name="rule_dates_hint_be">«12.05.2026» is read as «дванаццатага мая дзве тысячы дваццаць шостага года», «3.09» as «трэцяга верасня».</string>
     <string name="rule_day_month">Day and month</string>
     <string name="rule_day_month_hint">«20 июня» is read as «двадцатого июня», «к 1 сентября» as «к первому сентября».</string>
-    <string name="rule_day_month_hint_be">«20 чэрвеня» is read as «дваццатага чэрвеня», «да 1 верасня» as «да першага верасня».</string>
+    <string name="rule_day_month_hint_be">«20 чэрвеня» is read as «дваццатага чэрвеня», «да 1 верасня» as «да першага верасня», «на 1 верасня» as «на першае верасня».</string>
     <string name="rule_years">Years</string>
     <string name="rule_years_hint">«в 1917 году» is read as «в тысяча девятьсот семнадцатом», also «1941–1945 гг.», «в 90-х», «490 г. до н. э.».</string>
     <string name="rule_years_hint_be">«у 1812 г.» is read as «у тысяча восемсот дванаццатым годзе», «у 1990-х гадах» as «у тысяча дзевяцьсот дзевяностых гадах», also «1941-1945 гады».</string>
@@ -394,7 +394,7 @@
     <string name="rule_spoons_hint">Teaspoons and tablespoons in recipes: «2 ч. л.» is read as «две чайные ложки», «1 ст. л.» as «одна столовая ложка».</string>
     <string name="rule_gen_suffix">Number endings «5-ти», «2-х»</string>
     <string name="rule_gen_suffix_hint">«5-ти» is read as «пяти», «2-ух» as «двух», «3-х» as «трёх».</string>
-    <string name="rule_gen_suffix_hint_be">«2-х» is read as «двух», «3-х» as «трох», «4-х» as «чатырох».</string>
+    <string name="rule_gen_suffix_hint_be">«2-х» is read as «двух», «3-х» as «трох», «5-ці» as «пяці», «2-ма» as «двума».</string>
     <string name="rule_sections">Section numbers</string>
     <string name="rule_sections_hint">«2.10.3» is read as «два точка десять точка три». Two numbers with a dot («1.2») stay a decimal or a date.</string>
     <string name="rule_arith">Arithmetic</string>
@@ -413,7 +413,7 @@
     <string name="rule_spell_lat_hint_be">Spelled letter by letter: «FBI» as «эф-бэ-і», «LTE» as «эл-тэ-е».</string>
     <string name="rule_letter_digit">Letter next to a digit</string>
     <string name="rule_letter_digit_hint">The letter is read by its name: «5800X» as «пять тысяч восемьсот экс», «5800X3D» as «… экс три ди», «GPT-4o» as «… четыре оу», «1080p» as «… пи». Cyrillic codes too: «Р-9» as «эр девять», «8К74» as «восемь ка семьдесят четыре».</string>
-    <string name="rule_letter_digit_hint_be">The letter is read by its name: «5800X» as «пяць тысяч восемсот экс», «5800X3D» as «… экс тры дэ», «1080p» as «… пэ», «5G» as «пяць гэ».</string>
+    <string name="rule_letter_digit_hint_be">The letter is read by its name: «5800X» as «пяць тысяч восемсот экс», «5800X3D» as «… экс тры дэ», «1080p» as «… пэ», «5G» as «пяць гэ». Cyrillic codes too: «8К74» as «восем ка семдзесят чатыры».</string>
     <string name="rule_latin">Words in Latin letters</string>
     <string name="rule_latin_hint">Read the Russian way by transliteration: «iphone» as «айфон», «sherlock» as «шерлок». When off, words in Latin letters drop out of speech.</string>
     <string name="rule_latin_hint_be">Read the Belarusian way by transliteration: «Wi-Fi» as «вайфай», «Then I went» as «тен і ўент».</string>

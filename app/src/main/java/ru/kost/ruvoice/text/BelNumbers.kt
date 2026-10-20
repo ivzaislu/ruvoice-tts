@@ -53,14 +53,21 @@ object BelNumbers {
 
     /** 12.05.2026 → «дванаццатага мая дзве тысячы дваццаць шостага года»; 3.09 → «трэцяга верасня».
      * Без года — только «дд.мм» через точку: «1.5 кг», «1/2 шклянкі», «24/7» — не даты, их читают числа.
-     * Первая группа у всех трёх — «па» перед датой: день тогда вінавальны ніякага роду, «з 1 па 5 мая» → «з першага па
-     * пятае мая» (не проверено носителем). Цифровые даты — правило dates, месяц словом и диапазон дней — day_month. */
+     * Первая группа у всех трёх — предлог перед датой ([DATE_PREP]), падеж дня по нему, как у русского: «на/па/пра/праз/за» —
+     * вінавальны ніякага роду («на 1 верасня» → «на першае верасня», «з 1 па 5 мая» → «з першага па пятае мая»), «перад» —
+     * творны («перад першым верасня»), иначе родны. Не проверено носителем. Цифровые даты — правило dates, месяц словом и
+     * диапазон дней — day_month. */
     fun dates(text: String, rules: Rules = Rules()): String {
         fun date(m: MatchResult, dRaw: String, moRaw: String, yearRaw: String): String {
             val d = dRaw.toInt(); val mo = moRaw.toInt()
             if (d !in 1..31 || mo !in 1..12) return m.value
-            val pa = m.groupValues[1]
-            val sb = StringBuilder(pa).append(if (pa.isEmpty()) BelNormalizer.ordinal(d.toLong(), BelNormalizer.Form.GEN) else neuter(d.toLong()))
+            val prep = m.groupValues[1]
+            val day = when (prep.trim().lowercase()) {
+                "" -> BelNormalizer.ordinal(d.toLong(), BelNormalizer.Form.GEN)
+                "перад" -> BelNormalizer.ordinal(d.toLong(), BelNormalizer.Form.LOC)   // творны м./н. совпадает с месным
+                else -> neuter(d.toLong())
+            }
+            val sb = StringBuilder(prep).append(day)
             sb.append(' ').append(MONTHS[mo - 1])
             if (yearRaw.isNotEmpty()) {
                 val y0 = yearRaw.toLong()
@@ -121,7 +128,7 @@ object BelNumbers {
     // ---- единицы и валюты ----
 
     /** Единица по точному токену: ключ — то, что стоит сразу за числом (без точки). */
-    private val UNITS: Map<String, Triple<String, String, String>> = mapOf(
+    val UNITS: Map<String, Triple<String, String, String>> = mapOf(
         "км/г" to Triple("кіламетр у гадзіну", "кіламетры ў гадзіну", "кіламетраў у гадзіну"),
         "км" to Triple("кіламетр", "кіламетры", "кіламетраў"),
         "см" to Triple("сантыметр", "сантыметры", "сантыметраў"),
@@ -222,28 +229,50 @@ object BelNumbers {
      * родны/месны мн. («у 1990-х» → «у тысяча дзевяцьсот дзевяностых»). С «-я» десятилетие без «гады»/«гг.» за ним —
      * только четырёхзначное, кроме 1000: «10-я кніга» не трогаем, «у 2000-я» — «двухтысячныя», 1000 — ж. р. («1000-я
      * старонка» → «тысячная»). «2-х»…«4-х» — количественное: «двух», «трох», «чатырох» (род не знаем, «дзвюх» не
-     * бывает). «-й» — русский суффикс: число без него («2-й» → «два»). Прочее («5-я» — «пятая»?, «5-х») не трогаем. Не проверено носителем. */
+     * бывает). Падежные суффиксы количественного, как русское «5-ти»: «-ці», «-мі» — родны (он же давальны и месны у 5 и
+     * больше: «да 5-ці» → «да пяці», «7-мі» → «сямі»), «-цю», «-мю», «-ма» — творны («5-цю» → «пяццю», «2-ма» → «двума»);
+     * «3-ці» — порядковое «трэці», «1990-мі» — десятилетие («дзевяностымі»). «-й» — русский суффикс: число без него
+     * («2-й» → «два»). Прочее («5-я» — «пятая»?, «5-х») не трогаем. Не проверено носителем. */
     fun ordinals(text: String, rules: Rules = Rules()): String = ORD_SUFFIX.replace(text) { m ->
         val raw = m.groupValues[1]
         val n = raw.toLongOrNull() ?: return@replace m.value
         val sfx = m.groupValues[2].lowercase()
-        // «2-х»…«4-х» — правило gen_suffix, остальные суффиксы — numbers
-        if (!rules.on(if (sfx == "х" && n in 2..4) "gen_suffix" else "numbers")) return@replace m.value
         val decade = n % 10 == 0L && (raw.length == 2 || raw.length == 4)
+        val case = when {
+            sfx == "х" && n in 2..4 || sfx == "мі" && !(decade && n >= 20) -> CARD_GEN
+            sfx == "ці" && !BelNormalizer.ordinal(n).endsWith("ці") -> CARD_GEN
+            sfx == "цю" || sfx == "мю" || sfx == "ма" -> CARD_INS
+            else -> null
+        }
+        // падеж количественного — правило gen_suffix, остальные суффиксы — numbers
+        if (!rules.on(if (case != null) "gen_suffix" else "numbers")) return@replace m.value
+        if (case != null) return@replace cardinalCase(n, case)
         val thousand = n == 1000L
         when {
             sfx.endsWith("га") -> BelNormalizer.ordinal(n, BelNormalizer.Form.GEN)
             sfx.endsWith("м") -> BelNormalizer.ordinal(n, BelNormalizer.Form.LOC)
+            sfx == "мі" -> gender(n, "ымі", emptyMap())   // десятилетие; до «-і»: иначе «дзевяносты»
             sfx.endsWith("ы") || sfx.endsWith("і") -> BelNormalizer.ordinal(n)
             sfx == "я" && decade && (raw.length == 4 && !thousand || m.groupValues[3].isNotEmpty()) -> BelNormalizer.ordinal(n) + "я"
             sfx == "я" && thousand -> gender(n, "ая", FEMININE)
             sfx == "х" && decade -> gender(n, "ых", emptyMap())
-            sfx == "х" && n in 2..4 -> CARDINAL_GEN[n.toInt() - 2]
             sfx == "й" -> raw
             else -> m.value
         }
     }
-    private val CARDINAL_GEN = arrayOf("двух", "трох", "чатырох")
+    /** Количественное в косвенном падеже по таблице [case] (1..19 и десятки 20..90, формы из GrammarDB): склоняется каждое
+     * слово, «25-ці» → «дваццаці пяці». От 100 — именительный, как у русского genitiveCardinal. Мужской род: «дзвюх» не берём. */
+    private fun cardinalCase(n: Long, case: Pair<List<String>, List<String>>) = when {
+        n in 1..19 -> case.first[n.toInt() - 1]
+        n in 20..99 -> case.second[n.toInt() / 10 - 2] + (if (n % 10 == 0L) "" else " " + case.first[n.toInt() % 10 - 1])
+        else -> BelNormalizer.cardinal(n)
+    }
+    private val CARD_GEN = ("аднаго двух трох чатырох пяці шасці сямі васьмі дзевяці дзесяці адзінаццаці дванаццаці трынаццаці " +
+        "чатырнаццаці пятнаццаці шаснаццаці сямнаццаці васямнаццаці дзевятнаццаці").split(' ') to
+        "дваццаці трыццаці сарака пяцідзесяці шасцідзесяці сямідзесяці васьмідзесяці дзевяноста".split(' ')
+    private val CARD_INS = ("адным двума трыма чатырма пяццю шасцю сямю васьмю дзевяццю дзесяццю адзінаццаццю дванаццаццю " +
+        "трынаццаццю чатырнаццаццю пятнаццаццю шаснаццаццю сямнаццаццю васямнаццаццю дзевятнаццаццю").split(' ') to
+        "дваццаццю трыццаццю сарака пяццюдзесяццю шасцюдзесяццю сямюдзесяццю васьмюдзесяццю дзевяноста".split(' ')
 
     /** Римское число I–XXX перед «стагоддзе», «век» — порядковым в падеже существительного: «XX стагоддзе» →
      * «дваццатае стагоддзе», «XX стагоддзя» → «дваццатага», «у XX стагоддзі» → «у дваццатым». Кириллические «Х», «І»
@@ -409,17 +438,18 @@ object BelNumbers {
 
     /** С годом: «12.05.2026», «12/05/26»; не после цифры и знака — иначе кусок большого числа. Хвост «г.» съедаем:
      * «года» дата уже говорит, иначе «…года горад». */
-    private val DATE = Regex("""(?<![\d.,])$PA(\d{1,2})([./])(\d{1,2})\3(\d{4}|\d{2})(?!\d)(?:\s*г\.)?""")
-    /** «па» перед датой — первая группа у [DATE], [DAY_MONTH], [DAY_MONTH_WORD]. */
-    private const val PA = """(?:(?<!\p{L})(па\s+))?"""
+    private val DATE = Regex("""(?<![\d.,])$DATE_PREP(\d{1,2})([./])(\d{1,2})\3(\d{4}|\d{2})(?!\d)(?:\s*г\.)?""")
+    /** Предлог, меняющий падеж дня ([dates]), — первая группа у [DATE], [DAY_MONTH], [DAY_MONTH_WORD]. «у» не берём: с датой
+     * по-белорусски не ставится, падеж не ясен. */
+    private const val DATE_PREP = """(?:(?<!\p{L})((?:па|на|праз?|за|перад)\s+))?"""
     /** «3 мая», «3 мая 2026 г.», «3 мая 2026 года»: год съедаем вместе с «г.»/«года» — date() скажет «года» сам. */
-    private val DAY_MONTH_WORD = Regex("""(?<![\d.,])$PA(\d{1,2})\s+(${MONTHS.joinToString("|")})(?!\p{L})(?:\s+(\d{4})(?!\d)(?:\s*г\.|\s+года(?!\p{L}))?)?""",
+    private val DAY_MONTH_WORD = Regex("""(?<![\d.,])$DATE_PREP(\d{1,2})\s+(${MONTHS.joinToString("|")})(?!\p{L})(?:\s+(\d{4})(?!\d)(?:\s*г\.|\s+года(?!\p{L}))?)?""",
         RegexOption.IGNORE_CASE)
     /** Первый день диапазона перед «д месяц»: «15-16 мая», «з 1 па 5 мая», «ад 5 да 10 мая». */
     private val DAY_RANGE = Regex("""(?<![\d.,])(\d{1,2})(?:\s*[-–—]\s*|(\s+(?:па|да)\s+))(?=\d{1,2}\s+(?:${MONTHS.joinToString("|")})(?!\p{L}))""",
         RegexOption.IGNORE_CASE)
     /** Число с суффиксом порядкового ([ordinals]); не кусок «8-029» и не «1.5-га». Третья группа — «гады»/«гг.» за ним. */
-    private val ORD_SUFFIX = Regex("""(?<![\d.,-])(\d{1,4})-(га|ы|і|гі|ці|шы|ты|мы|м|ым|ім|я|х|й)(?!\p{L})(?=(\s+(?:гады|гг)(?!\p{L}))?)""",
+    private val ORD_SUFFIX = Regex("""(?<![\d.,-])(\d{1,4})-(га|ы|і|гі|ці|шы|ты|мы|м|ым|ім|я|х|й|мі|цю|мю|ма)(?!\p{L})(?=(\s+(?:гады|гг)(?!\p{L}))?)""",
         RegexOption.IGNORE_CASE)
     /** I–XXX латиницей или кириллицей: непустое. */
     private const val ROMAN_NUM = """(?=[IVXІХ])[XХ]{0,3}(?:[IІ][XХ]|[IІ]V|V?[IІ]{0,3})"""
@@ -440,7 +470,7 @@ object BelNumbers {
     private const val UNIT = """(км/г|тыс|млрд|млн|трлн|руб|кап|км|см|мм|кг|мл|мг|м2|м²|га|шт|°с|%|₽|\$|€|м|л|г|т)(?:(?<![%₽€\$]|°с)\.)?(?![\p{L}])"""
     /** Без года: «3.09» — месяц двумя цифрами, не дробь «1.5», не кусок «1.10.2» и не число с единицей «1.05 кг».
      * «г.» после «дд.мм» — горад, а не граммы: «15.06 г. Гомель». */
-    private val DAY_MONTH = Regex("""(?<![\d.,])$PA(\d{1,2})\.(\d{2})(?!\d|[.,]\d)(?!\s*(?!г\.)$UNIT)""", RegexOption.IGNORE_CASE)
+    private val DAY_MONTH = Regex("""(?<![\d.,])$DATE_PREP(\d{1,2})\.(\d{2})(?!\d|[.,]\d)(?!\s*(?!г\.)$UNIT)""", RegexOption.IGNORE_CASE)
     private val TIME = Regex("""(?<!\d)(\d{1,2}):(\d{2})(?!\d)""")
     /** «чч.мм» после предлога ([times]); не кусок даты «у 12.05.2026» и не число с единицей «1.50 руб.», «ў 1.25 раза»,
      * «каля 1.30 мільёна». «па» с числом — чаще цена («па 2.50 за кілаграм»), время — только сразу за другим
