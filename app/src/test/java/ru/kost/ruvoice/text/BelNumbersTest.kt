@@ -268,6 +268,41 @@ class BelNumbersTest {
     }
 
     @Test
+    fun cardinalCaseSuffixes() {
+        // «-ці», «-мі» — родны, «-цю», «-мю», «-ма» — творны; «-ці» у тройки — порядковое; не проверено носителем
+        assertEquals("да пяці", prep("да 5-ці"))
+        assertEquals("ад пяці да сямі кіламетраў", prep("ад 5-ці да 7-мі кіламетраў"))
+        assertEquals("васьмі", prep("8-мі"))
+        assertEquals("трынаццаці", prep("13-ці"))
+        assertEquals("дваццаці пяці", prep("25-ці"))
+        assertEquals("сарака", prep("40-ці"))
+        assertEquals("дваццаць трэці", prep("23-ці"))
+        assertEquals("з пяццю", prep("з 5-цю"))
+        assertEquals("шасцю", prep("6-цю"))
+        assertEquals("сямю", prep("7-мю"))
+        assertEquals("з двума", prep("з 2-ма"))
+        assertEquals("трыма", prep("3-ма"))
+        assertEquals("дваццаццю двума", prep("22-ма"))
+        // «-мі» у десятилетия — творны мн. порядкового
+        assertEquals("тысяча дзевяцьсот дзевяностымі", prep("1990-мі"))
+    }
+
+    @Test
+    fun datePrepositionCase() {
+        // «на/па/пра/праз/за» — вінавальны ніякага роду, «перад» — творны, иначе родны; не проверено носителем
+        assertEquals("на першае верасня", prep("на 1 верасня"))
+        assertEquals("да першага верасня", prep("да 1 верасня"))
+        assertEquals("з першага верасня", prep("з 1 верасня"))
+        assertEquals("перад першым верасня", prep("перад 1 верасня"))
+        assertEquals("пра трэцяе мая", prep("пра 3 мая"))
+        assertEquals("праз трэцяе мая", prep("праз 3 мая"))
+        assertEquals("за трэцяе мая", prep("за 3 мая"))
+        assertEquals("на дванаццатае мая дзве тысячы дваццаць шостага года было", prep("На 12.05.2026 было"))
+        assertEquals("на дванаццатае мая", prep("на 12.05"))
+        assertEquals("перад дванаццатым мая дзве тысячы дваццаць шостага года", prep("перад 12.05.2026"))
+    }
+
+    @Test
     fun romanCentury() {
         // падеж по существительному; средний род не проверен носителем
         assertEquals("дваццатае стагоддзе", prep("XX стагоддзе"))
@@ -552,6 +587,27 @@ class BelNumbersTest {
         assertEquals("вайф+ай", prep("Wi-Fi"))
         assertEquals("к+овід-дзевятнаццаць", prep("COVID-19"))
         assertEquals("у-эс-бэ-к", prep("USB-C"))
+    }
+
+    @Test
+    fun cyrillicCodes() {
+        // одна заглавная буква в коде — именем; число со строчной буквой вплотную — отдельным словом, не «восемксемдзесят»
+        assertEquals("восем к+а семдзесят чатыры", prep("8К74"))
+        assertEquals("два +а тры", prep("2А3"))
+        assertEquals("два а тры", prep("2а3"))
+        assertEquals("т+э-трыццаць чатыры", prep("Т-34"))
+        assertEquals("чатыры к+а", prep("4К"))
+        assertEquals("+а чатыры", prep("А4"))
+        assertEquals("дом сем б+э", prep("дом 7Б"))
+        assertEquals("тры тамы", prep("3тамы"))
+        assertEquals("ан дваццаць чатыры", prep("АН24"))
+        // смешанный регистр — слово; единица и суффикс порядкового капсом — как были
+        assertEquals("ту-сто пяцьдзясят чатыры", prep("ТУ-154"))
+        assertEquals("міг-дваццаць дзевяць", prep("МіГ-29"))
+        assertEquals("пяць тон", prep("5Т"))
+        assertEquals("у пятым класе", prep("У 5-М КЛАСЕ"))
+        assertEquals("тысяча дзевяцьсот дзевяностых", prep("1990-Х"))
+        assertEquals("айф+он пятнаццаць", prep("iPhone 15"))
     }
 
     @Test

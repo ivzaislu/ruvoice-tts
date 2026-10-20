@@ -54,6 +54,7 @@ class BelRulesTest {
         "Яблыкі, грушы і г. д.", "Гэта, г. зн., памылка.", "Грушы і інш. Потым", "Музей на вул. Леніна, 5.", "21:30", "cок",
         "C++", "д+якуй", "Мiнск", "https://example.com", "Тэл. 1234-5678-9012-3456", "2 + 3 = 5", "3/4 шклянкі", "1 ч. л.",
         "§ 5", "п. 2.10.3", "1 000 000", "Тэкст[1].", "ПРЫВІТАННЕ СВЕТ", "😀 Добра", "Вось → там", "па-беларуску",
+        "8К74", "Т-34", "да 5-ці", "з 2-ма", "на 1 верасня",
     )
 
     @Test fun eachReadKeyChangesOutput() {
@@ -126,6 +127,7 @@ class BelRulesTest {
     @Test fun numberKeys() {
         assertEquals("тэмпература плюс", prep("тэмпература +11", off("numbers")))
         assertEquals("адзін з тры-х.", prep("Адзін з 3-х.", off("gen_suffix")))
+        assertEquals("да пяць-ці", prep("да 5-ці", off("gen_suffix")))
         assertEquals("дзве тысячы дваццаць шэсць год", prep("2026 год", off("years")))
         assertEquals("тры мая", prep("3 мая", off("day_month")))
         assertEquals("трэцяга верасня", prep("3.09", off("day_month")))
@@ -135,6 +137,8 @@ class BelRulesTest {
     @Test fun latinKeys() {
         assertEquals("усб", prep("USB", off("spell_lat")))
         assertEquals("галаксі с дваццаць чатыры", prep("Galaxy S24", off("letter_digit")))
+        // без правила буква кода остаётся буквой, но от чисел отделена
+        assertEquals("восем к семдзесят чатыры", prep("8К74", off("letter_digit")))
         assertEquals("кніга", prep("Кніга FilmBell", off("latin")))
     }
 
