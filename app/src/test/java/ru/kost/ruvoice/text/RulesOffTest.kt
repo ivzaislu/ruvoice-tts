@@ -190,15 +190,20 @@ class RulesOffTest {
         assertEquals("– +Я.", stress.yaOnset("+Я."))
         for (s in listOf("пот+ом +я пошёл.", "– +я пошёл.", "+ясно.", "яз+ык.", "+юля пришл+а."))
             assertEquals(s, stress.yaOnset(s))
+        assertEquals("+эй!", stress.yaOnset("– +эй!"))  // тире реплики снимается
     }
 
-    /** kseniya/eugene: перед двумя согласными в начале куска — тире, больше нигде. */
+    /** kseniya/eugene: перед двумя согласными в начале куска (и предлогом перед согласной) — тире, тире реплики
+     * перед остальным снимается. */
     @Test fun clusterOnsetDash() {
         val stress = Stress(d, firstVowel, rules = off("homo", "gram"))
-        for (s in listOf("Стр+ах.", "спас+ибо.", "Чт+о +это?", "Вст+ал."))
+        for (s in listOf("Стр+ах.", "спас+ибо.", "Чт+о +это?", "Вст+ал.", "С т+ех п+ор.", "с п+омощью.", "К т+ому ж+е."))
             assertEquals("– $s", stress.clusterOnset(s))
-        for (s in listOf("С+ад.", "+Утро.", "Он ушёл. Стр+ах.", "– Стр+ах.", "Сь."))
+        for (s in listOf("С+ад.", "+Утро.", "Он ушёл. Стр+ах.", "– Стр+ах.", "Сь.", "С +утра.", "в +это вр+емя."))
             assertEquals(s, stress.clusterOnset(s))
+        assertEquals("д+аа.", stress.clusterOnset("– д+аа."))
+        assertEquals("+эй, т+ы!", stress.clusterOnset("– +эй, т+ы!"))
+        assertEquals("– с т+ех п+ор.", stress.clusterOnset("– с т+ех п+ор."))
     }
 
     /** Реплика из одного короткого слова на гласную: гласная сдвоена, всё остальное как есть. */
