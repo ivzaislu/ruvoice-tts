@@ -497,15 +497,12 @@
     <string name="rule_intonation_hint_be">疑问句（«Ты ідзеш?»、«Чай ці каву?»）和感叹句用相应的语调朗读。关闭时全部按陈述句朗读。</string>
     <string name="rule_focus">逻辑重音</string>
     <string name="rule_focus_hint">星号中的单词（文本或替换中的 «Он *не* пришёл»，SSML 中的 &lt;emphasis&gt;）由模型用语调突出。关闭时只去掉星号。</string>
-    <string name="rule_focus_hint_be">星号中的单词（文本或替换中的 «Ён *не* прыйшоў»，SSML 中的 &lt;emphasis&gt;）由模型用语调突出。关闭时只去掉星号。</string>
     <string name="focus_level">突出强度</string>
     <string name="focus_level_hint">范围 1 到 3：1 表示比相邻的词稍明显，3 表示最强。对所有突出的单词生效。</string>
     <string name="rule_exclaim">短感叹句中的重音</string>
     <string name="rule_exclaim_hint">«Эй, вы!»、«Бам!»（以 «!» 结尾、不超过两个词）在最后一个词上加逻辑重音，否则模型会读得短促平淡。强度与上方的逻辑重音相同。</string>
-    <string name="rule_exclaim_hint_be">«Гэй, вы!»、«Бах!»（以 «!» 结尾、不超过两个词）在最后一个词上加逻辑重音，否则模型会读得短促平淡。强度与上方的逻辑重音相同。</string>
     <string name="rule_question">无动词疑问句中的重音</string>
     <string name="rule_question_hint">«Вы барон Гордеев?»、«Это правда?»：没有动词的一般疑问句在最后一个词上加逻辑重音。否则模型会在第一个词上升调、句尾下降，疑问句听起来像陈述句。带动词的疑问句（«Ты придёшь завтра?»）不受影响。强度与上方的逻辑重音相同。</string>
-    <string name="rule_question_hint_be">«Гэта праўда?»、«Вы з Мінска?»：没有动词的一般疑问句在最后一个词上加逻辑重音。否则模型会在第一个词上升调、句尾下降，疑问句听起来像陈述句。带动词的疑问句（«Ты прыйдзеш заўтра?»）不受影响。强度与上方的逻辑重音相同。</string>
     <string name="rule_pause_semicolon">分号和冒号后停顿</string>
     <string name="rule_pause_semicolon_hint">“停顿”标签页中的“逗号之后”停顿也会加在分号和冒号之后。</string>
     <string name="rule_pause_parens">括号处停顿</string>

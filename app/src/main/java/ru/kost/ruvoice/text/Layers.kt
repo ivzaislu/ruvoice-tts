@@ -86,11 +86,13 @@ object BeLayer : TextLayer {
     override val code = "be"
     override val locale = Locale("be", "BY")
     /** Русские правила без белорусского аналога: ссылки, эмодзи и имена знаков, коды, арифметика, падежи, дроби, разделы,
-     * разряды, сноски, капс кириллицей, русские ударения ([Stress]: таблицы, омографы, «ё», твёрдое «э», приставка через пробел). */
+     * разряды, сноски, капс кириллицей, русские ударения ([Stress]: таблицы, омографы, «ё», твёрдое «э», приставка через пробел).
+     * Логическое ударение (focus, exclaim, question) — тоже: у белорусских голосов (cis_be, Pack.types = false) входа
+     * focus_mask нет, метка `*слово*` до модели не доходит ([ru.kost.ruvoice.SileroModels.synthesize]). */
     override val unsupported = setOf(
         "sr_symbols", "symbol_names", "emoji", "sr_link_word", "drop_links", "link_domain", "drop_emails", "drop_images", "read_links",
         "codes", "arith", "cases", "fractions", "spoons", "sections", "thousands", "footnotes", "spell_cyr",
-        "gram", "first_pl", "homo", "yo", "hard_e", "prefix_space")
+        "gram", "first_pl", "homo", "yo", "hard_e", "prefix_space", "focus", "exclaim", "question")
     override fun prepare(text: String, allowed: String, rules: Rules): String = BelNormalizer.prepare(text, allowed, rules)
     override fun questions(d: SileroData): QuestionLists = BE_QUESTIONS
     override fun dictWord(w: String): String = w.replace(BelNormalizer.APOSTROPHE, "")

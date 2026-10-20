@@ -496,15 +496,12 @@
     <string name="rule_intonation_hint_be">Questions («Ты ідзеш?», «Чай ці каву?») and exclamations are read with matching intonation. When off, everything is read as a statement.</string>
     <string name="rule_focus">Word emphasis</string>
     <string name="rule_focus_hint">A word in asterisks («Он *не* пришёл» in the text or in a replacement, &lt;emphasis&gt; in SSML) is stressed by the model with intonation. When off, the asterisks are just removed.</string>
-    <string name="rule_focus_hint_be">A word in asterisks («Ён *не* прыйшоў» in the text or in a replacement, &lt;emphasis&gt; in SSML) is stressed by the model with intonation. When off, the asterisks are just removed.</string>
     <string name="focus_level">Emphasis strength</string>
     <string name="focus_level_hint">From 1 to 3: 1 is slightly stronger than the neighboring words, 3 is the strongest. Applies to all emphasized words.</string>
     <string name="rule_exclaim">Emphasis in a short exclamation</string>
     <string name="rule_exclaim_hint">«Эй, вы!», «Бам!» (up to two words ending in «!») are read with emphasis on the last word, otherwise the model says them short and flat. Strength is the same as for word emphasis above.</string>
-    <string name="rule_exclaim_hint_be">«Гэй, вы!», «Бах!» (up to two words ending in «!») are read with emphasis on the last word, otherwise the model says them short and flat. Strength is the same as for word emphasis above.</string>
     <string name="rule_question">Emphasis in a question without a verb</string>
     <string name="rule_question_hint">«Вы барон Гордеев?», «Это правда?»: a yes/no question without a verb is read with emphasis on the last word. Otherwise the model raises the voice on the first word and drops it at the end, and the question sounds like a statement. A question with a verb («Ты придёшь завтра?») is left alone. Strength is the same as for word emphasis above.</string>
-    <string name="rule_question_hint_be">«Гэта праўда?», «Вы з Мінска?»: a yes/no question without a verb is read with emphasis on the last word. Otherwise the model raises the voice on the first word and drops it at the end, and the question sounds like a statement. A question with a verb («Ты прыйдзеш заўтра?») is left alone. Strength is the same as for word emphasis above.</string>
     <string name="rule_pause_semicolon">Pause after semicolons and colons</string>
     <string name="rule_pause_semicolon_hint">The “After a comma” pause from the Pauses tab is also added after semicolons and colons.</string>
     <string name="rule_pause_parens">Pause at parentheses</string>
