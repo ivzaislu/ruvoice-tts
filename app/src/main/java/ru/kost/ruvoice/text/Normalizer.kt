@@ -2243,7 +2243,8 @@ object Normalizer {
             p.isNotEmpty() -> nounAbbrPrepCase[p] ?: Case.GEN
             else -> Case.GEN
         }
-        val word = oblForms.getValue(key)[case.ordinal]
+        // регулярка без учёта регистра: «Московская Обл.» даёт ключ «Обл» (без lowercase — NoSuchElementException на весь запрос)
+        val word = oblForms.getValue(key.lowercase())[case.ordinal]
         (if (prep.isEmpty()) "" else "$prep ") + adj + " " + word + if (m.value.endsWith(".")) dotAfter(text, m) else ""
     }
     // «Прим. пер.» — примечание переводчика; «на прим. сербы» — например

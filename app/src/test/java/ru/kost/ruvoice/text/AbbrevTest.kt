@@ -100,6 +100,13 @@ class AbbrevTest {
         assertEquals("по вай-фай, вайфай и вайфай, хай-фай.", Normalizer.prepare("По Wi-Fi, wifi и WiFi, hi-fi.", allowed))
     }
 
+    // «Обл.»/«Р-Н.» с заглавной: ключ таблицы форм искался как есть, и prepare падал (ревью 20.10.2026)
+    @Test fun oblAbbrevAnyCase() {
+        val allowed = "_~|!+,-.:;?абвгдежзийклмнопрстуфхцчшщъыьэюяё–… "
+        assertEquals(Normalizer.prepare("Московская обл.", allowed), Normalizer.prepare("Московская Обл.", allowed))
+        assertEquals(Normalizer.prepare("в Ленинском р-н.", allowed), Normalizer.prepare("в Ленинском Р-Н.", allowed))
+    }
+
     @Test fun threeLettersWithEdgeVowelSpelled() {
         assertEquals("испытания эл ка +и и тэ эмм +а", Abbrev.apply("испытания ЛКИ и ТМА"))
         assertEquals("а ка +эс", Abbrev.apply("АКС"))
