@@ -390,7 +390,7 @@
     <string name="rule_degrees_hint">«−5 °C» → «минус пять градусов цельсия», «°F» → «по фаренгейту».</string>
     <string name="rule_currency">Валюты</string>
     <string name="rule_currency_hint">«5 руб. 30 коп.» → «пять рублей тридцать копеек», $, €, ₽.</string>
-    <string name="rule_currency_hint_be">«5 тыс. руб.» → «пяць тысяч рублёў», «1,20 BYN» → «адзін коска дваццаць рубля», «$65 000» → «шэсцьдзясят пяць тысяч долараў», «€ 50» → «пяцьдзясят еўра».</string>
+    <string name="rule_currency_hint_be">«5 тыс. руб.» → «пяць тысяч рублёў», «1,20 BYN» → «адзін рубель дваццаць капеек», «$65 000» → «шэсцьдзясят пяць тысяч долараў», «€ 50» → «пяцьдзясят еўра».</string>
     <string name="rule_fractions">Дроби через слэш</string>
     <string name="rule_fractions_hint">«3/4» → «три четвёртых», «1/2» → «одна вторая»; «25/3» → «двадцать пять дробь три».</string>
     <string name="rule_spoons">Ложки</string>

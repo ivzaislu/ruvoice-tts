@@ -161,9 +161,20 @@ object BelNumbers {
         "м" to "метра", "л" to "літра", "г" to "грама", "т" to "тоны", "шт" to "штукі", "°с" to "градуса цэльсія",
         "%" to "працэнта", "руб" to "рубля", "кап" to "капейкі", "тыс" to "тысячы", "млн" to "мільёна", "млрд" to "мільярда",
         "трлн" to "трыльёна", "₽" to "рубля", "$" to "долара", "€" to "еўра")
+    /** Монета валюты: две цифры после запятой — капейкі или цэнты ([units]). «цэнт» не проверен носителем. */
+    private val MINOR = mapOf("руб" to "кап", "₽" to "кап", "$" to "цэнт", "€" to "цэнт")
+    private val CENTS = Triple("цэнт", "цэнты", "цэнтаў")
+
+    /** Число и единица в нужной форме; единицы женского рода: «дзве тоны», «дзве капейкі», «дзве штукі», «дзве тысячы»,
+     * а не «два». */
+    private fun counted(n: Long, unit: String) = (UNITS[unit] ?: CENTS).let { u ->
+        (if (unit in FEM_UNITS) BelNormalizer.cardinalFem(n) else BelNormalizer.cardinal(n)) + " " + plural(n, u.first, u.second, u.third)
+    }
 
     /** «3 км» → «тры кіламетры», «5 %» → «пяць працэнтаў», «2 руб.» → «два рублі», «2 т» → «дзве тоны»;
      * «1,5 кг» → «адзін коска пяць кілаграма» ([decimal]). Валюта перед числом — как после: «$65 000» → «… долараў».
+     * Деньги с двумя цифрами после запятой — с монетой, как у русского: «1,20 руб.» → «адзін рубель дваццаць капеек»,
+     * «$1.50» → «адзін долар пяцьдзясят цэнтаў»; нуль монет не читаем, одна цифра («2,5 €», «1,5 млн руб.») — дробь.
      * Единица после «тыс.», «млн», «млрд» — родны мн.: «1,2 тыс. км» → «… тысячы кіламетраў».
      * Каждая единица — под своим правилом ([unitKey]), перенос валюты вперёд — под currency. */
     fun units(text: String, rules: Rules = Rules()): String = MULT_UNIT.replace(NUMBER_UNIT.replace(if (rules.on("currency")) currencyAfter(text) else text) { m ->
@@ -171,10 +182,11 @@ object BelNumbers {
         val n = raw.toLongOrNull() ?: return@replace m.value
         val rest = m.groupValues[3].lowercase()
         val u = UNITS[rest]?.takeIf { rules.on(unitKey(rest)) } ?: return@replace m.value
-        if (m.groupValues[2].isNotEmpty()) return@replace "${decimal(raw, m.groupValues[2])} ${UNITS_FRAC[rest] ?: u.third}"
-        // единицы женского рода: «дзве тоны», «дзве капейкі», «дзве штукі», «дзве тысячы», а не «два»
-        val num = if (rest in FEM_UNITS) BelNormalizer.cardinalFem(n) else BelNormalizer.cardinal(n)
-        "$num ${plural(n, u.first, u.second, u.third)}"
+        val frac = m.groupValues[2]
+        val minor = MINOR[rest]?.takeIf { frac.length == 2 }
+        if (minor != null) return@replace counted(n, rest) + frac.toLong().let { if (it == 0L) "" else " " + counted(it, minor) }
+        if (frac.isNotEmpty()) return@replace "${decimal(raw, frac)} ${UNITS_FRAC[rest] ?: u.third}"
+        counted(n, rest)
     }) { m ->
         val k = m.groupValues[2].lowercase()
         UNITS[k]?.takeIf { rules.on(unitKey(k)) }?.let { "${m.groupValues[1]} ${it.third}" } ?: m.value
