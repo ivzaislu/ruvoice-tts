@@ -2,9 +2,13 @@ package ru.kost.ruvoice.text
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import ru.kost.ruvoice.DictCache
+import ru.kost.ruvoice.Dicts
 import ru.kost.ruvoice.Pipeline
+import ru.kost.ruvoice.Prefs
 import ru.kost.ruvoice.TestData
 import java.io.File
 import java.security.MessageDigest
@@ -12,11 +16,12 @@ import java.util.stream.Collectors
 
 /**
  * Страховка русского пути на время правок белорусского слоя: вывод RuLayer.prepare и полного пути куска
- * (Pipeline.plan → Pipeline.accent → Stress, системные словари) на наборе текстов при разных правилах сверяется
- * с эталоном ru_snapshot.txt («вариант<TAB>sha256»). Эталон снят до правок; перезапись —
- * ./gradlew :app:testFullDebugUnitTest --tests '*RuPathSnapshotTest*' -Druvoice.snapshot.write=true
+ * (Pipeline.plan → Pipeline.accent → Stress, системные словари, а в вариантах user-* — и свои списки пользователя)
+ * на наборе текстов при разных правилах сверяется с эталоном ru_snapshot.txt («вариант<TAB>sha256»). Эталон снят
+ * до правок; перезапись — ./gradlew :app:testFullDebugUnitTest --tests '*RuPathSnapshotTest*' -Druvoice.snapshot.write=true
  */
 class RuPathSnapshotTest {
+    @get:Rule val tmp = TemporaryFolder()
     private val root = TestData.root()
     private val d = TestData.data()
     private fun asset(p: String) = File(root, "app/src/main/assets/$p")
@@ -101,19 +106,76 @@ class RuPathSnapshotTest {
 
     private val inputs by lazy { TestData.golden().let { g -> List(g.length()) { g.getJSONObject(it).getString("text") } } + examples + paragraphs }
 
-    /** Умолчание, чтец, cis-пак и каждый ключ правил, переключённый относительно умолчания (плюс служебные);
+    /** Умолчание, чтец, cis-пак и чтец на нём. */
+    private fun base() = listOf(Triple("default", Rules(), d.allowed), Triple("sr", Rules().screenReader(), d.allowed),
+        Triple("cis", Rules(), TestData.cisAllowed), Triple("cis-sr", Rules().screenReader(), TestData.cisAllowed))
+
+    /** base и каждый ключ правил, переключённый относительно умолчания (плюс служебные);
      * ключи sr_* и en_proxy_sr действуют только у чтеца — с ними screenReader(). */
     private fun variants(): List<Triple<String, Rules, String>> {
-        val ru = d.allowed; val cis = TestData.cisAllowed
         val keys = Rules.KEYS + listOf("speech", Rules.LINK_WORD, Rules.LETTER_ECHO, Rules.SCREEN_READER)
-        return listOf(Triple("default", Rules(), ru), Triple("sr", Rules().screenReader(), ru),
-            Triple("cis", Rules(), cis), Triple("cis-sr", Rules().screenReader(), cis)) +
-            keys.map { k -> Rules().let { r -> r.with(k, !r.on(k)).let { t ->
-                Triple("$k=${if (r.on(k)) 0 else 1}", if (k.startsWith("sr_") || k == "en_proxy_sr") t.screenReader() else t, ru) } } }
+        return base() + keys.map { k -> Rules().let { r -> r.with(k, !r.on(k)).let { t ->
+            Triple("$k=${if (r.on(k)) 0 else 1}", if (k.startsWith("sr_") || k == "en_proxy_sr") t.screenReader() else t, d.allowed) } } }
+    }
+
+    // Свои списки пользователя. Ударения: значения не там, где их поставит заглушка акцентора (последняя гласная), —
+    // иначе потеря строки не видна; «замок» в обоих списках — побеждает поздний по алфавиту («Основной»); «потом» и
+    // «замок» выбрасывают системные фразы замен с этими словами (DictCache.userWords); ключ с заглавной, «ё», апостроф
+    // (у русского ключ как есть: «Дартаньян» без апострофа словарь не находит).
+    private val ownStress = mapOf(
+        Dicts.NAMES to listOf("замок зам+ок", "Гордеев горд+еев"),
+        Dicts.MAIN to listOf("замок з+амок", "потом п+отом", "Королев корол+ёв", "блёклый бл+еклый", "д'артаньян д'арт+аньян"))
+    // замены: слово, «$» с регистром, фраза с ударением (её «замок» словарь ударений не трогает), маска, regex,
+    // апостроф, удаление, пауза; первой строкой в «Основном» — предустановка Prefs.DEFAULT_REPLACE
+    private val ownReplace = listOf("ФСБ = федеральная служба", "\$Мэр = Градоначальник", "старый замок = старый зам+ок",
+        "перечита* = перечит+а*", "~(\\d+) ?р\\.(?!\\p{L}) = \$1 рублей", "о'нил = о-н+ил", "ну-ну =", "итак = итак{pause:400}")
+    // смахнутые строки системных («Системный удалённые»)
+    private val swiped = mapOf(Dicts.Kind.STRESS to "большие больш+ие", Dicts.Kind.REPLACE to "в замке старого = в з+амке старого")
+    private val ownTexts = listOf(
+        "Старый замок стоял на холме, а замок на двери сломан. Ключ под замок его положи. В замке старого графа темно.",
+        "Мы пили чай, а потом обливались потом. Ищи потом ветра в поле.",
+        "Королев и Королёв, блёклый и блеклый, малек в пруду. Большие волны.",
+        "Д'Артаньян и Дартаньян, мистер О'Нил.",
+        "Мэр и мэр, агент ФСБ. Вы барон Гордеев?",
+        "Цена 5р. и 7 р., перечитал и перечитала. Итак, ну-ну.",
+    )
+
+    /** Словари, сложенные, как их складывает приложение: Prefs (migrate с предустановкой, installSystem), свои списки,
+     * смахивание строк системных (addRemoved + rebuildSystem); читаемые файлы — как Prefs.langDictFiles для ru. */
+    private fun ownDicts(): Pair<Map<String, String>, Replacements> {
+        val dir = tmp.newFolder()
+        Dicts.migrate(dir, Prefs.DEFAULT_REPLACE)
+        Dicts.installSystem(dir) { p -> asset(p).takeIf { it.isFile }?.readText() }
+        for ((name, lines) in ownStress) Dicts.file(dir, Dicts.Kind.STRESS, name).writeText(lines.joinToString("") { "$it\n" })
+        Dicts.file(dir, Dicts.Kind.REPLACE, Dicts.MAIN).appendText(ownReplace.joinToString("") { "$it\n" })
+        for ((kind, line) in swiped) { Dicts.addRemoved(dir, kind, line); Dicts.rebuildSystem(dir, kind) }
+        fun files(kind: Dicts.Kind) = Dicts.forLang(Dicts.files(dir, kind).filter { Dicts.name(it) != Dicts.REMOVED }, "ru")
+        return DictCache.stress(files(Dicts.Kind.STRESS)) to DictCache.replacements(files(Dicts.Kind.REPLACE), stress = files(Dicts.Kind.STRESS))
     }
 
     private fun sha(lines: List<String>) = MessageDigest.getInstance("SHA-256").digest(lines.joinToString("\n").toByteArray())
         .joinToString("") { "%02x".format(it) }
+
+    /** Хэши обоих этапов варианта: словари ударений и замен — [dicts]. */
+    private fun hashes(name: String, r: Rules, allowed: String, dicts: Pair<Map<String, String>, Replacements>,
+                       texts: List<String>): List<Pair<String, String>> {
+        val s = Stress(d, models, dicts.first, r)
+        return listOf("prepare/$name" to sha(texts.map { RuLayer.prepare(it, allowed, r) }), "full/$name" to sha(texts.flatMap { t ->
+            // английский кусок другому движку (en_proxy_*) — от трёх слов
+            val en = if (r.on(if (r.on(Rules.SCREEN_READER)) "en_proxy_sr" else "en_proxy_books")) 3 else 0
+            Pipeline.plan(t, d, 100, 300, dicts.second, r, en, allowed = allowed).map { seg ->
+                // фокус и тип — как в synthSegment сервиса: в accent их не видно
+                var ft = if (r.on("exclaim")) Marks.exclaim(seg.text) else seg.text
+                if (r.on("question") && SentenceType.classify(ft, d, r) == "general_q") ft = Marks.question(ft)
+                val marks = Marks.parse(ft, r.focusLevel)
+                val acc = Pipeline.accent(seg.text, d, s, allowed, r)
+                val (end, dot) = s.modelEnd(acc)
+                val spoken = s.stretchShort(end)
+                "$seg\t${marks.words}\t$acc\t$dot\t${s.forModel(spoken)}\t${s.yaOnset(spoken)}\t${s.clusterOnset(spoken)}\t" +
+                    SentenceType.classify(marks.text, d, r)
+            }
+        }))
+    }
 
     @Test fun ruPathMatchesSnapshot() {
         // общие таблицы — как в SileroModels.data(): морфология, «ё», твёрдое «э», эмодзи, имена знаков
@@ -125,27 +187,16 @@ class RuPathSnapshotTest {
         SymbolNames.cldr = asset("symbols_ru.tsv").bufferedReader().useLines { SymbolNames.parse(it) }
         try {
             val stressDict = listOf(asset("dicts/stress/Системный.txt"))
-            val userDict = DictCache.stress(stressDict)
-            val repl = DictCache.replacements(listOf(asset("dicts/replace/Системный.txt")), stress = stressDict)
-            // варианты независимы: параллельно (~25 с подряд), порядок строк — по списку вариантов
-            val got = variants().parallelStream().map { (name, r, allowed) ->
-                val s = Stress(d, models, userDict, r)
-                listOf("prepare/$name" to sha(inputs.map { RuLayer.prepare(it, allowed, r) }), "full/$name" to sha(inputs.flatMap { t ->
-                    // английский кусок другому движку (en_proxy_*) — от трёх слов
-                    val en = if (r.on(if (r.on(Rules.SCREEN_READER)) "en_proxy_sr" else "en_proxy_books")) 3 else 0
-                    Pipeline.plan(t, d, 100, 300, repl, r, en, allowed = allowed).map { seg ->
-                        // фокус и тип — как в synthSegment сервиса: в accent их не видно
-                        var ft = if (r.on("exclaim")) Marks.exclaim(seg.text) else seg.text
-                        if (r.on("question") && SentenceType.classify(ft, d, r) == "general_q") ft = Marks.question(ft)
-                        val marks = Marks.parse(ft, r.focusLevel)
-                        val acc = Pipeline.accent(seg.text, d, s, allowed, r)
-                        val (end, dot) = s.modelEnd(acc)
-                        val spoken = s.stretchShort(end)
-                        "$seg\t${marks.words}\t$acc\t$dot\t${s.forModel(spoken)}\t${s.yaOnset(spoken)}\t${s.clusterOnset(spoken)}\t" +
-                            SentenceType.classify(marks.text, d, r)
-                    }
-                }))
-            }.collect(Collectors.toList()).flatten().toMap()
+            val sys = DictCache.stress(stressDict) to DictCache.replacements(listOf(asset("dicts/replace/Системный.txt")), stress = stressDict)
+            val own = ownDicts()
+            val jobs = variants().map { (n, r, a) -> { hashes(n, r, a, sys, inputs) } } +
+                base().map { (n, r, a) -> { hashes("user-$n", r, a, own, inputs + ownTexts) } }
+            // Варианты независимы: параллельно (подряд ~36 с против 10–20), порядок строк — по списку вариантов; подряд
+            // эталон тот же. Общее между потоками только читается: таблицы выше поставлены до потоков (@Volatile), Morph и
+            // stress.bin — абсолютные get по буферу, словари — готовые карты, ленивые регулярки Normalizer — by lazy
+            // с блокировкой; Replacements кладёт скомпилированный regex правила в поле — гонка безвредна (тот же Regex,
+            // Pattern в final-поле); Stress с кэшем фраз свой на вариант.
+            val got = jobs.parallelStream().map { it() }.collect(Collectors.toList()).flatten().toMap()
             if (System.getProperty("ruvoice.snapshot.write") == "true") {
                 snapshot.writeText("# RuPathSnapshotTest: вариант<TAB>sha256 вывода; перезапись -Druvoice.snapshot.write=true\n" +
                     got.entries.joinToString("") { "${it.key}\t${it.value}\n" })
