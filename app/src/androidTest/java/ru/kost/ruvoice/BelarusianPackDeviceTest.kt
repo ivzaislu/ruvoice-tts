@@ -15,6 +15,9 @@ import org.junit.Assume.assumeTrue
 import org.junit.BeforeClass
 import org.junit.Test
 import org.junit.runner.RunWith
+import ru.kost.ruvoice.text.BeLayer
+import ru.kost.ruvoice.text.Rules
+import ru.kost.ruvoice.text.Stress
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -77,7 +80,10 @@ class BelarusianPackDeviceTest {
         assertEquals("be", p.lang)
         assertEquals(3, p.format)
         assertTrue("нет ${Packs.ACCENTOR}", p.accentor)
-        assertTrue("${Packs.STRESS} пуст", p.corrections.isNotEmpty())
+        // stress.txt пака — системный список языка в «Ударениях»
+        val list = Dicts.file(ctx.filesDir, Dicts.Kind.STRESS, Dicts.packName("be"))
+        assertEquals(File(p.dir, Packs.STRESS).readText(), list.readText())
+        assertTrue("${Packs.STRESS} пуст", list.readLines().any { DictLines.parseStress(it) != null })
         assertEquals("bel_larisa", p.defaultVoice)
         assertEquals(setOf("bel_larisa", "bel_anatoliy", "bel_dmitriy"), p.speakers.keys)
     }
@@ -147,6 +153,25 @@ class BelarusianPackDeviceTest {
             val (ru, ruYo) = m.accentor(listOf("елка", "привет"))
             assertEquals(2, ru.size); assertEquals(2, ruYo.size)
             assertTrue("«ё» русского акцентора пустые", ruYo.all { it.isNotEmpty() })
+        } finally { m.release() }
+    }
+
+    /** «Системный be» выключается, как другие списки: включён — слово из stress.txt с ударением пака, выключен — как
+     * у акцентора (в stress.txt только слова, где он ошибается). Состояние списков вернёт @AfterClass. */
+    @Test fun packListToggles() {
+        val name = Dicts.packName("be")
+        val (w, v) = Dicts.file(ctx.filesDir, Dicts.Kind.STRESS, name).useLines { ls ->
+            ls.mapNotNull { DictLines.parseStress(it) }.first { (w, _) -> w.all { it in 'а'..'я' || it in "ёіў" } && w.count { it in "аеёіоуыэюя" } >= 2 }
+        }
+        val prefs = Prefs(ctx)
+        val m = SileroModels(ctx)
+        try {
+            m.ensureStress(packs.single { it.id == ID })
+            fun read() = Stress(m.data, m, prefs.userDict("be"), Rules(), layer = BeLayer).apply(w)
+            prefs.setOff(Dicts.Kind.STRESS, prefs.off(Dicts.Kind.STRESS) - name)
+            assertEquals(v.lowercase(), read())
+            prefs.setOff(Dicts.Kind.STRESS, prefs.off(Dicts.Kind.STRESS) + name)
+            assertNotEquals(v.lowercase(), read())
         } finally { m.release() }
     }
 

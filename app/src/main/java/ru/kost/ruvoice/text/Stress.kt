@@ -22,12 +22,11 @@ internal fun verbLike(t: String, morph: Morph?) = t.isNotEmpty() && (morph == nu
 
 /** morph — таблица морфологии для согласования с прилагательным в gramPass; null — правило выключено. По умолчанию та же,
  * что у нормализатора (SileroModels.data() ставит её раз на процесс; в JVM-тестах без ассета — null).
- * layer — язык текста (по полю lang пака): у белорусского ударения ставит [BelStress] по акцентору пака и его
- * поправкам [corrections]; русский конвейер (таблицы, омографы, «ё», акцентор) остаётся как был. */
+ * layer — язык текста (по полю lang пака): у белорусского ударения ставит [BelStress] по акцентору пака и словарю
+ * языка (в нём и поправки пака); русский конвейер (таблицы, омографы, «ё», акцентор) остаётся как был. */
 class Stress(private val d: SileroData, private val models: StressModels, private val userDict: Map<String, String> = emptyMap(),
              private val rules: Rules = Rules(), private val morph: Morph? = Normalizer.morph, private val yo: YoDict? = YoDict.shared,
-             private val hardE: HardE? = HardE.shared, val layer: TextLayer = Layers.RU,
-             private val corrections: Map<String, String> = emptyMap()) {
+             private val hardE: HardE? = HardE.shared, val layer: TextLayer = Layers.RU) {
     private val vowels = "аоуыэиеяёю"
     private val tok = BertTokenizer(d)
     private val homoWordRe = Regex("(?=.*[а-яё])[а-яё+]+", RegexOption.IGNORE_CASE)
@@ -38,8 +37,8 @@ class Stress(private val d: SileroData, private val models: StressModels, privat
     private val nonCyr = Regex("[^А-Яа-яёЁ]")
     private val wordRe = Regex("[а-яё+]+", RegexOption.IGNORE_CASE)
 
-    /** Ударения языка слоя (у белорусского — акцентор пака и его поправки); null — русский конвейер ниже. */
-    private val own = layer.stress(models, userDict, corrections)
+    /** Ударения языка слоя (у белорусского — акцентор пака и словарь); null — русский конвейер ниже. */
+    private val own = layer.stress(models, userDict, rules)
 
     /** source — текст сегмента до нормализации: нормализатор опускает регистр, а правилу «самого + Имя» нужна заглавная
      * следующего слова. По умолчанию — сам sentence (тесты, аудит). */

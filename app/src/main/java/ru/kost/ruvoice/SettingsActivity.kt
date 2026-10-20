@@ -365,8 +365,7 @@ class SettingsActivity : AppCompatActivity() {
                 // те же акцентор и BERT, что у сервиса (SileroModels.shared); если сервис их выгрузил, Stress догрузит
                 val models = SileroModels.shared(ctx)
                 val lang = speaker?.lang ?: "ru"
-                val stress = Stress(d, models, prefs.userDict(lang), rules, layer = layer,
-                    corrections = speaker?.pack?.corrections ?: emptyMap())
+                val stress = Stress(d, models, prefs.userDict(lang), rules, layer = layer)
                 // «Разбор» — как «Прослушать»: запрос из самого приложения сервис читает по правилам книг
                 val enEngine = if (rules.on("en_proxy_books")) EnglishProxy.chosen(ctx, prefs.enEngine) else null
                 val segments = Pipeline.plan(text, d, prefs.sentencePauseMs, prefs.paragraphPauseMs, prefs.replacements(lang), rules,

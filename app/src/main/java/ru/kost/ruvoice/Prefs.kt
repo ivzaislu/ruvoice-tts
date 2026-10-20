@@ -154,6 +154,8 @@ class Prefs(private val context: Context) {
         val installedAt = context.packageManager.getPackageInfo(context.packageName, 0).lastUpdateTime
         if (p.getLong("system_dicts_at", -1) != installedAt) {
             Dicts.installSystem(context.filesDir) { path -> runCatching { context.assets.open(path).bufferedReader().readText() }.getOrNull() }
+            // пак не на русском, поставленный до появления системных списков паков
+            Dicts.syncPacks(context.filesDir, Packs.installed(context.filesDir))
             p.edit().putLong("system_dicts_at", installedAt).apply()
         }
         // пустой список «Имена» один раз: удалённый пользователем не воскрешаем
@@ -173,7 +175,8 @@ class Prefs(private val context: Context) {
     fun replacements(lang: String = "ru"): Replacements =
         DictCache.replacements(langDictFiles(Dicts.Kind.REPLACE, lang), stress = langDictFiles(Dicts.Kind.STRESS, lang), lang = lang)
 
-    /** Собирает JSON-файл экспорта настроек (текущие Prefs + все списки ударений и замен + профили). */
+    /** Собирает JSON-файл экспорта настроек (текущие Prefs + все списки ударений и замен, кроме системных паков
+     * (Dicts.portable), + профили). */
     fun exportJson(): String {
         val prefsMap = mapOf(
             "voice" to voice,
@@ -207,7 +210,7 @@ class Prefs(private val context: Context) {
             "audit_dict_names" to auditDict(Audit.Kind.NAMES),
             "audit_dict_replace" to auditReplaceDict,
         )
-        fun all(kind: Dicts.Kind) = dictFiles(kind).associate { Dicts.name(it) to it.readText() }
+        fun all(kind: Dicts.Kind) = dictFiles(kind).filter { Dicts.portable(Dicts.name(it)) }.associate { Dicts.name(it) to it.readText() }
         val auditLists = Audit.Kind.values().associate { it.name.lowercase() to audit.text(it) }.filterValues { it.isNotEmpty() }
         val profiles = Profiles(context)
         val binds = profiles.binds().entries.associate { (v, id) -> id to v }
@@ -261,8 +264,10 @@ class Prefs(private val context: Context) {
         (prefsMap["audit_dict_names"] as? String)?.let { setAuditDict(Audit.Kind.NAMES, it) }
         (prefsMap["audit_dict_replace"] as? String)?.let { auditReplaceDict = it }
         parsed.audit?.forEach { (k, text) -> Audit.Kind.values().firstOrNull { it.name.equals(k, ignoreCase = true) }?.let { audit.load(it, text) } }
+        // «Системный be» в файле — свой список из версии, где имя было свободно (наш экспорт списков паков не пишет): под свободным именем
         fun write(kind: Dicts.Kind, dicts: Map<String, String>?) = dicts?.forEach { (name, body) ->
-            if (Dicts.validName(name)) Dicts.file(context.filesDir, kind, name.trim()).also { it.parentFile!!.mkdirs() }.writeText(body)
+            if (Dicts.validName(name)) Dicts.file(context.filesDir, kind, name.trim().let { if (Dicts.portable(it)) it else Dicts.freeName(context.filesDir, kind, it) })
+                .also { it.parentFile!!.mkdirs() }.writeText(body)
         }
         write(Dicts.Kind.STRESS, parsed.stress); write(Dicts.Kind.REPLACE, parsed.replace)
         // системный из файла — чужой версии и со своими удалёнными: пересобрать по нашей полной копии
