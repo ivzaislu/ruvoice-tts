@@ -71,6 +71,12 @@ object RuLayer : TextLayer {
 object BeLayer : TextLayer {
     override val code = "be"
     override val locale = Locale("be", "BY")
+    /** Русские правила без белорусского аналога: ссылки, эмодзи и имена знаков, коды, арифметика, падежи, дроби, разделы,
+     * разряды, сноски, капс кириллицей, русские ударения ([Stress]: таблицы, омографы, «ё», твёрдое «э», приставка через пробел). */
+    override val unsupported = setOf(
+        "sr_symbols", "symbol_names", "emoji", "sr_link_word", "drop_links", "link_domain", "drop_emails", "drop_images", "read_links",
+        "codes", "arith", "cases", "fractions", "spoons", "sections", "thousands", "footnotes", "spell_cyr",
+        "gram", "first_pl", "homo", "yo", "hard_e", "prefix_space")
     override fun prepare(text: String, allowed: String, rules: Rules): String = BelNormalizer.prepare(text, allowed, rules)
     override fun questions(d: SileroData): QuestionLists = BE_QUESTIONS
     override fun stress(models: StressModels, userDict: Map<String, String>, corrections: Map<String, String>) =

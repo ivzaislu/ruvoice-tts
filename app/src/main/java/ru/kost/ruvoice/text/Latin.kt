@@ -105,11 +105,11 @@ object Latin {
     private const val VOWELS = "аеёіоуыэюя"
     private const val EN_VOWELS = "aeiou"
 
-    /** Одно латинское слово в белорусской записи. */
-    fun word(raw: String): String {
+    /** Одно латинское слово в белорусской записи; капс по буквам — правило spell_lat. */
+    fun word(raw: String, rules: Rules = Rules()): String {
         val low = raw.lowercase()
         WORDS[low]?.let { return it }
-        if (raw.length in 2..5 && raw.all { it.isUpperCase() || !it.isLetter() } && raw.all { !it.isLetter() || it.isUpperCase() }) {
+        if (rules.on("spell_lat") && raw.length in 2..5 && raw.all { it.isUpperCase() || !it.isLetter() } && raw.all { !it.isLetter() || it.isUpperCase() }) {
             return low.mapNotNull { NAMES[it] ?: LETTERS[it] }.joinToString("-")
         }
         val out = StringBuilder()
@@ -148,8 +148,8 @@ object Latin {
     /** Все латинские вставки в тексте → белорусские буквы; остальное не трогаем. Вплотную к цифрам — через пробел, а одна
      * заглавная буква — именем, как у русского «пять джи»: «5G» — «5 гэ», «S24» — «эс 24», «MP3» — «эм-пэ 3» (капс — по буквам и так);
      * иначе число склеивалось с буквой, а «г», «м», «т» читались единицами («пяць грамаў»). Слово через дефис сначала
-     * ищется в словаре целиком: «Wi-Fi» — «вайфай», а не «ўі-фі». */
-    fun translate(text: String): String {
+     * ищется в словаре целиком: «Wi-Fi» — «вайфай», а не «ўі-фі». Имя буквы при цифрах — правило letter_digit. */
+    fun translate(text: String, rules: Rules = Rules()): String {
         fun latin(k: Int) = k < text.length && text[k].code < 128 && text[k].isLetter()
         val out = StringBuilder(text.length + 8)
         var i = 0
@@ -167,8 +167,8 @@ object Latin {
             val digitAfter = j < text.length && text[j].isDigit()
             if (digitBefore) out.append(' ')
             // строчные g, m, l, t — единицы, как были («5m», «500g», «2l»); заглавные («5G», «10T») и прочие («2x») — именем
-            val name = (digitBefore || digitAfter) && j - i == 1 && (text[i].isUpperCase() || text[i] !in "gmlt")
-            out.append(if (name) NAMES.getValue(text[i].lowercaseChar()) else word(text.substring(i, j)))
+            val name = rules.on("letter_digit") && (digitBefore || digitAfter) && j - i == 1 && (text[i].isUpperCase() || text[i] !in "gmlt")
+            out.append(if (name) NAMES.getValue(text[i].lowercaseChar()) else word(text.substring(i, j), rules))
             if (digitAfter) out.append(' ')
             i = j
         }
