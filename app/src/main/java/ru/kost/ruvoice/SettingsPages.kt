@@ -264,9 +264,9 @@ class RulesFragment : PageFragment(R.layout.fragment_rules) {
     override fun onSaveInstanceState(out: Bundle) { super.onSaveInstanceState(out); out.putString(KEY_LANG, lang) }
 
     override fun load(v: View) {
-        val tabs = !english && loadTabs(v)
-        for (id in listOf(R.id.chunkBlock, R.id.rulesFilterBox)) v.findViewById<View>(id).visibility = if (english) View.GONE else View.VISIBLE
-        v.findViewById<View>(R.id.rulesHint).visibility = if (english || tabs) View.GONE else View.VISIBLE
+        if (!english) loadTabs(v)
+        // при вкладках общая подпись остаётся: пояснение про языки — над поиском, совет про «Разбор» — под ним
+        for (id in listOf(R.id.chunkBlock, R.id.rulesFilterBox, R.id.rulesHint)) v.findViewById<View>(id).visibility = if (english) View.GONE else View.VISIBLE
         v.findViewById<EditText>(R.id.maxLen).setText(prefs.maxLen.toString())
         v.findViewById<EditText>(R.id.srMaxLen).setText(prefs.srMaxLen.toString())
         v.findViewById<View>(R.id.quoteBlock).visibility = if (english) View.GONE else View.VISIBLE

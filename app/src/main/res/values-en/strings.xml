@@ -304,6 +304,7 @@
     <string name="rule_sr_link_word_hint">Only for the screen reader: an address starting with «https://» or «www.» is read as the word «ссылка» (link) and the site name («ссылка, youtube точка com»), instead of the whole address piece by piece. Works even if “Skip links” is on. Email addresses are read as before.</string>
     <string name="rule_sr_quote_off">No dialogue voice</string>
     <string name="rule_sr_quote_off_hint">Lines starting with a dash in notifications and chats («— Привет») do not switch to the dialogue voice in the middle of a phrase.</string>
+    <string name="rule_sr_quote_off_hint_be">Lines starting with a dash in notifications and chats («— Прывітанне») do not switch to the dialogue voice in the middle of a phrase.</string>
     <string name="rule_sr_lead_in_off">No silence before a phrase</string>
     <string name="rule_sr_lead_in_off_hint">The screen reader starts almost every phrase after a pause, so 300 ms of silence (the “Silence before a phrase” rule) would add a delay to every gesture.</string>
     <string name="rule_sr_pauses_off">No pauses between sentences</string>
@@ -335,6 +336,7 @@
     <string name="rule_lead_in">Silence before a phrase</string>
     <string name="rule_lead_in_hint">300 ms of silence before the first word, if more than 2.5 seconds have passed since the last sound. In the first fraction of a second after it starts, the Android audio player may swallow the beginning of the sound, and with silence in front, it is the silence that gets lost, not speech. Turn it off if the delay after a pause bothers you.</string>
     <string name="rule_letter_name_hint">A request that is a single letter (in TalkBack: the letter under the cursor, typing echo, a key) is read as the letter name: «б» as «бэ», «ь» as «мягкий знак» (soft sign). A single symbol is read by name: «#» as «решётка». Letters that are words of their own inside text are not changed.</string>
+    <string name="rule_letter_name_hint_be">A request that is a single letter (in TalkBack: the letter under the cursor, typing echo, a key) is read as the letter name: «б» as «бэ», «ь» as «мяккі знак» (soft sign), «ў» as «у нескладовае» (non-syllabic u). Letters that are words of their own inside text are not changed.</string>
     <string name="rule_fast_start">Fast start in books and apps</string>
     <string name="rule_fast_start_hint">The first chunk of text is at most 100 characters (cut at a comma), the rest follow the length from the “Synthesis chunk length” section. Sound starts only after a whole chunk is synthesized, so on a slow phone a long sentence means seconds of silence before it starts. When off, the first chunk is like all the others. The screen reader has its own rule in “Screen reading (TalkBack)”.</string>
     <string name="rule_prefetch">Synthesize the next chunk in advance</string>
@@ -359,11 +361,13 @@
     <string name="rule_roman_hint_be">«XX стагоддзе» (century) is read as «дваццатае стагоддзе», «Пётр I» as «Пётр першы».</string>
     <string name="rule_roman_name">Roman numeral after a name</string>
     <string name="rule_roman_name_hint">«Николай II» is read as «Николай второй», «Екатерина II» as «вторая».</string>
+    <string name="rule_roman_name_hint_be">«Мікалай II» is read as «Мікалай другі», «Кацярына II» as «другая».</string>
     <string name="rule_dates">Dates in digits</string>
     <string name="rule_dates_hint">«05.12.2020» is read as «пятого декабря две тысячи двадцатого года», «12.05» as «двенадцатое мая».</string>
     <string name="rule_dates_hint_be">«12.05.2026» is read as «дванаццатага мая дзве тысячы дваццаць шостага года», «3.09» as «трэцяга верасня».</string>
     <string name="rule_day_month">Day and month</string>
     <string name="rule_day_month_hint">«20 июня» is read as «двадцатого июня», «к 1 сентября» as «к первому сентября».</string>
+    <string name="rule_day_month_hint_be">«20 чэрвеня» is read as «дваццатага чэрвеня», «да 1 верасня» as «да першага верасня».</string>
     <string name="rule_years">Years</string>
     <string name="rule_years_hint">«в 1917 году» is read as «в тысяча девятьсот семнадцатом», also «1941–1945 гг.», «в 90-х», «490 г. до н. э.».</string>
     <string name="rule_years_hint_be">«у 1812 г.» is read as «у тысяча восемсот дванаццатым годзе», «у 1990-х гадах» as «у тысяча дзевяцьсот дзевяностых гадах», also «1941-1945 гады».</string>
@@ -380,6 +384,7 @@
     <string name="rule_units_hint_be">км, кг, г, л, шт. and others: «3 км» is read as «тры кіламетры», «5 г. солі» as «пяць грамаў солі».</string>
     <string name="rule_degrees">Degrees</string>
     <string name="rule_degrees_hint">«−5 °C» is read as «минус пять градусов цельсия», «°F» as «по фаренгейту».</string>
+    <string name="rule_degrees_hint_be">«−5 °C» is read as «мінус пяць градусаў цэльсія».</string>
     <string name="rule_currency">Currencies</string>
     <string name="rule_currency_hint">«5 руб. 30 коп.» is read as «пять рублей тридцать копеек», also $, € and ₽.</string>
     <string name="rule_currency_hint_be">«5 тыс. руб.» is read as «пяць тысяч рублёў», «1,20 BYN» as «адзін рубель дваццаць капеек», «$65 000» as «шэсцьдзясят пяць тысяч долараў», «€ 50» as «пяцьдзясят еўра».</string>
@@ -389,6 +394,7 @@
     <string name="rule_spoons_hint">Teaspoons and tablespoons in recipes: «2 ч. л.» is read as «две чайные ложки», «1 ст. л.» as «одна столовая ложка».</string>
     <string name="rule_gen_suffix">Number endings «5-ти», «2-х»</string>
     <string name="rule_gen_suffix_hint">«5-ти» is read as «пяти», «2-ух» as «двух», «3-х» as «трёх».</string>
+    <string name="rule_gen_suffix_hint_be">«2-х» is read as «двух», «3-х» as «трох», «4-х» as «чатырох».</string>
     <string name="rule_sections">Section numbers</string>
     <string name="rule_sections_hint">«2.10.3» is read as «два точка десять точка три». Two numbers with a dot («1.2») stay a decimal or a date.</string>
     <string name="rule_arith">Arithmetic</string>
@@ -407,6 +413,7 @@
     <string name="rule_spell_lat_hint_be">Spelled letter by letter: «FBI» as «эф-бэ-і», «LTE» as «эл-тэ-е».</string>
     <string name="rule_letter_digit">Letter next to a digit</string>
     <string name="rule_letter_digit_hint">The letter is read by its name: «5800X» as «пять тысяч восемьсот экс», «5800X3D» as «… экс три ди», «GPT-4o» as «… четыре оу», «1080p» as «… пи». Cyrillic codes too: «Р-9» as «эр девять», «8К74» as «восемь ка семьдесят четыре».</string>
+    <string name="rule_letter_digit_hint_be">The letter is read by its name: «5800X» as «пяць тысяч восемсот экс», «5800X3D» as «… экс тры дэ», «1080p» as «… пэ», «5G» as «пяць гэ».</string>
     <string name="rule_latin">Words in Latin letters</string>
     <string name="rule_latin_hint">Read the Russian way by transliteration: «iphone» as «айфон», «sherlock» as «шерлок». When off, words in Latin letters drop out of speech.</string>
     <string name="rule_latin_hint_be">Read the Belarusian way by transliteration: «Wi-Fi» as «вайфай», «Then I went» as «тен і ўент».</string>
@@ -452,10 +459,12 @@
     <string name="analyze_english">English, read by “%1$s”</string>
     <string name="rule_dehyphen">Words split across lines</string>
     <string name="rule_dehyphen_hint">«со-» at the end of a line and «бака» at the start of the next are joined into «собака». Hyphenated words like «Санкт-Петербург» and «по-русски» are left alone.</string>
+    <string name="rule_dehyphen_hint_be">«са-» at the end of a line and «бака» at the start of the next are joined into «сабака». «Санкт-Пецярбург» keeps its hyphen.</string>
     <string name="rule_soft_break">Soft line breaks</string>
     <string name="rule_soft_break_hint">A single line break before a lowercase letter (common in text from PDF files) is treated as a space, not as a new paragraph. When off, each line is a separate paragraph.</string>
     <string name="rule_punct">Punctuation cleanup</string>
     <string name="rule_punct_hint">«!!!» becomes «!», «. . .» becomes «…», a hyphen with spaces around it becomes a dash. When off, «Всё. . . Дальше» is split into sentences at every dot.</string>
+    <string name="rule_punct_hint_be">«!!!» becomes «!», «. . .» becomes «…», a hyphen with spaces around it becomes a dash. When off, «Усё. . . Далей» is split into sentences at every dot.</string>
     <string name="rule_ssml">SSML markup</string>
     <string name="rule_ssml_hint">SSML is speech markup that some reader apps send. Supported tags: &lt;speak&gt;, &lt;break&gt;, &lt;p&gt;, &lt;s&gt;, &lt;emphasis&gt; and &lt;prosody rate pitch&gt; (also inside a sentence, without breaking it; pitch=\"robot\" gives a flat robot voice). When off, text with tags is read as it is.</string>
     <string name="rule_gram">Stress by grammatical case</string>
@@ -475,20 +484,27 @@
     <string name="rule_prefix_space_hint">«Из-под», «по-другому», «во-первых» are sent to the model as «из под», «по другому»: the model stretches a hyphen into a pause, and with a space it sounds smoother. Only for the unstressed prefixes во-, по-, из-. «кто-то», «чёрно-белый» are left alone. When off, the hyphen stays, as in the text.</string>
     <string name="rule_end_dot">Period after a phrase without final punctuation</string>
     <string name="rule_end_dot_hint">The model drags out the last vowel, and without punctuation at the end the stress moves onto it: «страдала» sounds like «страдалá». A chunk without a final mark (a single word, a menu item) is sent to the model with a period, without adding a pause. A word stressed on its last syllable is left alone. When off, the text goes as it is.</string>
+    <string name="rule_end_dot_hint_be">The model drags out the last vowel, and without punctuation at the end the stress moves onto it: «кніга» sounds like «кнігá». A chunk without a final mark (a single word, a menu item) is sent to the model with a period, without adding a pause. A word stressed on its last syllable is left alone. When off, the text goes as it is.</string>
     <string name="rule_end_oxy">No period after a stressed final syllable</string>
     <string name="rule_end_oxy_hint">Before a period the model swallows the last vowel, so stress on the last syllable is heard on the one before it: «ухо востро» sounds like «вóстро», the same with «светло», «окно». When on, such a word at the end of a sentence is sent to the model without the period. The stress is heard better, but the voice drops less at the end of the phrase. When off, the text goes as it is.</string>
+    <string name="rule_end_oxy_hint_be">Before a period the model swallows the last vowel, so stress on the last syllable is heard on the one before it: «акно» sounds like «áкно», the same with «святло», «вясна». When on, such a word at the end of a sentence is sent to the model without the period. The stress is heard better, but the voice drops less at the end of the phrase. When off, the text goes as it is.</string>
     <string name="rule_short_word">Lengthen a short one-word sentence</string>
     <string name="rule_short_word_hint">«— Да.», «Вы?», «Кто?», «Всё.»: a word of 2 or 3 letters ending in its only vowel, when it is the only word in the sentence. The model says such a vowel in 160 ms, and when sped up you hear just «Д\'». The rule doubles the vowel (about 300 ms). When off, the text goes as it is.</string>
+    <string name="rule_short_word_hint_be">«— Не.», «Ты?», «Хто?», «Дзе?»: a word of 2 or 3 letters ending in its only vowel, when it is the only word in the sentence. The model says such a vowel in 160 ms, and when sped up you hear just «Н\'». The rule doubles the vowel (about 300 ms). When off, the text goes as it is.</string>
     <string name="rule_intonation">Intonation by sentence type</string>
     <string name="rule_intonation_hint">Questions («Ты идёшь?», «Чай или кофе?») and exclamations are read with matching intonation. When off, everything is read as a statement.</string>
+    <string name="rule_intonation_hint_be">Questions («Ты ідзеш?», «Чай ці каву?») and exclamations are read with matching intonation. When off, everything is read as a statement.</string>
     <string name="rule_focus">Word emphasis</string>
     <string name="rule_focus_hint">A word in asterisks («Он *не* пришёл» in the text or in a replacement, &lt;emphasis&gt; in SSML) is stressed by the model with intonation. When off, the asterisks are just removed.</string>
+    <string name="rule_focus_hint_be">A word in asterisks («Ён *не* прыйшоў» in the text or in a replacement, &lt;emphasis&gt; in SSML) is stressed by the model with intonation. When off, the asterisks are just removed.</string>
     <string name="focus_level">Emphasis strength</string>
     <string name="focus_level_hint">From 1 to 3: 1 is slightly stronger than the neighboring words, 3 is the strongest. Applies to all emphasized words.</string>
     <string name="rule_exclaim">Emphasis in a short exclamation</string>
     <string name="rule_exclaim_hint">«Эй, вы!», «Бам!» (up to two words ending in «!») are read with emphasis on the last word, otherwise the model says them short and flat. Strength is the same as for word emphasis above.</string>
+    <string name="rule_exclaim_hint_be">«Гэй, вы!», «Бах!» (up to two words ending in «!») are read with emphasis on the last word, otherwise the model says them short and flat. Strength is the same as for word emphasis above.</string>
     <string name="rule_question">Emphasis in a question without a verb</string>
     <string name="rule_question_hint">«Вы барон Гордеев?», «Это правда?»: a yes/no question without a verb is read with emphasis on the last word. Otherwise the model raises the voice on the first word and drops it at the end, and the question sounds like a statement. A question with a verb («Ты придёшь завтра?») is left alone. Strength is the same as for word emphasis above.</string>
+    <string name="rule_question_hint_be">«Гэта праўда?», «Вы з Мінска?»: a yes/no question without a verb is read with emphasis on the last word. Otherwise the model raises the voice on the first word and drops it at the end, and the question sounds like a statement. Strength is the same as for word emphasis above.</string>
     <string name="rule_pause_semicolon">Pause after semicolons and colons</string>
     <string name="rule_pause_semicolon_hint">The “After a comma” pause from the Pauses tab is also added after semicolons and colons.</string>
     <string name="rule_pause_parens">Pause at parentheses</string>

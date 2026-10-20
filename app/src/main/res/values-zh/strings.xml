@@ -305,6 +305,7 @@
     <string name="rule_sr_link_word_hint">仅对读屏软件：«https://…» 或 «www.…» 地址读作俄语单词 «ссылка»（意为“链接”）加网站名（«ссылка, youtube точка com»），而不是逐段完整读出。即使开启了“跳过链接”也生效。电子邮件地址照常朗读。</string>
     <string name="rule_sr_quote_off">不使用对话语音</string>
     <string name="rule_sr_quote_off_hint">通知和聊天中带破折号的行（«— Привет»）不会在语句中途切换语音。</string>
+    <string name="rule_sr_quote_off_hint_be">通知和聊天中带破折号的行（«— Прывітанне»）不会在语句中途切换语音。</string>
     <string name="rule_sr_lead_in_off">去掉句前静音</string>
     <string name="rule_sr_lead_in_off_hint">读屏软件几乎每句话都在停顿之后开始，300 毫秒静音（“句前静音”规则）会让每个手势都多一次延迟。</string>
     <string name="rule_sr_pauses_off">去掉句间停顿</string>
@@ -336,6 +337,7 @@
     <string name="rule_lead_in">句前静音</string>
     <string name="rule_lead_in_hint">如果距上一次发声已超过 2.5 秒，在第一个词前加 300 毫秒静音。Android 播放器在启动后的最初零点几秒可能吞掉声音的开头，加上静音后被吞掉的是静音而不是语音。如果停顿后的延迟让您不便，可以关闭。</string>
     <string name="rule_letter_name_hint">只含一个字母的请求（TalkBack：光标下的字母、输入回显、按键）读作字母名称：«б» 读作 «бэ»，«ь» 读作 «мягкий знак»。单个符号按名称读出：«#» 读作 «решётка»。文本中由单个字母构成的单词不受影响。</string>
+    <string name="rule_letter_name_hint_be">只含一个字母的请求（TalkBack：光标下的字母、输入回显、按键）读作字母名称：«б» 读作 «бэ»，«ь» 读作 «мяккі знак»，«ў» 读作 «у нескладовае»。文本中由单个字母构成的单词不受影响。</string>
     <string name="rule_fast_start">书籍和应用中快速出声</string>
     <string name="rule_fast_start_hint">文本的第一段不超过 100 个字符（在逗号处切开），其余各段按“合成的分段长度”部分的设置。整段合成完才开始发声，在较慢的手机上，一个长句意味着开始前有好几秒静音。关闭时，第一段与其他段相同。读屏软件有自己的规则，位于“读屏（TalkBack）”中。</string>
     <string name="rule_prefetch">提前合成下一段</string>
@@ -360,11 +362,13 @@
     <string name="rule_roman_hint_be">«XX стагоддзе» 读作 «дваццатае стагоддзе»，«Пётр I» 读作 «Пётр першы»。</string>
     <string name="rule_roman_name">人名后的罗马数字</string>
     <string name="rule_roman_name_hint">«Николай II» 读作 «Николай второй»，«Екатерина II» 读作 «вторая»。</string>
+    <string name="rule_roman_name_hint_be">«Мікалай II» 读作 «Мікалай другі»，«Кацярына II» 读作 «другая»。</string>
     <string name="rule_dates">数字日期</string>
     <string name="rule_dates_hint">«05.12.2020» 读作 «пятого декабря две тысячи двадцатого года»，«12.05» 读作 «двенадцатое мая»。</string>
     <string name="rule_dates_hint_be">«12.05.2026» 读作 «дванаццатага мая дзве тысячы дваццаць шостага года»，«3.09» 读作 «трэцяга верасня»。</string>
     <string name="rule_day_month">日和月</string>
     <string name="rule_day_month_hint">«20 июня» 读作 «двадцатого июня»，«к 1 сентября» 读作 «к первому сентября»。</string>
+    <string name="rule_day_month_hint_be">«20 чэрвеня» 读作 «дваццатага чэрвеня»，«да 1 верасня» 读作 «да першага верасня»。</string>
     <string name="rule_years">年份</string>
     <string name="rule_years_hint">«в 1917 году» 读作 «в тысяча девятьсот семнадцатом»，«1941–1945 гг.»，«в 90-х»，«490 г. до н. э.»。</string>
     <string name="rule_years_hint_be">«у 1812 г.» 读作 «у тысяча восемсот дванаццатым годзе»，«у 1990-х гадах» 读作 «у тысяча дзевяцьсот дзевяностых гадах»，以及 «1941-1945 гады»。</string>
@@ -381,6 +385,7 @@
     <string name="rule_units_hint_be">км、кг、г、л、шт. 等：«3 км» 读作 «тры кіламетры»，«5 г. солі» 读作 «пяць грамаў солі»。</string>
     <string name="rule_degrees">度数</string>
     <string name="rule_degrees_hint">«−5 °C» 读作 «минус пять градусов цельсия»，«°F» 读作 «по фаренгейту»。</string>
+    <string name="rule_degrees_hint_be">«−5 °C» 读作 «мінус пяць градусаў цэльсія»。</string>
     <string name="rule_currency">货币</string>
     <string name="rule_currency_hint">«5 руб. 30 коп.» 读作 «пять рублей тридцать копеек»，以及 $、€、₽。</string>
     <string name="rule_currency_hint_be">«5 тыс. руб.» 读作 «пяць тысяч рублёў»，«1,20 BYN» 读作 «адзін рубель дваццаць капеек»，«$65 000» 读作 «шэсцьдзясят пяць тысяч долараў»，«€ 50» 读作 «пяцьдзясят еўра»。</string>
@@ -390,6 +395,7 @@
     <string name="rule_spoons_hint">«2 ч. л.» 读作 «две чайные ложки»，«1 ст. л.» 读作 «одна столовая ложка»。</string>
     <string name="rule_gen_suffix">后缀 «5-ти»、«2-х»</string>
     <string name="rule_gen_suffix_hint">«5-ти» 读作 «пяти»，«2-ух» 读作 «двух»，«3-х» 读作 «трёх»。</string>
+    <string name="rule_gen_suffix_hint_be">«2-х» 读作 «двух»，«3-х» 读作 «трох»，«4-х» 读作 «чатырох»。</string>
     <string name="rule_sections">章节编号</string>
     <string name="rule_sections_hint">«2.10.3» 读作 «два точка десять точка три»。用点隔开的两个数（«1.2»）仍按小数或日期处理。</string>
     <string name="rule_arith">算术</string>
@@ -408,6 +414,7 @@
     <string name="rule_spell_lat_hint_be">逐字母读出：«FBI» 读作 «эф-бэ-і»，«LTE» 读作 «эл-тэ-е»。</string>
     <string name="rule_letter_digit">数字旁的字母</string>
     <string name="rule_letter_digit_hint">读作字母名称：«5800X» 读作 «пять тысяч восемьсот экс»，«5800X3D» 读作 «… экс три ди»，«GPT-4o» 读作 «… четыре оу»，«1080p» 读作 «… пи»。西里尔字母代码：«Р-9» 读作 «эр девять»，«8К74» 读作 «восемь ка семьдесят четыре»。</string>
+    <string name="rule_letter_digit_hint_be">读作字母名称：«5800X» 读作 «пяць тысяч восемсот экс»，«5800X3D» 读作 «… экс тры дэ»，«1080p» 读作 «… пэ»，«5G» 读作 «пяць гэ»。</string>
     <string name="rule_latin">拉丁字母单词</string>
     <string name="rule_latin_hint">音译：«iphone» 读作 «айфон»，«sherlock» 读作 «шерлок»。关闭时，拉丁字母会从朗读中消失。</string>
     <string name="rule_latin_hint_be">按白俄罗斯语音译：«Wi-Fi» 读作 «вайфай»，«Then I went» 读作 «тен і ўент»。</string>
@@ -453,10 +460,12 @@
     <string name="analyze_english">英语，由“%1$s”朗读</string>
     <string name="rule_dehyphen">合并断行的单词</string>
     <string name="rule_dehyphen_hint">行尾的 «со-» 和下一行开头的 «бака» 合并为 «собака»。«Санкт-Петербург» 和 «по-русски» 不受影响。</string>
+    <string name="rule_dehyphen_hint_be">行尾的 «са-» 和下一行开头的 «бака» 合并为 «сабака»。«Санкт-Пецярбург» 保留连字符。</string>
     <string name="rule_soft_break">段内换行视为空格</string>
     <string name="rule_soft_break_hint">小写字母前的单个换行（如 PDF 中）视为空格，而不是新段落。关闭时，每行都是单独的段落。</string>
     <string name="rule_punct">标点清理</string>
     <string name="rule_punct_hint">«!!!» 变为 «!»，«. . .» 变为 «…»，两侧有空格的连字符变为破折号。关闭时，«Всё. . . Дальше» 会在每个点处切成句子。</string>
+    <string name="rule_punct_hint_be">«!!!» 变为 «!»，«. . .» 变为 «…»，两侧有空格的连字符变为破折号。关闭时，«Усё. . . Далей» 会在每个点处切成句子。</string>
     <string name="rule_ssml">SSML 解析</string>
     <string name="rule_ssml_hint">如果阅读器发送了 &lt;speak&gt;、&lt;break&gt;、&lt;p&gt;、&lt;s&gt;、&lt;emphasis&gt; 和 &lt;prosody rate pitch&gt; 标签（也可在句子内部使用，不会打断句子；pitch=\"robot\" 表示平直音调，即机器人声音），则会进行解析。关闭时，带标签的文本按原样朗读。</string>
     <string name="rule_gram">按相邻词判断格</string>
@@ -476,20 +485,27 @@
     <string name="rule_prefix_space_hint">«Из-под»、«по-другому»、«во-первых» 以 «из под»、«по другому» 的形式交给模型：模型会把连字符拉成停顿，改成空格听起来更干净。仅限非重读前缀 во-、по-、из-；«кто-то»、«чёрно-белый» 不受影响。关闭时保留连字符，与原文一致。</string>
     <string name="rule_end_dot">无标点的语句末尾加句号</string>
     <string name="rule_end_dot_hint">模型会拖长最后一个元音，末尾没有标点时重音会跑到它上面：«страдала» 听起来像 «страдалá»。末尾没有标点的分段（单个词、菜单项）会加上句号交给模型，不会多出停顿。重音在最后音节的单词不受影响。关闭时与原文一致。</string>
+    <string name="rule_end_dot_hint_be">模型会拖长最后一个元音，末尾没有标点时重音会跑到它上面：«кніга» 听起来像 «кнігá»。末尾没有标点的分段（单个词、菜单项）会加上句号交给模型，不会多出停顿。重音在最后音节的单词不受影响。关闭时与原文一致。</string>
     <string name="rule_end_oxy">最后一个音节重读时去掉句号</string>
     <string name="rule_end_oxy_hint">在句号前，模型会弱化最后一个元音，于是落在最后音节的重音听起来像在前一个音节上：«ухо востро» 听起来像 «вóстро»，还有 «светло»、«окно»。开启时，这类单词在句末交给模型时不带句号。重音听得更清楚，但句尾降调会弱一些。关闭时与原文一致。</string>
+    <string name="rule_end_oxy_hint_be">在句号前，模型会弱化最后一个元音，于是落在最后音节的重音听起来像在前一个音节上：«акно» 听起来像 «áкно»，还有 «святло»、«вясна»。开启时，这类单词在句末交给模型时不带句号。重音听得更清楚，但句尾降调会弱一些。关闭时与原文一致。</string>
     <string name="rule_short_word">单独成句的短词读得更长</string>
     <string name="rule_short_word_hint">«— Да.»、«Вы?»、«Кто?»、«Всё.»：句中只有一个词，且为 2 到 3 个字母、以唯一的元音结尾。模型读这样的元音只用 160 毫秒，加速时听起来像 «Д\'»。此规则将元音重复一次（约 300 毫秒）。关闭时与原文一致。</string>
+    <string name="rule_short_word_hint_be">«— Не.»、«Ты?»、«Хто?»、«Дзе?»：句中只有一个词，且为 2 到 3 个字母、以唯一的元音结尾。模型读这样的元音只用 160 毫秒，加速时听起来像 «Н\'»。此规则将元音重复一次（约 300 毫秒）。关闭时与原文一致。</string>
     <string name="rule_intonation">按句子类型调整语调</string>
     <string name="rule_intonation_hint">疑问句（«Ты идёшь?»、«Чай или кофе?»）和感叹句用相应的语调朗读。关闭时全部按陈述句朗读。</string>
+    <string name="rule_intonation_hint_be">疑问句（«Ты ідзеш?»、«Чай ці каву?»）和感叹句用相应的语调朗读。关闭时全部按陈述句朗读。</string>
     <string name="rule_focus">逻辑重音</string>
     <string name="rule_focus_hint">星号中的单词（文本或替换中的 «Он *не* пришёл»，SSML 中的 &lt;emphasis&gt;）由模型用语调突出。关闭时只去掉星号。</string>
+    <string name="rule_focus_hint_be">星号中的单词（文本或替换中的 «Ён *не* прыйшоў»，SSML 中的 &lt;emphasis&gt;）由模型用语调突出。关闭时只去掉星号。</string>
     <string name="focus_level">突出强度</string>
     <string name="focus_level_hint">范围 1 到 3：1 表示比相邻的词稍明显，3 表示最强。对所有突出的单词生效。</string>
     <string name="rule_exclaim">短感叹句中的重音</string>
     <string name="rule_exclaim_hint">«Эй, вы!»、«Бам!»（以 «!» 结尾、不超过两个词）在最后一个词上加逻辑重音，否则模型会读得短促平淡。强度与上方的逻辑重音相同。</string>
+    <string name="rule_exclaim_hint_be">«Гэй, вы!»、«Бах!»（以 «!» 结尾、不超过两个词）在最后一个词上加逻辑重音，否则模型会读得短促平淡。强度与上方的逻辑重音相同。</string>
     <string name="rule_question">无动词疑问句中的重音</string>
     <string name="rule_question_hint">«Вы барон Гордеев?»、«Это правда?»：没有动词的一般疑问句在最后一个词上加逻辑重音。否则模型会在第一个词上升调、句尾下降，疑问句听起来像陈述句。带动词的疑问句（«Ты придёшь завтра?»）不受影响。强度与上方的逻辑重音相同。</string>
+    <string name="rule_question_hint_be">«Гэта праўда?»、«Вы з Мінска?»：没有动词的一般疑问句在最后一个词上加逻辑重音。否则模型会在第一个词上升调、句尾下降，疑问句听起来像陈述句。强度与上方的逻辑重音相同。</string>
     <string name="rule_pause_semicolon">分号和冒号后停顿</string>
     <string name="rule_pause_semicolon_hint">“停顿”标签页中的“逗号之后”停顿也会加在分号和冒号之后。</string>
     <string name="rule_pause_parens">括号处停顿</string>
