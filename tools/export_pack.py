@@ -4,8 +4,9 @@ app/src/test/resources/golden_pack.json (pack.json и ids golden-фразы дл
 Пак не на русском (LANGS) несёт ещё accentor.ptl — акцентор своего языка — и stress.txt, поправки ударений
 «слово сл+ово»: слова, где lite-акцентор ошибается, из exceptions того же акцентора (MIT) и, с --grammardb, из
 Беларускай граматычнай базы (https://github.com/Belarus/GrammarDB, CC BY-SA 4.0, файл релиза
-spellchecker/slovy-2008-stress.txt); --stress подменяет stress.txt своим файлом (и у русских паков).
-Запуск: ../venv-et/bin/python tools/export_pack.py cis_ru | ru | cis_be [--grammardb путь] [--stress путь]
+spellchecker/slovy-2008-stress.txt); --stress подменяет stress.txt своим файлом (и у русских паков); --morph кладёт
+morph.bin — морфологию языка (tools/gdb_morph.py, та же GrammarDB).
+Запуск: ../venv-et/bin/python tools/export_pack.py cis_ru | ru | cis_be [--grammardb путь] [--stress путь] [--morph путь]
 (модель и акцентор для id скачать заранее в tools/, см. source в PACKS и LANGS)"""
 import argparse, json, os, tempfile, zipfile
 from typing import List, Tuple
@@ -172,10 +173,12 @@ if __name__ == '__main__':
     ap.add_argument('pack_id', nargs='?', default='cis_ru', choices=PACKS)
     ap.add_argument('--stress', help='stress.txt в пак (поправки ударений) вместо собранного из exceptions')
     ap.add_argument('--grammardb', help='slovy-2008-stress.txt из релиза GrammarDB: поправки и из неё (CC BY-SA 4.0)')
+    ap.add_argument('--morph', help='morph.bin в пак: морфология языка (tools/gdb_morph.py из GrammarDB, CC BY-SA 4.0)')
     args = ap.parse_args()
     pack_id = args.pack_id
     pt, keep, types, title, lic, source, golden_speaker = PACKS[pack_id]
     if args.grammardb and not args.stress: lic += '; stress.txt — CC BY-SA 4.0 (GrammarDB)'
+    if args.morph: lic += '; morph.bin — CC BY-SA 4.0 (GrammarDB)'
     PT = os.path.join(HERE, pt)
     big = torch.package.PackageImporter(PT).load_pickle('tts_models', 'model')
     pk = big.packages[0]
@@ -222,6 +225,7 @@ if __name__ == '__main__':
             for n, p in files:
                 zf.write(p, n, compress_type=zipfile.ZIP_STORED)
             if args.stress: zf.write(args.stress, 'stress.txt', compress_type=zipfile.ZIP_DEFLATED)
+            if args.morph: zf.write(args.morph, 'morph.bin', compress_type=zipfile.ZIP_STORED)
     if pack_id == 'cis_ru':
         seq, _ = pk.preprocess_tacotron(TEXT)
         for p in (GOLDEN, os.path.join(ROOT, 'app/src/androidTest/assets/golden_pack.json')):

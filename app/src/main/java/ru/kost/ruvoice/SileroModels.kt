@@ -9,6 +9,7 @@ import org.pytorch.Module
 import org.pytorch.Tensor
 import org.pytorch.executorch.EValue
 import ru.kost.ruvoice.bin.StressBin
+import ru.kost.ruvoice.text.BelNumbers
 import ru.kost.ruvoice.text.Emoji
 import ru.kost.ruvoice.text.Morph
 import ru.kost.ruvoice.text.Normalizer
@@ -33,6 +34,8 @@ class SileroModels(private val context: Context) : StressModels {
     private var accLoadedDir: String? = null
     /** Папка тройки mel/backbone/head: null — штатная из assets, иначе каталог пака. */
     private var packDir: File? = null
+    /** Пак, чей morph.bin открыт в [BelNumbers.morph]. */
+    private var morphDir: String? = null
     /** id загруженного пака, null — штатная модель (или ничего не загружено). */
     @Volatile var loadedPack: String? = null; private set
     val isLoaded get() = mel != null && head != null && backbone != null && acc != null
@@ -63,6 +66,12 @@ class SileroModels(private val context: Context) : StressModels {
      * тройки, чтобы не трогать её; «Книга с ударениями» зовёт заранее, пока в окне «загрузка». */
     @Synchronized fun ensureStress(pack: Pack? = null) {
         ensureAccentor(pack?.takeIf { it.accentor }?.dir)
+        // морфология языка пака (белорусская из GrammarDB) — нормализатору слоя: род и падеж числа
+        pack?.takeIf { it.lang != "ru" && it.dir.path != morphDir }?.let { p ->
+            BelNumbers.morph = File(p.dir, Packs.MORPH).takeIf { it.isFile }
+                ?.let { f -> runCatching { Morph.open(f) }.onFailure { e -> Log.e(TAG, "morph.bin пака не открылся", e) }.getOrNull() }
+            morphDir = p.dir.path
+        }
         // омографы BERT — русские: белорусскому голосу не нужны, русскому греем заранее, а не на первой фразе
         if ((pack?.lang ?: "ru") == "ru") ensureHomo()
     }
@@ -262,6 +271,9 @@ class SileroModels(private val context: Context) : StressModels {
                 HardE.shared = runCatching { HardE.open(ctx) }.onFailure { e -> Log.e(TAG, "hard_e.txt не открылся", e) }.getOrNull()
                 Emoji.shared = runCatching { Emoji.open(ctx) }.onFailure { e -> Log.e(TAG, "emoji_ru.tsv не открылся", e) }.getOrNull()
                 SymbolNames.cldr = runCatching { SymbolNames.open(ctx) }.onFailure { e -> Log.e(TAG, "symbols_ru.tsv не открылся", e) }.getOrNull()
+                // белорусские имена эмодзи и знаков — 170 КБ, читаются за десятки мс; вместе с русскими, чтобы не ждать на первой фразе
+                Emoji.be = runCatching { Emoji.open(ctx, "emoji_be.tsv") }.onFailure { e -> Log.e(TAG, "emoji_be.tsv не открылся", e) }.getOrNull()
+                SymbolNames.cldrBe = runCatching { SymbolNames.open(ctx, "symbols_be.tsv") }.onFailure { e -> Log.e(TAG, "symbols_be.tsv не открылся", e) }.getOrNull()
                 d.also { shared = it }
             }
         }

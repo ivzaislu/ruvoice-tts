@@ -70,11 +70,13 @@ class Emoji(lines: Sequence<String>) {
 
         /** Общий на процесс, ставит SileroModels.data(); null — правило ничего не делает (JVM-тесты без ассета). */
         @Volatile var shared: Emoji? = null
+        /** Белорусские имена (emoji_be.tsv) — для [BelNormalizer]; ставит SileroModels.data(). */
+        @Volatile var be: Emoji? = null
 
-        fun open(context: Context): Emoji {
+        fun open(context: Context, name: String = "emoji_ru.tsv"): Emoji {
             val t = System.nanoTime()
-            return context.assets.open("emoji_ru.tsv").bufferedReader().useLines { Emoji(it) }
-                .also { Log.i("RuVoice", "emoji_ru.tsv: ${it.size} эмодзи, ${(System.nanoTime() - t) / 1_000_000} мс") }
+            return context.assets.open(name).bufferedReader().useLines { Emoji(it) }
+                .also { Log.i("RuVoice", "$name: ${it.size} эмодзи, ${(System.nanoTime() - t) / 1_000_000} мс") }
         }
     }
 }

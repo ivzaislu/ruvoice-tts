@@ -40,13 +40,32 @@ object SymbolNames {
     /** Имя знака или null: буквы, цифры, пробелы, знаки ударения и неизвестное не называем. */
     fun of(c: Char): String? = NAMES[c] ?: cldr?.get(c)
 
+    /** Белорусские имена: свои поверх CLDR (symbols_be.tsv), где у CLDR громоздко или непривычно («актаторп», «слімак»). Не
+     * проверено носителем. */
+    val NAMES_BE: Map<Char, String> = mapOf(
+        '→' to "стрэлка ўправа", '←' to "стрэлка ўлева", '↑' to "стрэлка ўверх", '↓' to "стрэлка ўніз",
+        '↔' to "стрэлка ўлева-ўправа", '⇒' to "падвойная стрэлка ўправа", '⇐' to "падвойная стрэлка ўлева",
+        '⟶' to "стрэлка ўправа", '➔' to "стрэлка ўправа",
+        '▲' to "трохвугольнік уверх", '▼' to "трохвугольнік уніз", '▶' to "трохвугольнік управа", '◀' to "трохвугольнік улева",
+        '•' to "маркер спіса", '·' to "кропка пасярэдзіне", '×' to "знак множання", '÷' to "знак дзялення", '≠' to "не роўна",
+        '<' to "менш", '>' to "больш", '≤' to "менш або роўна", '≥' to "больш або роўна", '∞' to "бясконцасць",
+        '@' to "сабака", '#' to "рашотка", '^' to "дашок", '`' to "гравіс",
+        '{' to "адкрываецца фігурная дужка", '}' to "закрываецца фігурная дужка",
+        '[' to "адкрываецца квадратная дужка", ']' to "закрываецца квадратная дужка",
+        '©' to "знак аўтарскага права", '✓' to "птушка", '✔' to "птушка", '✗' to "крыжык", '✘' to "крыжык", '✕' to "крыжык",
+        '✖' to "крыжык", '★' to "чорная зорка", '☆' to "белая зорка", '♥' to "сэрца", '♡' to "белае сэрца", '¶' to "знак абзаца",
+        '№' to "нумар", '₽' to "рубель", '₴' to "грыўня", '₸' to "тэнге", 'µ' to "мікра", '†' to "крыжык", '‡' to "падвойны крыжык",
+    )
+    @Volatile var cldrBe: Map<Char, String>? = null
+    fun ofBe(c: Char): String? = NAMES_BE[c] ?: cldrBe?.get(c)
+
     fun parse(lines: Sequence<String>): Map<Char, String> = lines
         .filter { !it.startsWith("#") && it.length > 2 && it[1] == '\t' }
         .associate { it[0] to it.substring(2) }
 
-    fun open(context: Context): Map<Char, String> {
+    fun open(context: Context, name: String = "symbols_ru.tsv"): Map<Char, String> {
         val t = System.nanoTime()
-        return context.assets.open("symbols_ru.tsv").bufferedReader().useLines { parse(it) }
-            .also { Log.i("RuVoice", "symbols_ru.tsv: ${it.size} знаков, ${(System.nanoTime() - t) / 1_000_000} мс") }
+        return context.assets.open(name).bufferedReader().useLines { parse(it) }
+            .also { Log.i("RuVoice", "$name: ${it.size} знаков, ${(System.nanoTime() - t) / 1_000_000} мс") }
     }
 }

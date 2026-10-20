@@ -2928,8 +2928,14 @@ object Normalizer {
         "thumbsdown" to "большой палец вниз", "-1" to "большой палец вниз", "thank_you" to "спасибо", "yes" to "да", "yes2" to "да",
         "no" to "нет", "ok" to "окей", "heart" to "сердце", "fire" to "огонь", "cool" to "круто", "kiss" to "целует", "hi" to "машет рукой",
         "bye" to "машет рукой", "sleep" to "спит", "sick" to "болеет", "scare" to "испуган", "rolleyes" to "закатывает глаза", "dry" to "недоволен")
-    private fun shortcodes(text: String) = shortcodeRe.replace(text) { m ->
-        ", " + (shortcodes[m.groupValues[1]] ?: m.groupValues[1].replace('_', ' ').replace('-', ' ')) + ", "
+    /** Смайлы словами (правило emoji): коды форумов, ASCII, скобки; один и тот же смайл подряд («....)).....))», «:) :)») —
+     * один раз, как повтор эмодзи. [tr] — имя на языке слоя (у белорусского «усміхаецца»), [repeat] — повтор этих имён. */
+    internal fun smileys(text: String, tr: (String) -> String = { it }, repeat: Regex = smileyRepeatRe): String {
+        var s = shortcodeRe.replace(text) { m ->
+            ", " + (shortcodes[m.groupValues[1]]?.let(tr) ?: m.groupValues[1].replace('_', ' ').replace('-', ' ')) + ", "
+        }
+        s = asciiSmileyRe.replace(s) { m -> ", " + tr(asciiSmiley(m)) + ", " }
+        return repeat.replace(parenSmileys(s, tr("улыбается"), tr("грустит")), "$1")
     }
 
     // Скобка-смайл, как пишут в рунете: «спасибо))», «ладно)))))» — «улыбается» (один раз), «жаль((» — «грустит».
@@ -2937,7 +2943,7 @@ object Normalizer {
     // пары — не смайл: текст приходит по предложениям, и скобка из книги («(Он ушёл. Она осталась)») закрывается уже
     // в следующем; так же «1)», «а)» и обрывки подписей, которые TalkBack шлёт по частям («%)»).
     private val smileyRepeatRe = Regex("""(?<![а-яё])(улыбается|смеётся|грустит|плачет|подмигивает)(?:[\s.,…!?]+\1(?![а-яё]))+""")
-    private fun parenSmileys(text: String): String {
+    private fun parenSmileys(text: String, smileWord: String, sadWord: String): String {
         if (!text.contains("))") && !text.contains("((")) return text
         val n = text.length
         // без пары: «)» — слева направо, «(» — справа налево
@@ -2964,7 +2970,7 @@ object Normalizer {
                 // «((» — в конце слова или фразы, а не перед текстом («((a) b)» — скобки)
                 else -> after.isBlank() || !after.first().isLetterOrDigit()
             }
-            if (smile) sb.append(if (c == ')') kept else "").append(", ").append(if (c == ')') "улыбается" else "грустит").append(", ").append(if (c == '(') kept else "")
+            if (smile) sb.append(if (c == ')') kept else "").append(", ").append(if (c == ')') smileWord else sadWord).append(", ").append(if (c == '(') kept else "")
             else sb.append(text, i, j)
             i = j
         }
@@ -3137,7 +3143,7 @@ object Normalizer {
     }
 
     /** Кандидат может содержать номер не целиком («в 2024. 8 012 345 06 78»): берём самый ранний и самый длинный отрезок групп, который читается телефоном, остаток разбираем так же. */
-    private fun phoneCandidate(v: String): String {
+    private fun phoneCandidate(v: String, group: (String) -> String): String {
         val gs = mutableListOf<PhoneGroup>()
         var i = 0
         var inParen = false
@@ -3162,12 +3168,13 @@ object Normalizer {
             val seps = (1 until sub.size).map { k -> v.substring(sub[k - 1].end, sub[k].start).filter { it != '(' && it != ')' } }
             val parts = phoneParts(plus, sub, seps) ?: continue
             val head = if (plus) "" else v.substring(0, st)
-            val read = (if (plus) "плюс " else "") + parts.joinToString(", ", transform = ::phoneGroup)
-            return head + read + phoneCandidate(v.substring(en))
+            val read = (if (plus) "плюс " else "") + parts.joinToString(", ", transform = group)
+            return head + read + phoneCandidate(v.substring(en), group)
         }
         return v
     }
-    private fun phones(text: String) = phoneRe.replace(text) { m -> phoneCandidate(m.value) }
+    /** [group] — чтение группы цифр: у белорусского слоя свои числительные ([BelNormalizer.group]). */
+    internal fun phones(text: String, group: (String) -> String = ::phoneGroup) = phoneRe.replace(text) { m -> phoneCandidate(m.value, group) }
 
     // Коды из СМС, пароли, PIN, номера карт — по цифрам, группами через запятую: их набирают на
     // клавиатуре, «четыреста восемьдесят две тысячи…» пришлось бы переводить обратно в цифры.
@@ -3185,14 +3192,14 @@ object Normalizer {
 
     /** «482913» → «четыре восемь два, девять один три»; группы как написаны, сплошное число — по три
      * (4 цифры — две пары, остаток в одну цифру склеивается с соседней группой: 7 → 3-2-2). */
-    internal fun spellDigits(v: String, whole: Boolean = false): String {
+    internal fun spellDigits(v: String, whole: Boolean = false, names: Array<String> = digitNames): String {
         val written = v.split(Regex("""\D+""")).filter { it.isNotEmpty() }
         if (written.isEmpty()) return v
         val groups = if (written.size > 1 || whole) written else when (written.single().length) {
             4 -> written.single().chunked(2)
             else -> written.single().chunked(3).let { c -> if (c.size > 1 && c.last().length == 1) c.dropLast(2) + c[c.size - 2].let { p -> listOf(p.take(2), p.drop(2) + c.last()) } else c }
         }
-        return groups.joinToString(", ") { g -> g.map { digitNames[it - '0'] }.joinToString(" ") }
+        return groups.joinToString(", ") { g -> g.map { names[it - '0'] }.joinToString(" ") }
     }
 
     private fun codes(text: String): String {
@@ -3213,13 +3220,7 @@ object Normalizer {
         // Эмодзи — до выкидывания соединителей: «👨‍👩‍👧» держится на U+200D, а «1️⃣» ушёл бы в числа.
         var s = Emoji.shared?.takeIf { rules.on("emoji") }?.apply(text) ?: text
         s = namedReadings(s)
-        if (rules.on("emoji")) {
-            s = shortcodes(s)
-            s = asciiSmileyRe.replace(s) { m -> ", " + asciiSmiley(m) + ", " }
-            s = parenSmileys(s)
-            // один и тот же смайл подряд («....)).....))», «:) :)») — один раз, как повтор эмодзи
-            s = smileyRepeatRe.replace(s, "$1")
-        }
+        if (rules.on("emoji")) s = smileys(s)
         s = precomposedStressRe.replace(s) { "" + precomposedBase.getValue(it.value[0]) + '\u0301' }
         s = combiningAcuteRe.replace(s) { "+" + it.groupValues[1] }.replace(zeroWidthRe, "")
         // «тел.» — «телефон» только перед номером (до phones, пока он цифрами): «лежало множество тел.» — слово.

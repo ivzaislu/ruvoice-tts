@@ -12,8 +12,8 @@ import java.util.zip.ZipInputStream
 
 /** Пак голосов: `filesDir/packs/<id>/{pack.json, tts_mel.ptl, backbone.pte, head.ptl}` — та же нарезка,
  * что у штатной модели в assets. Формат — спека 2026-09-18; сверху (по желанию) два файла языка:
- * `accentor.ptl` — акцентор этого языка и `stress.txt` — поправки ударений (слово → слово с «+»; только языкам
- * не ru: копия в списке «Системный <lang>», см. Dicts.syncPacks). */
+ * `accentor.ptl` — акцентор этого языка, `stress.txt` — поправки ударений (слово → слово с «+»; только языкам
+ * не ru: копия в списке «Системный <lang>», см. Dicts.syncPacks) и `morph.bin` — морфология языка ([Packs.MORPH]). */
 class Pack(json: String, val dir: File) {
     val id: String
     val title: String
@@ -61,8 +61,10 @@ object Packs {
     /** Файлы языка в паке: нужны не всем, поэтому необязательные. */
     const val ACCENTOR = "accentor.ptl"
     const val STRESS = "stress.txt"
+    /** Морфология языка (форма → род, падеж; формат text/Morph.kt): род и падеж числа у белорусского ([ru.kost.ruvoice.text.BelNumbers.morph]). */
+    const val MORPH = "morph.bin"
     /** Необязательные файлы пака: копируем, если пришли; обязательными не считаем. */
-    private val EXTRA_FILES = listOf(ACCENTOR, STRESS)
+    private val EXTRA_FILES = listOf(ACCENTOR, STRESS, MORPH)
     val ID_RE = Regex("[a-z0-9_]{1,40}")
     const val NOT_A_PACK = "Это не пак RuVoice"
     private fun notAPack(cause: Throwable? = null) = UserError(NOT_A_PACK, R.string.err_not_pack, cause = cause)

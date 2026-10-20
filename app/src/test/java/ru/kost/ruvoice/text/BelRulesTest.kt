@@ -36,6 +36,18 @@ class BelRulesTest {
         "units" to "3 км",
         "degrees" to "20 °C",
         "pause_parens" to "Кніга (том 2) тут",
+        "arith" to "2 + 3 = 5",
+        "fractions" to "3/4",
+        "sections" to "2.10.3",
+        "spell_cyr" to "Вучыцца ў БДУ",
+        "cases" to "каля 3 гадзін",
+        "codes" to "Код 482913",
+        "spoons" to "2 ст. л. цукру",
+        "thousands" to "1.000.000",
+        "footnotes" to "Тэкст[1].",
+        "emoji" to "Супер :) так",
+        "link_domain" to "Глядзі https://example.com/page тут",
+        "read_links" to "Пішыце на info@mail.by",
     )
 
     /** Примеры из BelNumbersTest и LayersTest: ключи из unsupported их вывод не меняют. */
@@ -78,7 +90,9 @@ class BelRulesTest {
                 assertEquals("$k, чтец: $t", full(t, Rules().screenReader()), full(t, flipped.screenReader()))
             }
         }
-        assertEquals("вось — там, а тут, далей", full("Вось → там, а тут · далей", Rules().screenReader()))
+        assertEquals("вось стрэлка ўправа там, а тут кропка пасярэдзіне далей", full("Вось → там, а тут · далей", Rules().screenReader()))
+        // без имён знаков (книги) — паузы
+        assertEquals("вось — там, а тут, далей", full("Вось → там, а тут · далей", Rules()))
     }
 
     @Test fun romanOff() {

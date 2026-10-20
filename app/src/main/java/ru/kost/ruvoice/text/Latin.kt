@@ -167,8 +167,10 @@ object Latin {
             val digitBefore = i > 0 && text[i - 1].isDigit()
             val digitAfter = j < text.length && text[j].isDigit()
             if (digitBefore) out.append(' ')
-            // строчные g, m, l, t — единицы, как были («5m», «500g», «2l»); заглавные («5G», «10T») и прочие («2x») — именем
-            val name = rules.on("letter_digit") && (digitBefore || digitAfter) && j - i == 1 && (text[i].isUpperCase() || text[i] !in "gmlt")
+            // строчные g, m, l, t — единицы, как были («5m», «500g», «2l»); заглавные («5G», «10T») и прочие («2x») — именем.
+            // Буква отдельным словом — тоже именем, как у русского camelCase: «x > 5» — «экс», «план B» — «бэ» (транслит давал «кс», «б»)
+            val alone = j - i == 1 && !digitBefore && !digitAfter && text.getOrNull(i - 1)?.isLetter() != true && text.getOrNull(j)?.isLetter() != true
+            val name = alone || rules.on("letter_digit") && (digitBefore || digitAfter) && j - i == 1 && (text[i].isUpperCase() || text[i] !in "gmlt")
             out.append(if (name) NAMES.getValue(text[i].lowercaseChar()) else word(text.substring(i, j), rules))
             if (digitAfter) out.append(' ')
             i = j

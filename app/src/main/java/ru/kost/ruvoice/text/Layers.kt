@@ -85,13 +85,11 @@ object RuLayer : TextLayer {
 object BeLayer : TextLayer {
     override val code = "be"
     override val locale = Locale("be", "BY")
-    /** Русские правила без белорусского аналога: ссылки, эмодзи и имена знаков, коды, арифметика, падежи, дроби, разделы,
-     * разряды, сноски, капс кириллицей, русские ударения ([Stress]: таблицы, омографы, «ё», твёрдое «э», приставка через пробел).
+    /** Русские правила без белорусского аналога: русские ударения ([Stress]: таблицы, омографы, «ё», твёрдое «э», приставка
+     * через пробел).
      * Логическое ударение (focus, exclaim, question) — тоже: у белорусских голосов (cis_be, Pack.types = false) входа
      * focus_mask нет, метка `*слово*` до модели не доходит ([ru.kost.ruvoice.SileroModels.synthesize]). */
     override val unsupported = setOf(
-        "sr_symbols", "symbol_names", "emoji", "sr_link_word", "drop_links", "link_domain", "drop_emails", "drop_images", "read_links",
-        "codes", "arith", "cases", "fractions", "spoons", "sections", "thousands", "footnotes", "spell_cyr",
         "gram", "first_pl", "homo", "yo", "hard_e", "prefix_space", "focus", "exclaim", "question")
     override fun prepare(text: String, allowed: String, rules: Rules): String = BelNormalizer.prepare(text, allowed, rules)
     override fun questions(d: SileroData): QuestionLists = BE_QUESTIONS
@@ -104,9 +102,9 @@ object BeLayer : TextLayer {
         val i = n.indexOfFirst { it in "аеёіоуыэюя" }
         if (i < 0) n else n.substring(0, i) + "+" + n.substring(i)
     }
-    /** Только пунктуация и только в эхе ([punct]), как у русского: одиночный знак без эха — пауза. Прочие (стрелки,
-     * валюты) идут как есть — таблицы SymbolNames и CLDR русские. */
-    override fun symbolName(c: Char, punct: Boolean) = if (punct) BE_SYMBOLS[c] else null
+    /** Как у русского: пунктуация — только в эхе ([punct]), одиночный знак без эха — пауза; прочие (стрелки, валюты) —
+     * белорусскими именами [SymbolNames.ofBe] (своя таблица и CLDR). */
+    override fun symbolName(c: Char, punct: Boolean) = (if (punct) BE_SYMBOLS[c] else null) ?: SymbolNames.ofBe(c)
     override fun keepHyphen(before: String, after: String) = BE_HYPHEN.matches("$before-$after")
 }
 
@@ -114,8 +112,9 @@ object BeLayer : TextLayer {
 // «па-воўчы») и «па-першае», «па-за», «па-над»: иначе «па-\nмяць», «па-\nчатак» — перенос (русское «по» оставляет любое);
 // «абы-» — у местоимений («абы-хто», но «абыякавы», «абыход»); «з-за», «з-пад»; частицы «-небудзь», «-колечы», «-кольвек»,
 // «-такі». «-ка», «-тка», «-та» нет: «рэч-\nка», «ні-\nтка», «ха-\nта» — перенос
-private val BE_HYPHEN = Regex("з-.+|па-(?:.*(?:ску|цку|му|чы)|першае|другое|трэцяе|за|над)|" +
-    "абы-(?:хто|што|дзе|куды|калі|адкуль|колькі|як|які|якая|якое|якія)|.+-(?:небудзь|колечы|кольвек|кольвечы|такі)")
+private val BE_HYPHEN = Regex("з-.+|па-(?:.*(?:ску|цку|му|чы)|першае|другое|трэцяе|чацвёртае|пятае|шостае|сёмае|восьмае|дзявятае|" +
+    "дзясятае|за|над)|абы-(?:хто|каго|каму|кім|што|чаго|чаму|чым|дзе|куды|калі|адкуль|колькі|як|які|якая|якое|якія|якога|якой|" +
+    "якую|якім|якіх|чый|чыя|чыё|чые)|.+-(?:небудзь|колечы|кольвек|кольвечы|такі)")
 
 // формы не проверены носителем; апостроф в «двукроп'е» BelNormalizer снимает, слово остаётся целым: «двукропе»
 private val BE_SYMBOLS = mapOf(

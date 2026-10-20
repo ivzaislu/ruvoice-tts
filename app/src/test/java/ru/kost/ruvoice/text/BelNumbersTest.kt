@@ -3,6 +3,7 @@
 package ru.kost.ruvoice.text
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import ru.kost.ruvoice.TestData
 
@@ -101,7 +102,7 @@ class BelNumbersTest {
 
     /** Реальные символы пака, а не урезанный набор: тесты видят то же, что модель. */
     private val cis = TestData.cisAllowed
-    private fun prep(t: String) = BelNormalizer.prepare(t, cis)
+    private fun prep(t: String, rules: Rules = Rules()) = BelNormalizer.prepare(t, cis, rules)
 
     @Test
     fun standaloneOnlyWholeWords() {
@@ -116,11 +117,11 @@ class BelNumbersTest {
 
     @Test
     fun bigNumbersAndDigitGroups() {
-        // с миллиарда — по цифрам, без падения запроса
-        assertEquals("восем нуль два дзевяць адзін два тры чатыры пяць шэсць сем", prep("80291234567"))
+        // с миллиарда — по цифрам, без падения запроса; «8029…» — номер, группами (правило phones)
+        assertEquals("восем нуль два дзевяць адзін два тры чатыры пяць шэсць сем", prep("80291234567", Rules().with("phones", false)))
         assertEquals("адзін пяць нуль нуль нуль нуль нуль нуль нуль нуль", BelNormalizer.cardinal(1_500_000_000))
-        // через пробел склеиваются только группы по три
-        assertEquals("плюс трыста семдзесят пяць дваццаць дзевяць сто дваццаць тры сорак пяць шэсцьдзясят сем", prep("+375 29 123 45 67"))
+        // через пробел склеиваются только группы по три; номер с кодом страны — телефон, с паузами
+        assertEquals("плюс трыста семдзесят пяць, дваццаць дзевяць, сто дваццаць тры, сорак пяць, шэсцьдзясят сем", prep("+375 29 123 45 67"))
         assertEquals("адзін два тры", prep("1 2 3"))
         assertEquals("чатыры тысячы дзвесце семдзесят шэсць адна тысяча дзвесце трыццаць чатыры", prep("4276 1234"))
         assertEquals("адзін мільён", prep("1 000 000"))
@@ -163,7 +164,7 @@ class BelNumbersTest {
         assertEquals("ад $y41 да тысяча дзевяцьсот сорак пятага года.", prep("ад 1941 да 1945 гг."))
         assertEquals("з $y41 па тысяча дзевяцьсот сорак пяты год. потым", prep("з 1941 г. па 1945 г. Потым"))
         // без «г.» — не годы
-        assertEquals("з адна тысяча да дзве тысячы рублёў", prep("з 1000 да 2000 рублёў"))
+        assertEquals("з адной тысячы да дзвюх тысяч рублёў", prep("з 1000 да 2000 рублёў"))
     }
 
     @Test
@@ -181,21 +182,21 @@ class BelNumbersTest {
 
     @Test
     fun decimals() {
-        // «коска» и родительный единицы после дроби — не проверено носителем
-        assertEquals("адзін коска пяць кілаграма", prep("1.5 кг"))
-        assertEquals("адзін коска пяць кілаграма", prep("1,5 кг"))
+        // «цэлая», «дзясятых» и родительный единицы после дроби, как у русского — не проверено носителем
+        assertEquals("адна цэлая пяць дзясятых кілаграма", prep("1.5 кг"))
+        assertEquals("адна цэлая пяць дзясятых кілаграма", prep("1,5 кг"))
         // число с единицей — не дата «першага мая»; нуль в дробной части читается
         assertEquals("1.05 кг", BelNumbers.dates("1.05 кг"))
-        assertEquals("адзін коска нуль пяць кілаграма", prep("1.05 кг"))
-        assertEquals("два коска семдзесят пяць працэнта", prep("2,75 %"))
-        assertEquals("тры коска чатырнаццаць", prep("3,14"))
-        assertEquals("адна тысяча коска пяць", prep("1 000,5"))
+        assertEquals("адна цэлая пяць сотых кілаграма", prep("1.05 кг"))
+        assertEquals("дзве цэлыя семдзесят пяць сотых працэнта", prep("2,75 %"))
+        assertEquals("тры цэлыя чатырнаццаць сотых", prep("3,14"))
+        assertEquals("адна тысяча цэлых пяць дзясятых", prep("1 000,5"))
         // «дд.мм» без единицы — по-прежнему дата; «г.» за ней — горад, не граммы
         assertEquals("сустрэча дванаццатага мая", prep("Сустрэча 12.05"))
         assertEquals("пятнаццатага чэрвеня горад гомель", prep("15.06 г. Гомель"))
         assertEquals("сустрэча пятнаццатага чэрвеня горад мінск", prep("Сустрэча 15.06 г. Мінск"))
-        // не дроби: версии и адреса — числа по отдельности, как было
-        assertEquals("адзін.дзесяць.два", prep("1.10.2"))
+        // не дроби: версии и адреса — номер раздела, через «кропка» (правило sections)
+        assertEquals("адзін кропка дзесяць кропка два", prep("1.10.2"))
     }
 
     @Test
@@ -211,7 +212,7 @@ class BelNumbersTest {
         assertEquals("з пяцьсот грамаў.", prep("з 500 г."))
         assertEquals("па пяцьсот грамаў мукі", prep("па 500 г. мукі"))
         assertEquals("па сто грамаў прадукту", prep("па 100 г. прадукту"))
-        assertEquals("ад сто грамаў да дзвесце грамаў.", prep("ад 100 г. да 200 г."))
+        assertEquals("ад ста грамаў да двухсот грамаў.", prep("ад 100 г. да 200 г."))
         assertEquals("тры тысячы грамаў.", prep("3000 г."))
     }
 
@@ -238,7 +239,7 @@ class BelNumbersTest {
     fun phonesByGroups() {
         // группами как написано, с паузой; не миллионы
         assertEquals("восем, нуль дваццаць дзевяць, сто дваццаць тры, сорак пяць, шэсцьдзясят сем", prep("8 029 123-45-67"))
-        assertEquals("тэл. восем, нуль сямнаццаць, дзвесце дваццаць два, трыццаць тры, сорак чатыры", prep("тэл. 8 017 222-33-44"))
+        assertEquals("тэлефон восем, нуль сямнаццаць, дзвесце дваццаць два, трыццаць тры, сорак чатыры", prep("тэл. 8 017 222-33-44"))
         assertEquals("плюс сем, дзевяцьсот дзевяноста дзевяць, сто дваццаць тры, сорак пяць, шэсцьдзясят сем", prep("+7 999 123-45-67"))
         assertEquals("восем, нуль дваццаць дзевяць, сто дваццаць тры, сорак пяць, шэсцьдзясят сем", prep("8 (029) 123-45-67"))
         assertEquals("восем, нуль дваццаць дзевяць, сто дваццаць тры, сорак пяць, шэсцьдзясят сем", prep("8-029-123-45-67"))
@@ -247,7 +248,7 @@ class BelNumbersTest {
         assertEquals("дзесяць тысяч-пятнаццаць тысяч", prep("10 000-15 000"))
         assertEquals("дзесяць-пятнаццаць хвілін", prep("10-15 хвілін"))
         // нуль в начале группы из трёх цифр — код, читается; «05» — нет
-        assertEquals("тэл. восем-нуль дваццаць дзевяць-сто дваццаць тры", prep("тэл. 8-029-123"))
+        assertEquals("тэлефон восем-нуль дваццаць дзевяць-сто дваццаць тры", prep("тэл. 8-029-123"))
         assertEquals("нуль нуль сем", prep("007"))
         assertEquals("дванаццаць-пяць-дзве тысячы дваццаць шэсць", prep("12-05-2026"))
     }
@@ -260,7 +261,7 @@ class BelNumbersTest {
         assertEquals("плюс адна тысяча", prep("+1 000"))
         assertEquals("мінус дваццаць градусаў цэльсія", prep("-20°С"))
         assertEquals("мінус пяць градусаў цэльсія", prep("−5 °C"))
-        assertEquals("ад мінус пяць да плюс тры", prep("ад -5 да +3"))
+        assertEquals("ад мінус пяці да плюс трох", prep("ад -5 да +3"))
         // дефис после буквы и цифры — не минус
         assertEquals("ту-сто пяцьдзясят чатыры", prep("Ту-154"))
         assertEquals("тысяча дзевяцьсот дзевяностыя", prep("1990-я"))
@@ -276,9 +277,9 @@ class BelNumbersTest {
         assertEquals("трэці", prep("3-ці"))
         assertEquals("у пятым класе", prep("у 5-м класе"))
         assertEquals("у тысяча дзевяцьсот дзевяностыя гады.", prep("у 1990-я гг."))
-        // «-я» не у десятилетия — род не знаем, не трогаем
-        assertEquals("пяць-я кніга", prep("5-я кніга"))
-        assertEquals("дзесяць-я кніга", prep("10-я кніга"))
+        // «-я» не у десятилетия — назоўны ж. р.
+        assertEquals("пятая кніга", prep("5-я кніга"))
+        assertEquals("дзясятая кніга", prep("10-я кніга"))
         // десятилетие: «-я» — назоўны мн., «-х» — родны/месны мн.; круглая тысяча с «-я» — ж. р., если не «гады» за ней
         assertEquals("гэта было ў васьмідзясятыя гады.", prep("Гэта было ў 80-я гады."))
         assertEquals("у тысяча дзевяцьсот дзевяностых гадах", prep("у 1990-х гадах"))
@@ -359,7 +360,7 @@ class BelNumbersTest {
         assertEquals("маргарыта першая", prep("Маргарыта I"))
         // одна буква после латиницы, капс и союз в начале — не римское
         assertEquals("тен і ўент", prep("Then I went"))
-        assertEquals("модел кс", prep("Model X"))
+        assertEquals("модел экс", prep("Model X"))
         assertEquals("янка і пятрусь", prep("ЯНКА І ПЯТРУСЬ"))
         assertEquals("і веку не хапіла", prep("І веку не хапіла"))
     }
@@ -388,12 +389,13 @@ class BelNumbersTest {
     @Test
     fun romanSingleLetterNotInitial() {
         // одна буква перед точкой — инициал; Х и V — не римские; «І» перед словом — союз
-        assertEquals("прафесар х. іваноў выступіў.", prep("Прафесар Х. Іваноў выступіў."))
-        assertEquals(listOf("акадэмік і. шамякін нарадзіўся."), path("Акадэмік І. Шамякін нарадзіўся."))
+        assertEquals("прафесар ха іваноў выступіў.", prep("Прафесар Х. Іваноў выступіў."))
+        // инициал — именем буквы без точки (правило spell_cyr)
+        assertEquals(listOf("акадэмік і шамякін нарадзіўся."), path("Акадэмік І. Шамякін нарадзіўся."))
         assertEquals("дзень х набліжаецца.", prep("Дзень Х набліжаецца."))
         assertEquals("планета х.", prep("Планета Х."))
-        assertEquals("літара в азначае перамогу.", prep("Літара V азначае перамогу."))
-        assertEquals("вакцына спутнік в дапамагла.", prep("Вакцына Спутнік V дапамагла."))
+        assertEquals("літара вэ азначае перамогу.", prep("Літара V азначае перамогу."))
+        assertEquals("вакцына спутнік вэ дапамагла.", prep("Вакцына Спутнік V дапамагла."))
         assertEquals("мінск і гомель.", prep("Мінск І Гомель."))
         assertEquals("пётр першы заснаваў горад.", prep("Пётр I заснаваў горад."))
         // латинская «I» перед точкой — римское, не инициал
@@ -429,10 +431,10 @@ class BelNumbersTest {
     @Test
     fun decimalAfterPrepositionIsNotTime() {
         // дробь со словом-единицей за ней — не время; «па» с числом — цена
-        assertEquals("цана вырасла ў адзін коска дваццаць пяць раза.", prep("Цана вырасла ў 1.25 раза."))
-        assertEquals("каля адзін коска трыццаць мільёна чалавек.", prep("Каля 1.30 мільёна чалавек."))
-        assertEquals("вышыня каля адзін коска сорак пяць метра.", prep("Вышыня каля 1.45 метра."))
-        assertEquals("яблыкі па два коска пяцьдзясят за кілаграм.", prep("Яблыкі па 2.50 за кілаграм."))
+        assertEquals("цана вырасла ў адну цэлую дваццаць пяць сотых раза.", prep("Цана вырасла ў 1.25 раза."))
+        assertEquals("каля адной цэлай трыццаці сотых мільёна чалавек.", prep("Каля 1.30 мільёна чалавек."))
+        assertEquals("вышыня каля адной цэлай сарака пяці сотых метра.", prep("Вышыня каля 1.45 метра."))
+        assertEquals("яблыкі па дзве цэлыя пяцьдзясят сотых за кілаграм.", prep("Яблыкі па 2.50 за кілаграм."))
         // «па» сразу за временем — время, и за «9:00» тоже
         assertEquals("з пятнаццаць гадзін трыццаць хвілін па шаснаццаць гадзін трыццаць хвілін", prep("з 15.30 па 16.30"))
         assertEquals("з дзевяць гадзін роўна па васямнаццаць гадзін роўна", prep("з 9:00 па 18.00"))
@@ -440,7 +442,7 @@ class BelNumbersTest {
         assertEquals("сустрэча а васямнаццаць гадзін трыццаць хвілін разам з бацькамі.", prep("Сустрэча а 18.30 разам з бацькамі."))
         assertEquals("у восем гадзін трыццаць хвілін метро ўжо працуе.", prep("У 8.30 метро ўжо працуе."))
         assertEquals("а сем гадзін пятнаццаць хвілін тонкі лёд трэснуў.", prep("А 7.15 тонкі лёд трэснуў."))
-        assertEquals("вышыня каля адзін коска сорак пяць метраў.", prep("Вышыня каля 1.45 метраў."))
+        assertEquals("вышыня каля адной цэлай сарака пяці сотых метраў.", prep("Вышыня каля 1.45 метраў."))
     }
 
     @Test
@@ -491,7 +493,7 @@ class BelNumbersTest {
         assertEquals("з дванаццатага мая па пятнаццатае мая", prep("з 12.05 па 15.05"))
         // без предлога — дата и дробь, как было; с единицей — не время
         assertEquals("пачатак дзясятага мая", prep("Пачатак 10.05"))
-        assertEquals("адзін коска пяць кілаграма", prep("1.5 кг"))
+        assertEquals("адна цэлая пяць дзясятых кілаграма", prep("1.5 кг"))
         assertEquals("па два рублі пяцьдзясят капеек.", prep("па 2.50 руб."))
     }
 
@@ -503,7 +505,7 @@ class BelNumbersTest {
         assertEquals("кошт — шэсцьдзясят пяць тысяч долараў.", prep("Кошт — $65 000."))
         assertEquals("пяцьдзясят еўра", prep("€ 50"))
         // с множителем валюта — за ним: «мільярда долараў», точка одна
-        assertEquals("кошт семдзесят пяць коска тры мільярда долараў. яшчэ", prep("Кошт $75,3 млрд. Яшчэ"))
+        assertEquals("кошт семдзесят пяць цэлых тры дзясятыя мільярда долараў. яшчэ", prep("Кошт $75,3 млрд. Яшчэ"))
         assertEquals("сто мільёнаў еўра", prep("€100 млн"))
         assertEquals("пяць працэнтаў.", prep("5 %."))                     // точка за знаком — конец предложения
     }
@@ -522,8 +524,8 @@ class BelNumbersTest {
         assertEquals("адзін долар", prep("1 $"))
         // нуль капеек не читаем; одна цифра и множитель — дробь, как было
         assertEquals("сто рублёў", prep("100,00 BYN"))
-        assertEquals("два коска пяць еўра", prep("2,5 €"))
-        assertEquals("адзін коска пяць мільёна рублёў.", prep("1,5 млн руб."))
+        assertEquals("дзве цэлыя пяць дзясятых еўра", prep("2,5 €"))
+        assertEquals("паўтара мільёна рублёў.", prep("1,5 млн руб."))
     }
 
     @Test
@@ -560,8 +562,7 @@ class BelNumbersTest {
         assertEquals("1/2 шклянкі", BelNumbers.dates("1/2 шклянкі"))
         assertEquals("24/7", BelNumbers.dates("24/7"))
         assertEquals("1.10.2", BelNumbers.dates("1.10.2"))
-        // ponytail: дроби через слэш не читаются словами, чинить с носителем; здесь закреплено как есть, а не как верно
-        assertEquals("адзін два шклянкі", prep("1/2 шклянкі"))
+        assertEquals("адна другая шклянкі", prep("1/2 шклянкі"))
         assertEquals("дванаццатага мая дзве тысячы дваццаць шостага года", BelNumbers.dates("12/05/2026"))
         assertEquals("першага студзеня тысяча дзевяцьсот дзевяноста дзявятага года", BelNumbers.dates("01.01.99"))
     }
@@ -574,19 +575,19 @@ class BelNumbersTest {
         // Splitter после «г.», «руб.», «л.», «гг.» не режет, разворот точку съедал — предложения склеивались
         assertEquals(listOf("падзея адбылася ў дзве тысячы дваццаць чацвёртым годзе. цяпер там музей."),
             path("Падзея адбылася ў 2024 г. Цяпер там музей."))
-        assertEquals(listOf("кошт — сем коска пяць рубля. тэлефон ёсць."), path("Кошт — 7,5 руб. Тэлефон ёсць."))
+        assertEquals(listOf("кошт — сем цэлых пяць дзясятых рубля. тэлефон ёсць."), path("Кошт — 7,5 руб. Тэлефон ёсць."))
         assertEquals(listOf("вада — пяць літраў. мука — сто грамаў. цукар — дзве штукі."), path("Вада — 5 л. Мука — 100 г. Цукар — 2 шт."))
         assertEquals(listOf("горад разбураны ў тысяча дзевяцьсот сорак першым — тысяча дзевяцьсот сорак пятым гадах. потым адноўлены."),
             path("Горад разбураны ў 1941–1945 гг. Потым адноўлены."))
         assertEquals("кошт пяць тысяч рублёў. тэлефон ёсць.", prep("Кошт 5 тыс. руб. Тэлефон ёсць."))
         // перед годом только предлог — середина предложения: за «г.» имя, а не новая фраза
         assertEquals("у тысяча дзевяцьсот сорак першым годзе германія напала.", prep("У 1941 г. Германія напала."))
-        assertEquals("у тысяча дзевяцьсот шостым годзе я. купала напісаў.", prep("У 1906 г. Я. Купала напісаў."))
+        assertEquals("у тысяча дзевяцьсот шостым годзе я купала напісаў.", prep("У 1906 г. Я. Купала напісаў."))
         assertEquals("нарадзіўся ў тысяча дзевяцьсот дзевяностым годзе. яго бацька.", prep("Нарадзіўся ў 1990 г. Яго бацька."))
         assertEquals("у тысяча дзевяцьсот дзевяностым годзе.", prep("У 1990 г."))
         // единица после «тыс.», «млн» разворачивается и съедает свою точку — точка одна
-        assertEquals("аўтапрабег адзін коска два тысячы кіламетраў.", prep("Аўтапрабег 1,2 тыс. км."))
-        assertEquals("на два коска тры тысячы гектараў. цяпер сеюць.", prep("на 2,3 тыс. га. Цяпер сеюць."))
+        assertEquals("аўтапрабег адна цэлая дзве дзясятыя тысячы кіламетраў.", prep("Аўтапрабег 1,2 тыс. км."))
+        assertEquals("на дзве цэлыя тры дзясятыя тысячы гектараў. цяпер сеюць.", prep("на 2,3 тыс. га. Цяпер сеюць."))
         assertEquals("вываз дзесяць тысяч тон. цяпер", prep("Вываз 10 тыс. т. Цяпер"))
         assertEquals("сабралі пяць мільёнаў тон.", prep("Сабралі 5 млн т."))
         assertEquals("вага пяць кілаграмаў.", prep("Вага 5kg."))
@@ -615,7 +616,7 @@ class BelNumbersTest {
         // через дефис — сначала словарь целиком
         assertEquals("вайф+ай", prep("Wi-Fi"))
         assertEquals("к+овід-дзевятнаццаць", prep("COVID-19"))
-        assertEquals("у-эс-бэ-к", prep("USB-C"))
+        assertEquals("у-эс-бэ-цэ", prep("USB-C"))
     }
 
     @Test
@@ -667,5 +668,321 @@ class BelNumbersTest {
         assertEquals(listOf("так званая новая хваля."), path("Т. зв. новая хваля."))
         assertEquals(listOf("так званыя новыя навіны."), path("Т. зв. новыя навіны."))
         assertEquals(listOf("так званае поле."), path("Т. зв. поле."))
+    }
+
+    @Test
+    fun cardinalCases() {
+        // формы GrammarDB: склоняется каждое слово
+        assertEquals("адной тысячы двухсот пяцідзесяці", BelNumbers.cardinal(1250, Case.GEN))
+        assertEquals("дваццаццю пяццю", BelNumbers.cardinal(25, Case.INS))
+        assertEquals("дзвюм", BelNumbers.cardinal(2, Case.DAT, fem = true))
+        assertEquals("дваццаць адну", BelNumbers.cardinal(21, Case.ACC, fem = true))
+        assertEquals("трох мільёнаў", BelNumbers.cardinal(3_000_000, Case.GEN))
+        assertEquals("адным мільёнам", BelNumbers.cardinal(1_000_000, Case.INS))
+        assertEquals("двумастамі сарака", BelNumbers.cardinal(240, Case.INS))
+        assertEquals("пяці тысячах", BelNumbers.cardinal(5000, Case.PRE))
+    }
+
+    @Test
+    fun ordinalForms() {
+        assertEquals("трэцяя", BelNumbers.ordinal(3, Case.NOM, Gender.F))
+        assertEquals("другой", BelNumbers.ordinal(2, Case.PRE, Gender.F))
+        assertEquals("саракавое", BelNumbers.ordinal(40, Case.NOM, Gender.N))
+        assertEquals("дваццаць пятых", BelNumbers.ordinal(25, Case.GEN, plural = true))
+        assertEquals("сотую", BelNumbers.ordinal(100, Case.ACC, Gender.F))
+    }
+
+    @Test
+    fun fractionsInWords() {
+        assertEquals("тры чацвёртыя", prep("3/4"))
+        assertEquals("дзве трэція", prep("2/3"))
+        assertEquals("пяць шостых", prep("5/6"))
+        assertEquals("адна трэцяя часткі", prep("1/3 часткі"))
+        assertEquals("сем другіх", prep("7/2"))
+        assertEquals("трыццаць сотых", prep("30/100"))
+        assertEquals("дваццаць чатыры дроб сем", prep("24/7"))
+        // единица после дроби — родны адз.; после половины — по целой части
+        assertEquals("адна другая кілаграма", prep("1/2 кг"))
+        assertEquals("два з паловай кілаграмы", prep("2 1/2 кг"))
+        assertEquals("пяць з паловай кілаграмаў", prep("5 1/2 кг"))
+        assertEquals("паўтара кілаграма", prep("1 1/2 кг"))
+        assertEquals("паўтары тоны", prep("1 1/2 т"))
+        assertEquals("адна цэлая адна трэцяя", prep("1 1/3"))
+        assertEquals("дзве цэлыя тры чацвёртыя літра", prep("2 3/4 л"))
+        // знак-дробь
+        assertEquals("палова кілаграма", prep("½ кг"))
+        assertEquals("два з паловай кілаграмы", prep("2½ кг"))
+        assertEquals("тры чвэрці шклянкі", prep("¾ шклянкі"))
+        assertEquals("адна восьмая", prep("⅛"))
+        // дата с годом — по-прежнему дата
+        assertEquals("дванаццатага мая дзве тысячы дваццаць шостага года", prep("12/05/2026"))
+    }
+
+    @Test
+    fun degreesAndAngles() {
+        assertEquals("дваццаць градусаў", prep("20°"))
+        assertEquals("плюс дваццаць адзін градус", prep("+21°"))
+        assertEquals("сорак пяць градусаў вугал", prep("45° вугал"))
+        assertEquals("сто градусаў па фарэнгейце", prep("100 °F"))
+        assertEquals("трыццаць шэсць цэлых шэсць дзясятых градуса", prep("36,6°"))
+        assertEquals("пяцьдзясят пяць градусаў сорак пяць мінут", prep("55°45′"))
+        assertEquals("сорак два градусы трыццаць мінут", prep("42°30'"))
+        assertEquals("сорак пяць градусаў трыццаць мінут пятнаццаць секунд", prep("45°30′15″"))
+        assertEquals("дваццаць сем цаляў", prep("27″"))
+    }
+
+    @Test
+    fun moreCurrencies() {
+        assertEquals("пяць долараў", prep("5 USD"))
+        assertEquals("дзесяць еўра", prep("10 EUR"))
+        assertEquals("сто рублёў", prep("100 Br"))
+        assertEquals("пяць фунтаў", prep("£5"))
+        assertEquals("адзін фунт пяцьдзясят пенсаў", prep("£1.50"))
+        assertEquals("пяцьдзясят грыўняў", prep("50 ₴"))
+        assertEquals("дзве грыўні", prep("2 грн"))
+        assertEquals("тры іены", prep("¥3"))
+        assertEquals("сто тэнге", prep("100 ₸"))
+    }
+
+    @Test
+    fun signsAndSections() {
+        assertEquals("аўтобус нумар пяць", prep("Аўтобус № 5"))
+        assertEquals("нумар пяць", prep("№5"))
+        assertEquals("пад нумарам сем", prep("пад № 7"))
+        assertEquals("у параграфе чатыры і параграфе пяць", prep("у § 4 і § 5"))
+        assertEquals("нумары пяць, шэсць", prep("№№ 5, 6"))
+        assertEquals("параграф чатыры кропка два", prep("§ 4.2"))
+        // после метки — номер, а не дата «чацвёртага снежня»
+        assertEquals("пункт чатыры кропка дванаццаць", prep("п. 4.12"))
+        assertEquals("два кропка дзесяць кропка тры", prep("2.10.3"))
+        assertEquals("сто дзевяноста два кропка сто шэсцьдзясят восем кропка адзін кропка дзесяць", prep("192.168.1.10"))
+        assertEquals("два кропка нуль тры кропка адзін", prep("2.03.1"))
+    }
+
+    @Test
+    fun arithmetic() {
+        assertEquals("два плюс тры роўна пяць", prep("2 + 3 = 5"))
+        assertEquals("пяць мінус тры роўна два", prep("5 - 3 = 2"))
+        assertEquals("два памножыць на тры", prep("2×3"))
+        assertEquals("дзесяць падзяліць на два", prep("10 ÷ 2"))
+        assertEquals("экс роўна мінус пяць", prep("x = -5"))
+        assertEquals("экс больш за пяць", prep("x > 5"))
+        assertEquals("дзесяць у квадраце", prep("10²"))
+        assertEquals("два ў кубе", prep("2³"))
+        assertEquals("дзесяць у мінус трэцяй ступені", prep("10⁻³"))
+        assertEquals("пяць на дзесяць метраў", prep("5х10 м"))
+        assertEquals("корань з двух", prep("√2"))
+        assertEquals("у прапорцыі адзін да чатырох", prep("у прапорцыі 1:4"))
+        assertEquals("ціск сто дваццаць на восемдзесят", prep("ціск 120/80"))
+        assertEquals("плюс-мінус пяць", prep("±5"))
+        assertEquals("прыблізна пяць кіламетраў", prep("~5 км"))
+        assertEquals("рок і рол", prep("Rock & Roll"))
+        assertEquals("дзесяць тысяч", prep("10k"))
+        // без «=» дефис — диапазон
+        assertEquals("дзесяць-пятнаццаць", prep("10-15"))
+    }
+
+    @Test
+    fun phonesAllShapes() {
+        assertEquals("плюс трыста семдзесят пяць, дваццаць дзевяць, сто дваццаць тры, сорак пяць, шэсцьдзясят сем", prep("+375 29 123-45-67"))
+        assertEquals("плюс трыста семдзесят пяць, дваццаць дзевяць, сто дваццаць тры, сорак пяць, шэсцьдзясят сем", prep("+375291234567"))
+        assertEquals("плюс трыста семдзесят пяць, дваццаць дзевяць, сто дваццаць тры, сорак пяць, шэсцьдзясят сем", prep("+375 (29) 123-45-67"))
+        assertEquals("тэл. восем, нуль дваццаць дзевяць, сто дваццаць тры, сорак пяць, шэсцьдзясят сем", prep("Тэл. 8 029 1234567"))
+        assertEquals("восем, нуль дваццаць дзевяць, сто дваццаць тры, сорак пяць, шэсцьдзясят сем", prep("80291234567"))
+        assertEquals("дзвесце дваццаць два, трыццаць тры, сорак чатыры", prep("222-33-44"))
+        // не телефон — числа и диапазоны
+        assertEquals("дзесяць тысяч-пятнаццаць тысяч", prep("10 000-15 000"))
+    }
+
+    @Test
+    fun codesByDigits() {
+        assertEquals("код чатыры восем два, дзевяць адзін тры", prep("Код 482913"))
+        assertEquals("пэ-і-эн адзін два, тры чатыры", prep("PIN 1234"))
+        assertEquals("чатыры два сем шэсць, адзін два тры чатыры, пяць шэсць сем восем, дзевяць нуль адзін два", prep("4276 1234 5678 9012"))
+        assertEquals("картка тры чатыры пяць шэсць", prep("картка •• 3456"))
+        assertEquals("у-эн-пэ адзін дзевяць нуль, адзін два тры, чатыры пяць шэсць", prep("УНП 190123456"))
+    }
+
+    @Test
+    fun footnotesThousandsSpoons() {
+        assertEquals("тэкст.", prep("Тэкст[1]."))
+        assertEquals("даследчыкі.", prep("даследчыкі2."))
+        assertEquals("словах далей", prep("словах¹ далей"))
+        assertEquals("пяць квадратных метраў", prep("5 м²"))
+        assertEquals("адзін мільён", prep("1.000.000"))
+        assertEquals("дзесяць тысяч", prep("10,000"))
+        assertEquals("адна чайная лыжка солі", prep("1 ч. л. солі"))
+        assertEquals("дзве сталовыя лыжкі цукру", prep("2 ст. л. цукру"))
+        assertEquals("пяць сталовых лыжак", prep("5 ст. л."))
+        assertEquals("адна другая чайнай лыжкі", prep("1/2 ч. л."))
+    }
+
+    @Test
+    fun isoDatesSecondsOrdinalSuffixes() {
+        assertEquals("дванаццатага мая дзве тысячы дваццаць шостага года", prep("2026-05-12"))
+        assertEquals("дваццаць адна гадзіна трыццаць хвілін пятнаццаць секунд", prep("21:30:15"))
+        assertEquals("у дзевяностыя", prep("у 90-я"))
+        assertEquals("дзевяностая старонка", prep("90-я старонка"))
+        assertEquals("пятая кніга", prep("5-я кніга"))
+        assertEquals("пятае месца", prep("5-е месца"))
+        assertEquals("на пятую", prep("на 5-ю"))
+        assertEquals("у пятых класах", prep("у 5-х класах"))
+        assertEquals("пятай", prep("5-ай"))
+        assertEquals("пятаму", prep("5-аму"))
+    }
+
+    @Test
+    fun compoundsChaptersLists() {
+        assertEquals("пяцігадовы", prep("5-гадовы"))
+        assertEquals("стагадовы юбілей", prep("100-гадовы юбілей"))
+        assertEquals("дваццаціпяцігадовы", prep("25-гадовы"))
+        assertEquals("аднапакаёвая кватэра", prep("1-пакаёвая кватэра"))
+        assertEquals("двух-трохпакаёвая", prep("2–3-пакаёвая"))
+        assertEquals("дзесяціпавярховы", prep("10-павярховы"))
+        assertEquals("глава пятая", prep("Глава 5"))
+        assertEquals("у главе дзясятай", prep("у главе 10"))
+        assertEquals("раздзел трэці", prep("Раздзел 3"))
+        assertEquals("прычыны: першае, голад; другое, холад", prep("Прычыны: 1) голад; 2) холад"))
+    }
+
+    @Test
+    fun moreUnits() {
+        assertEquals("дзвесце дваццаць вольтаў", prep("220 В"))
+        assertEquals("шаснаццаць гігабайтаў", prep("16 ГБ"))
+        assertEquals("шаснаццаць гігабайтаў", prep("16 GB"))
+        assertEquals("пяць мегабітаў у секунду", prep("5 Мбіт/с"))
+        assertEquals("тры метры ў секунду", prep("3 м/с"))
+        assertEquals("дзве гадзіны трыццаць хвілін", prep("2 гадз 30 мін"))
+        assertEquals("тры квадратныя кіламетры", prep("3 км²"))
+        assertEquals("пяць кубічных сантыметраў", prep("5 см³"))
+        assertEquals("адзін квадратны метр", prep("1 м²"))
+        assertEquals("адна цэлая пяць дзясятых квадратнага метра", prep("1,5 м²"))
+        assertEquals("сто кілават-гадзін", prep("100 кВт·г"))
+        assertEquals("сто кілават-гадзін", prep("100 kWh"))
+        assertEquals("пяць ампераў", prep("5 А"))
+        assertEquals("пяць конскіх сіл.", prep("5 л. с."))
+        assertEquals("дзве конскія сілы.", prep("2 л.с."))
+        assertEquals("сто дваццаць міліметраў ртутнага слупа.", prep("120 мм рт. ст."))
+        assertEquals("тры тысячы мегават", prep("3000 МВт").replace("мегаватаў", "мегават"))
+    }
+
+    @Test
+    fun unitCaseByPreposition() {
+        assertEquals("да пяці кіламетраў", prep("да 5 км"))
+        assertEquals("ад пяці да сямі кіламетраў", prep("ад 5 да 7 км"))
+        assertEquals("у пяці кіламетрах ад горада", prep("у 5 км ад горада"))
+        assertEquals("пры дваццаці градусах цэльсія", prep("пры 20 °C"))
+        assertEquals("пры мінус дваццаці градусах", prep("пры -20°"))
+        assertEquals("да пяці працэнтаў", prep("да 5 %"))
+        assertEquals("каля адной тоны", prep("каля 1 т"))
+        assertEquals("паміж двума метрамі", prep("паміж 2 м"))
+        // время с «у» — вінавальны, как было
+        assertEquals("у дзве гадзіны", prep("у 2 гадз"))
+    }
+
+    @Test
+    fun nounAbbreviations() {
+        assertEquals("дом пяць, кватэра дванаццаць", prep("д. 5, кв. 12"))
+        assertEquals("жыве ў доме пяць", prep("жыве ў д. 5"))
+        assertEquals("том тры, старонка сорак пяць", prep("т. 3, с. 45"))
+        assertEquals("кніга другая", prep("кн. II"))
+        assertEquals("у томе трэцім", prep("у т. III"))
+        assertEquals("пункт чатыры кропка дванаццаць", prep("п. 4.12"))
+        assertEquals("артыкул пятнаццаты", prep("арт. 15").replace("пятнаццаць", "пятнаццаты"))
+        assertEquals("вёска ракаў", prep("в. Ракаў"))
+        assertEquals("з вёскі ракаў", prep("з в. Ракаў"))
+        assertEquals("на праспекце незалежнасці", prep("на пр. Незалежнасці"))
+        assertEquals("плошча перамогі", prep("пл. Перамогі"))
+        assertEquals("рака нёман", prep("р. Нёман"))
+        assertEquals("гарадскі пасёлак бялынічы", prep("г. п. Бялынічы"))
+        assertEquals("акадэмік карскі", prep("акад. Карскі"))
+        assertEquals("з прафесарам іванчыкам", prep("з праф. Іванчыкам"))
+        assertEquals("тэлефон: восем, нуль дваццаць дзевяць, сто дваццаць тры, сорак пяць, шэсцьдзясят сем", prep("тэл.: 8 029 123-45-67"))
+        // инициалы — не «вёска», «рака»
+        assertEquals("вэ быкаў", prep("В. Быкаў"))
+        assertEquals("кв. м", prep("кв. м", Rules().with("units", false)))
+    }
+
+    @Test
+    fun linksEmojiSymbols() {
+        // ссылка — «спасылка» и сайт (link_domain), почта — по частям (read_links)
+        assertEquals("глядзі спасылка, эксампле кропка ком тут", prep("Глядзі https://example.com/page?id=5 тут"))
+        assertEquals("пішыце на інфо сабака мэйл кропка бі", prep("Пішыце на info@mail.by"))
+        assertEquals("глядзі тут", prep("Глядзі https://example.com/page тут", Rules().with("drop_links", true)))
+        assertEquals("пішыце на", prep("Пішыце на info@mail.by", Rules().with("drop_emails", true)))
+        assertEquals("глядзі эксампле кропка ком касая рыса паге пытальнік ід роўна пяць тут",
+            prep("Глядзі https://example.com/page?id=5 тут", Rules().with("link_domain", false)))
+        // смайлы
+        assertEquals("супер, усміхаецца, так", prep("Супер :) так"))
+        assertEquals("дзякуй, усміхаецца", prep("Дзякуй))"))
+        assertEquals("сумна, сумуе", prep("Сумна :("))
+        // имена знаков — по правилу symbol_names (у чтеца sr_symbols)
+        assertEquals("рашотка тэг", prep("#тэг", Rules().with("symbol_names", true)))
+        assertEquals("тэг", prep("#тэг"))
+        // пометка картинки
+        assertEquals("ілюстрацыя.", prep("(- Иллюстрация -)"))
+        assertEquals("", prep("(- Иллюстрация -)", Rules().with("drop_images", true)))
+    }
+
+    @Test
+    fun smallAbbrevAndHyphen() {
+        assertEquals("яблыкі, грушы і так далей.", prep("Яблыкі, грушы і т. д."))
+        assertEquals("кнігі, часопісы і падобнае. потым", prep("Кнігі, часопісы і пад. Потым"))
+        assertEquals("глядзі вышэй", prep("гл. вышэй"))
+        assertEquals("сто беларускіх рублёў", prep("100 бел. руб"))
+        assertEquals("два беларускія рублі", prep("2 бел. руб"))
+        assertTrue(BeLayer.keepHyphen("па", "чацвёртае"))
+        assertTrue(BeLayer.keepHyphen("абы", "каго"))
+        assertEquals("мінская вобласць", prep("Мінская вобл."))
+        assertEquals("у мінскай вобласці", prep("у Мінскай вобл."))
+        assertEquals("ленінскі раён", prep("Ленінскі р-н"))
+        assertEquals("тысяч кіламетраў", prep("тыс. км"))
+        assertEquals("а сёмай", prep("а 7-й"))
+        assertEquals("філе кропка тэ-экс-тэ", prep("file.txt"))
+        // «у» после числа на гласную — «ў» (род без морфологии не знаем: «два»)
+        assertEquals("два ўзнагароды", prep("2 узнагароды"))
+        assertEquals("сем удзельнікаў", prep("7 удзельнікаў"))
+    }
+
+    @Test
+    fun decimalsAndHalves() {
+        assertEquals("нуль цэлых пяць дзясятых", prep("0,5"))
+        assertEquals("дваццаць адна цэлая сто дваццаць пяць тысячных", prep("21,125"))
+        assertEquals("да пяці цэлых дзвюх дзясятых", prep("да 5,2"))
+        assertEquals("паўтары тысячы.", prep("1,5 тыс."))
+        assertEquals("дзве з паловай тысячы.", prep("2,5 тыс."))
+        assertEquals("пяць з паловай мільёнаў", prep("5,5 млн"))
+        assertEquals("каля двух з паловай мільёнаў", prep("каля 2,5 млн"))
+        // «21,5» — дробью, как у русского
+        assertEquals("дваццаць адна цэлая пяць дзясятых мільёна", prep("21,5 млн"))
+    }
+
+    @Test
+    fun cyrillicAbbreviations() {
+        assertEquals("вучыцца ў бэ-дэ-у", prep("Вучыцца ў БДУ"))
+        assertEquals("зэ-ша-а", prep("ЗША"))
+        assertEquals("эс-эс-эс-эр", prep("СССР"))
+        assertEquals("эм-у-эс эр-бэ", prep("МУС РБ"))
+        // с гласными — слово
+        assertEquals("аан", prep("ААН"))
+        assertEquals("ната", prep("НАТА"))
+        // заголовок капсом — слова, не сокращения
+        assertEquals("прывітанне свет", prep("ПРЫВІТАННЕ СВЕТ"))
+        assertEquals("хто тут", prep("ХТО ТУТ"))
+        assertEquals("дзе ты дзе ты", prep("ДЗЕ ТЫ ДЗЕ ТЫ"))
+        // строчные без гласных
+        assertEquals("напісаў эс-эм-эс", prep("напісаў смс"))
+        assertEquals("пяць кіламетраў, км", prep("5 км, км"))
+        // инициалы
+        assertEquals("я купала", prep("Я. Купала"))
+        assertEquals("шамякін і пэ", prep("Шамякін І. П."))
+        assertEquals("бду", prep("БДУ", Rules().with("spell_cyr", false)))
+    }
+
+    @Test
+    fun greekLetters() {
+        assertEquals("альфа-распад", prep("α-распад"))
+        assertEquals("пі роўна тры цэлыя чатырнаццаць сотых", prep("π = 3,14"))
+        assertEquals("вугал бэта", prep("вугал β"))
     }
 }

@@ -6,17 +6,19 @@
 Тон кожи из имён убирается. Ключ — последовательность без U+FE0F (вариант начертания речи не меняет, в тексте он то есть, то нет).
 
     python3 tools/emoji_ru.py ru.xml ru_derived.xml > app/src/main/assets/emoji_ru.tsv
+Белорусская таблица — так же из be.xml (annotations/ и annotationsDerived/) в emoji_be.tsv.
 Данные: Unicode CLDR, Unicode License v3 (заголовок файла).
 """
+import os
 import re
 import sys
 import xml.etree.ElementTree as ET
 
 # Тон кожи в речи — шум («машет рукой: средний тон кожи»): ключ с модификатором остаётся (вся
 # последовательность — одно эмодзи), из имени тон убирается.
-TONE = re.compile(r'[:,]?\s*(?:очень светлый|светлый|средний|темный|тёмный|очень темный|очень тёмный) тон кожи')
+TONE = re.compile(r'[:,]?\s*(?:(?:очень светлый|светлый|средний|темный|тёмный|очень темный|очень тёмный) тон кожи|(?:светлы|сярэднясветлы|сярэдні|сярэдняцёмны|цёмны) тон скуры)')
 
-HEADER = """# Имена эмодзи — Unicode CLDR (common/annotations/ru.xml, annotationsDerived/ru.xml), tools/emoji_ru.py.
+HEADER = """# Имена эмодзи — Unicode CLDR (common/annotations/{lang}.xml, annotationsDerived/{lang}.xml), tools/emoji_ru.py.
 # Copyright © 2001–2026 Unicode, Inc. Distributed under the Unicode License v3 (SPDX: Unicode-3.0):
 # Полный текст уведомления — cldr.LICENSE.txt рядом.
 # Формат: эмодзи без U+FE0F <TAB> имя."""
@@ -42,7 +44,7 @@ def main(paths):
                 name = TONE.sub('', a.text.strip()).strip(' :,')
                 if name:
                     names[key] = name
-    print(HEADER)
+    print(HEADER.format(lang=os.path.basename(paths[0]).split('.')[0]))
     for k in sorted(names):
         print(f"{k}\t{names[k]}")
 

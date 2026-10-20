@@ -8,15 +8,17 @@
 называть их нельзя. Кавычки из имён убираются: «стрелка «направо»» → «стрелка направо».
 
     python3 tools/symbols_ru.py ru.xml ru_derived.xml > app/src/main/assets/symbols_ru.tsv
+Белорусская таблица — так же из be.xml в symbols_be.tsv.
 Данные: Unicode CLDR, Unicode License v3 (app/src/main/assets/cldr.LICENSE.txt).
 """
+import os
 import sys
 import unicodedata
 import xml.etree.ElementTree as ET
 
 from emoji_ru import is_emoji
 
-HEADER = """# Имена символов — Unicode CLDR (common/annotations/ru.xml, annotationsDerived/ru.xml), tools/symbols_ru.py.
+HEADER = """# Имена символов — Unicode CLDR (common/annotations/{lang}.xml, annotationsDerived/{lang}.xml), tools/symbols_ru.py.
 # Copyright © 2001–2026 Unicode, Inc. Distributed under the Unicode License v3 (SPDX: Unicode-3.0):
 # полный текст уведомления — cldr.LICENSE.txt рядом.
 # Формат: знак <TAB> имя."""
@@ -42,7 +44,7 @@ def main(paths):
             k = a.get('cp').replace('️', '')
             if len(k) == 1 and ord(k) <= 0xFFFF and wanted(k):
                 names[k] = ' '.join(a.text.replace('«', '').replace('»', '').split())
-    print(HEADER)
+    print(HEADER.format(lang=os.path.basename(paths[0]).split('.')[0]))
     for k in sorted(names):
         print(f"{k}\t{names[k]}")
 

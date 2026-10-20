@@ -215,9 +215,9 @@ class LayersTest {
         // апостроф «двукроп'е», «шматкроп'е» снимает BelNormalizer — слово целое
         assertEquals("двукропе", BeLayer.prepare(BeLayer.symbolName(':', punct = true)!!, cis, Rules()))
         assertEquals("шматкропе", BeLayer.prepare(BeLayer.symbolName('…', punct = true)!!, cis, Rules()))
-        // прочие знаки — как есть, не русскими словами
-        assertEquals(null, BeLayer.symbolName('#'))
-        assertEquals(null, BeLayer.symbolName('@', punct = true))
+        // прочие знаки — белорусскими именами, не русскими
+        assertEquals("рашотка", BeLayer.symbolName('#'))
+        assertEquals("сабака", BeLayer.symbolName('@', punct = true))
         // русский — как был: в эхе своя пунктуация, иначе SymbolNames
         assertEquals("запятая", RuLayer.symbolName(',', punct = true))
         assertEquals(null, RuLayer.symbolName(',', punct = false))
