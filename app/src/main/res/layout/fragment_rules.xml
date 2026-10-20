@@ -13,7 +13,7 @@
         android:layout_height="wrap_content">
 
         <!-- Вкладки языков голосов (RulesFragment.loadTabs): только если на телефоне голоса двух языков и больше,
-             с пояснением вместо rulesHint. Без ViewPager: вкладка перестраивает список ниже. -->
+             с пояснением под ними (rulesHint ниже остаётся). Без ViewPager: вкладка перестраивает список ниже. -->
         <com.google.android.material.tabs.TabLayout
             android:id="@+id/rulesTabs"
             android:layout_width="match_parent"
