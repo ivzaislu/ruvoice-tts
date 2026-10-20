@@ -382,7 +382,7 @@
     <string name="rule_degrees_hint">«−5 °C» is read as «минус пять градусов цельсия», «°F» as «по фаренгейту».</string>
     <string name="rule_currency">Currencies</string>
     <string name="rule_currency_hint">«5 руб. 30 коп.» is read as «пять рублей тридцать копеек», also $, € and ₽.</string>
-    <string name="rule_currency_hint_be">«5 тыс. руб.» is read as «пяць тысяч рублёў», «1,20 BYN» as «адзін коска дваццаць рубля», «$65 000» as «шэсцьдзясят пяць тысяч долараў», «€ 50» as «пяцьдзясят еўра».</string>
+    <string name="rule_currency_hint_be">«5 тыс. руб.» is read as «пяць тысяч рублёў», «1,20 BYN» as «адзін рубель дваццаць капеек», «$65 000» as «шэсцьдзясят пяць тысяч долараў», «€ 50» as «пяцьдзясят еўра».</string>
     <string name="rule_fractions">Fractions with a slash</string>
     <string name="rule_fractions_hint">«3/4» is read as «три четвёртых», «1/2» as «одна вторая», «25/3» as «двадцать пять дробь три».</string>
     <string name="rule_spoons">Spoon measures</string>

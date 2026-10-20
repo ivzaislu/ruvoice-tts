@@ -76,6 +76,13 @@ class BelStressTest {
         assertEquals(listOf("чорна", "белы"), m.asked)
     }
 
+    @Test fun prefixSpaceRussianOnly() {
+        // prefix_space в BeLayer.unsupported: дефис «па-/по-» у белорусского слоя не трогаем ни при вкл, ни при выкл
+        val text = "па-р+уску і по-р+усски"
+        for (rules in listOf(Rules(), Rules(setOf("prefix_space"))))
+            assertEquals(text, Stress(d, Fake(emptyArray()), emptyMap(), rules, layer = BeLayer).forModel(text))
+    }
+
     @Test fun modelEndKnowsBelarusianVowels() {
         // «дар+огі» — ударение не на последнем слоге: точка остаётся (end_oxy её снимал, «і» не считалась гласной)
         val stress = Stress(d, Fake(emptyArray()), emptyMap(), Rules(), layer = BeLayer)

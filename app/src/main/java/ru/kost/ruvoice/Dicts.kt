@@ -104,8 +104,8 @@ object Dicts {
                 .thenBy(COLLATOR) { name(it) })
 
     /** Системные списки паков: `Системный <lang>.txt` — копия stress.txt первого по id пака языка (не ru; русским
-     * пакам свои поправки ни к чему — у русского свой Системный). Копируем, если копии нет, у источника другой размер
-     * или он новее (переставили пак); списки языков, чей пак удалён, убираем.
+     * пакам свои поправки ни к чему — у русского свой Системный). Копия получает mtime источника; копируем, если копии
+     * нет или у неё другой размер или mtime (переставили пак, хоть и более старый); списки языков, чей пак удалён, убираем.
      * Переписываем и убираем только свои копии — языки в учёте `Системный.packs`. Список пользователя с таким именем
      * (заведён, пока имя было свободно; любого вида) уходит под свободное имя «Системный be (2)»: иначе копия пака
      * его перезаписала бы, снятие пака удалило, а пока он зовётся так — он только для чтения и не в экспорте.
@@ -125,11 +125,11 @@ object Dicts {
         for ((lang, s) in src) {
             val dst = file(root, Kind.STRESS, packName(lang))
             owned += lang
-            if (dst.isFile && dst.length() == s.length() && dst.lastModified() >= s.lastModified()) continue
+            if (dst.isFile && dst.length() == s.length() && dst.lastModified() == s.lastModified()) continue
             // через временный файл, как DictCache: сервис в это время мог читать прежнюю копию; недописанный — не оставляем
             dst.parentFile!!.mkdirs()
             val tmp = File(dst.path + ".tmp")
-            try { s.copyTo(tmp, overwrite = true); if (!tmp.renameTo(dst)) throw IOException("не переименован ${tmp.path}") } finally { tmp.delete() }
+            try { s.copyTo(tmp, overwrite = true); tmp.setLastModified(s.lastModified()); if (!tmp.renameTo(dst)) throw IOException("не переименован ${tmp.path}") } finally { tmp.delete() }
         }
         rec.parentFile!!.mkdirs(); rec.writeText(owned.joinToString("\n"))
     } catch (e: Exception) { Log.e(SileroModels.TAG, "списки паков не обновлены", e) } }

@@ -486,9 +486,11 @@ class Stress(private val d: SileroData, private val models: StressModels, privat
     private val hyphenPrefix = setOf("во", "по", "из")
 
     /** Дефис после такой приставки модель растягивает в паузу («из-п+од», «по-друг+ому» на слух хуже, чем через пробел).
-     * Подменяем только в символах для модели: длина та же, accented с дефисом остаётся для tokens/align/подсветки. */
+     * Подменяем только в символах для модели: длина та же, accented с дефисом остаётся для tokens/align/подсветки.
+     * Только русский путь: у слоя со своими ударениями ключа нет ([BeLayer.unsupported]), «по-русски» в белорусском
+     * тексте идёт как есть. */
     private val prefixHyphenRe = Regex("(?<![а-яё+])(во|по|из)-(?=[а-яё])", RegexOption.IGNORE_CASE)
-    fun forModel(accented: String) = if (rules.on("prefix_space")) prefixHyphenRe.replace(accented, "$1 ") else accented
+    fun forModel(accented: String) = if (own == null && rules.on("prefix_space")) prefixHyphenRe.replace(accented, "$1 ") else accented
 
     /** Последняя гласная входа модели всегда тянется (13 кадров) и без знака в конце перетягивает ударение:
      * «страд+ала» звучит «страдал+а», с точкой — верно. Перед точкой наоборот: ударная последняя гласная

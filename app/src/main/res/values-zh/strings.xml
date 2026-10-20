@@ -383,7 +383,7 @@
     <string name="rule_degrees_hint">«−5 °C» 读作 «минус пять градусов цельсия»，«°F» 读作 «по фаренгейту»。</string>
     <string name="rule_currency">货币</string>
     <string name="rule_currency_hint">«5 руб. 30 коп.» 读作 «пять рублей тридцать копеек»，以及 $、€、₽。</string>
-    <string name="rule_currency_hint_be">«5 тыс. руб.» 读作 «пяць тысяч рублёў»，«1,20 BYN» 读作 «адзін коска дваццаць рубля»，«$65 000» 读作 «шэсцьдзясят пяць тысяч долараў»，«€ 50» 读作 «пяцьдзясят еўра»。</string>
+    <string name="rule_currency_hint_be">«5 тыс. руб.» 读作 «пяць тысяч рублёў»，«1,20 BYN» 读作 «адзін рубель дваццаць капеек»，«$65 000» 读作 «шэсцьдзясят пяць тысяч долараў»，«€ 50» 读作 «пяцьдзясят еўра»。</string>
     <string name="rule_fractions">斜杠分数</string>
     <string name="rule_fractions_hint">«3/4» 读作 «три четвёртых»，«1/2» 读作 «одна вторая»；«25/3» 读作 «двадцать пять дробь три»。</string>
     <string name="rule_spoons">勺（茶匙、汤匙）</string>
