@@ -156,7 +156,9 @@ class UkLayerTest {
         assertNotNull(UkLayer.letterName('Ї', lone = true))
         assertEquals("й+от", UkLayer.letterName('й'))
         assertEquals("м'як+ий знак", UkLayer.letterName('ь'))
-        assertEquals("+ікс", UkLayer.letterName('x'))
+        // латиница — английскими именами, как по-украински читают «USB»: «ю-ес-бі»
+        assertEquals("+екс", UkLayer.letterName('x'))
+        assertEquals(listOf("+ю", "+ес", "б+і"), "USB".map { UkLayer.letterName(it) })
         // имя мягкого знака до модели — с «ъ» и ударением
         assertEquals("мъяк+ий знак", prep(plan("ь")))
         assertEquals("кома", UkLayer.symbolName(',', punct = true))
@@ -174,11 +176,17 @@ class UkLayerTest {
 
     @Test fun keepHyphen() {
         for ((a, b) in listOf("будь" to "хто", "по" to "українськи", "хтозна" to "що", "по" to "моєму", "по" to "німецьки",
-            "по" to "перше", "по" to "п'яте", "з" to "за", "з" to "під", "аби" to "хто", "казна" to "де", "хто" to "небудь",
-            "як" to "от", "все" to "таки"))
+            "по" to "перше", "по" to "п'яте", "з" to "за", "з" to "під", "з" to "поза", "казна" to "де", "хто" to "небудь",
+            "як" to "от", "все" to "таки", "тому" to "то", "якби" to "то"))
             assertTrue("$a-$b", UkLayer.keepHyphen(a, b))
-        for ((a, b) in listOf("ха" to "та", "по" to "милки", "по" to "купки", "аби" to "який", "з" to "вук", "ри" to "ба"))
+        // «аби…» слитно; «-то» только после списка слов: «місто», «багато» — перенос
+        for ((a, b) in listOf("ха" to "та", "по" to "милки", "по" to "купки", "аби" to "який", "аби" to "хто", "з" to "вук", "ри" to "ба",
+            "бага" to "то", "міс" to "то", "жи" to "то", "лі" to "то", "зо" to "лото"))
             assertFalse("$a-$b", UkLayer.keepHyphen(a, b))
+        // как на телефоне: Splitter.paragraphs (dehyphen по слою), потом Splitter.sentences
+        fun split(t: String) = Splitter.paragraphs(t, Rules(), UkLayer).flatMap { Splitter.sentences(it) }.joinToString(" | ")
+        assertEquals("Тут багато людей, велике місто і жито.", split("Тут бага-\nто людей, велике міс-\nто і жи-\nто."))
+        assertEquals("Тому-то він прийшов, а абихто ні.", split("Тому-\nто він прийшов, а аби-\nхто ні."))
         // через Splitter: перенос склеивается, дефисное написание остаётся; слово с апострофом целиком
         fun join(t: String) = Splitter.paragraphs(t, Rules(), UkLayer).single()
         assertEquals("по-українськи", join("по-\nукраїнськи"))
@@ -209,6 +217,14 @@ class UkLayerTest {
         assertEquals("alternative_q", t("Чи будеш чай чи каву?"))
         // хвост — только в конце после запятой
         assertEquals("tag_q", t("Ти прийдеш, правда?"))
+        assertEquals("tag_q", t("Ти прийдеш, так?"))
+        assertEquals("general_q", t("Так?"))
+        assertEquals("wh_q", t("Скажи, будь ласка, котра година?"))
+        assertEquals("wh_q", t("Котре з них твоє?"))
+        // «Ну що, …?» — как у русского и белорусского («Ну что, пойдём?», «Ну што, пойдзем?» — wh_q)
+        val d = TestData.data()
+        assertEquals(SentenceType.classify("Ну что, пойдём?", RuLayer.questions(d)), t("Ну що, підемо?"))
+        assertEquals(SentenceType.classify("Ну што, пойдзем?", BeLayer.questions(d)), t("Ну що, підемо?"))
         assertEquals("general_q", t("Це правда?"))
         // «будь ласка» — не «як»; «що», «як» после глагола и запятой — союз; «Скажи, як…» — вопрос
         assertEquals("general_q", t("Ти прийдеш, будь ласка?"))
