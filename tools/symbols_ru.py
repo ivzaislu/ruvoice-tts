@@ -8,7 +8,7 @@
 называть их нельзя. Кавычки из имён убираются: «стрелка «направо»» → «стрелка направо».
 
     python3 tools/symbols_ru.py ru.xml ru_derived.xml > app/src/main/assets/symbols_ru.tsv
-Белорусская таблица — так же из be.xml в symbols_be.tsv.
+Белорусская таблица — так же из be.xml в symbols_be.tsv, украинская — из uk.xml в symbols_uk.tsv.
 Данные: Unicode CLDR, Unicode License v3 (app/src/main/assets/cldr.LICENSE.txt).
 """
 import os
