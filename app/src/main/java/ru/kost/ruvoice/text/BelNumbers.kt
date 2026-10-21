@@ -119,7 +119,7 @@ object BelNumbers {
         add("мм рт. ст", "мм рт.ст", "мм рт ст", u = Measure("метр", "мілі", suffix = " ртутнага слупа"))
         add("кг", u = Measure("грам", "кіла")); add("г", "гр", u = Measure("грам")); add("мг", u = Measure("грам", "мілі")); add("мкг", u = Measure("грам", "мікра"))
         add("т", u = Measure("тона")); add("унц", u = Measure("унцыя"))
-        add("гадз", "ч", u = Measure("гадзіна")); add("мін", u = Measure("хвіліна")); add("сек", u = Measure("секунда"))
+        add("гадз", "ч", u = Measure("гадзіна")); add("хв", "мін", u = Measure("хвіліна")); add("сек", u = Measure("секунда"))
         add("мс", u = Measure("секунда", "мілі")); add("мкс", u = Measure("секунда", "мікра")); add("нс", u = Measure("секунда", "нана"))
         add("шт", u = Measure("штука")); add("чал", u = Measure("чалавек")); add("экз", u = Measure("экземпляр"))
         add("в", u = Measure("вольт")); add("мв", u = Measure("вольт", "мілі"))
@@ -358,7 +358,9 @@ object BelNumbers {
             val a = m.groupValues[1].toLongOrNull() ?: return@replace m.value
             val b = m.groupValues[2].toLongOrNull() ?: return@replace m.value
             val u = unitOf(m.groupValues[4])
-            if (a >= 1 && (b in 2..20 && a < b || b in ROUND_DENOMS)) fraction(a, b) + (u?.let { " " + unitGen(it) } ?: m.groupValues[3])
+            // падеж по предлогу, как у десятичной: «каля 2/5» → «каля дзвюх пятых»
+            if (a >= 1 && (b in 2..20 && a < b || b in ROUND_DENOMS))
+                fraction(a, b, decimalCase(s, m.range.first) ?: Case.NOM) + (u?.let { " " + unitGen(it) } ?: m.groupValues[3])
             else BelNormalizer.cardinal(a) + " дроб " + BelNormalizer.cardinal(b) + m.groupValues[3]
         }
     }
@@ -397,8 +399,15 @@ object BelNumbers {
             if (upTo) m.value.replaceGroups(m, 2 to a, 4 to cardinal(m.groupValues[4].toLong(), Case.GEN)) else m.value.replaceGroups(m, 2 to a)
         }
         for ((re, case) in TRIGGERS) s = re.replace(s) { m ->
-            val fem = nextNoun(s, m.range.last + 1)?.let { Morph.gender(it) == Gender.F } == true
-            m.chain(1) { n -> cardinal(n, case, fem && n % 10 in 1..2 && n % 100 !in 11..12) }?.let { m.value.replaceGroups(m, 1 to it) } ?: m.value
+            val noun = nextNoun(s, m.range.last + 1)
+            // «з» — и родны («92 балы з 100», «з 2 бакоў»), и творны («з 3 сябрамі» — ниже по существительному): родны только
+            // с таблицей и без творного за числом; «з 100» → «са ста»
+            val from = m.value.takeWhile { !it.isWhitespace() }.lowercase() in setOf("з", "са")
+            if (from && (morph == null || noun?.let { Case.INS in Morph.nounCases(it, true) + Morph.nounCases(it, false) } == true ||
+                    FROM_YEARS_AHEAD.containsMatchIn(s.substring(m.range.last + 1)))) return@replace m.value
+            val fem = noun?.let { Morph.gender(it) == Gender.F } == true
+            m.chain(1) { n -> cardinal(n, case, fem && n % 10 in 1..2 && n % 100 !in 11..12) }?.let { m.value.replaceGroups(m, 1 to it) }
+                ?.let { if (from) SA_RE.replace(it) { z -> if (z.value == "з") "са" else "Са" } else it } ?: m.value
         }
         val morph = morph ?: return s
         return NOUN_AFTER.replace(s) { m ->
@@ -477,7 +486,7 @@ object BelNumbers {
     /** Числа цепочки в группе [g] («2-3», «3 і 5») — каждое через [f]; null — хоть одно не вышло. */
     private fun MatchResult.chain(g: Int, f: (Long) -> String?): String? {
         var bad = false
-        val out = Regex("\\d+").replace(groupValues[g]) { d -> d.value.toLongOrNull()?.let(f) ?: run { bad = true; d.value } }
+        val out = NUM_RE.replace(groupValues[g]) { d -> d.value.filter { it.isDigit() }.toLongOrNull()?.let(f) ?: run { bad = true; d.value } }
         return if (bad) null else out
     }
     private fun String.replaceGroups(m: MatchResult, vararg r: Pair<Int, String>): String {
@@ -489,8 +498,10 @@ object BelNumbers {
         return res
     }
 
+    /** Число, можно разрядами через пробел («1 234 567»), как [BelNormalizer.numberWords]; без соседних групп («29 123 45»). */
+    private const val NUM = """(?:\d{1,3}(?:[ \x{A0}\x{202F}]\d{3})+(?![ \x{A0}\x{202F}]?\d)|\d+)"""
     /** Цепочка чисел: «2-3», «3, 5 і 7»; запятая — только с пробелом («1,1» — дробь). */
-    private const val NUM_CHAIN = """\d+(?:(?:,\s+|\s*[-–—]\s*|\s+(?:і|ці|або)\s+)\d+){0,6}"""
+    private const val NUM_CHAIN = """$NUM(?:(?:,\s+|\s*[-–—]\s*|\s+(?:і|ці|або)\s+)$NUM){0,6}"""
     /** Не часть дроби, времени, порядкового («5-га»), процента; не год («1990 года») и не день перед месяцем. */
     private val NUM_TAIL = """(?![:/\d]|[.,]\d)(?!-\p{L})(?!\s?%)(?!(?<=\d{3})\s*(?:год|года|годзе|гады|гадах|г\.)(?!\p{L}))""" +
         """(?!\s+(?:${MONTHS.joinToString("|")})(?!\p{L}))"""
@@ -501,13 +512,18 @@ object BelNumbers {
         trigger("""да|ад|каля|ля|без|для|акрамя|апроч|пасля|замест|сярод|звыш|з-за|з-пад|больш|менш|старэй|маладзей""") to Case.GEN,
         trigger("""аб|пры""") to Case.PRE,
         trigger("""паміж|між|над|пад|перад""") to Case.INS,
-        trigger("""дзякуючы|насуперак|насустрач""") to Case.DAT)
+        trigger("""дзякуючы|насуперак|насустрач""") to Case.DAT,
+        trigger("""з|са""") to Case.GEN)
+    /** За «з N» — «па/да» с числом: годы «з 2010 па 2015 год» ([RANGE_FROM_TO] их оставил). */
+    private val FROM_YEARS_AHEAD = Regex("""^\s+(?:па|да)\s+\d""", RegexOption.IGNORE_CASE)
+    private val SA_RE = Regex("""^[зЗ](?=\s+ст)""")
     private val RANGE_BETWEEN = Regex("""(?<![\p{L}])(?:паміж|між)\s+(\d+)$NUM_TAIL\s+і\s+(\d+)$NUM_TAIL""", RegexOption.IGNORE_CASE)
     /** «з 5 да 10», «ад 5 да 10», «з 5 па 10»; между числами — одно слово («з 10 000 рублёў да 1000»). */
     private val RANGE_FROM_TO = Regex("""(?<![\p{L}])(з|са|ад)\s+(\d+)$NUM_TAIL(?:\s+\p{L}+)?\s+(да|па)\s+(\d+)$NUM_TAIL""", RegexOption.IGNORE_CASE)
     /** Слово за диапазоном — не «год», «гады», «г.»: тогда числа — количество. */
     private val COUNTED_AFTER = Regex("""^\s+(?![гГ])\p{L}""")
-    private val NOUN_AFTER = Regex("""(?<![\p{L}\d,./–-])($NUM_CHAIN)$NUM_TAIL\s+(\p{L}{2,})(?![\p{L}-])(?=(?:\s+(\p{L}{2,}))?)""")
+    private val NUM_RE = Regex(NUM)
+    private val NOUN_AFTER = Regex("""(?<![\p{L}\d,./–-])(?<!\d[ \x{A0}\x{202F}])($NUM_CHAIN)$NUM_TAIL\s+(\p{L}{2,})(?![\p{L}-])(?=(?:\s+(\p{L}{2,}))?)""")
     private val NEXT_WORDS = Regex("""^\s+(\p{L}+)(?:\s+(\p{L}+))?""")
     /** Номер, а не количество: «пункт 22 правіл», «нумар 5 аўтобуса», «п. 3 артыкула». */
     private val LABEL_BEHIND = Regex("""(?<![\p{L}])(?:(?:пункт\p{L}{0,2}|артыкул\p{L}{0,2}|глав\p{L}{0,2}|нумар\p{L}{0,2}|том\p{L}{0,2}|""" +
@@ -686,7 +702,7 @@ object BelNumbers {
             val p = m.groupValues[1].lowercase()
             // «з/да…» перед «дд.мм» с месяцем 01–12 — скорее дата («з 12.05 па 15.05»); «а», «у», «ў» — всегда время
             if (p != "а" && p != "у" && p != "ў" && m.groupValues[4].toInt() in 1..12) return@replace m.value
-            time(m.groupValues[3], m.groupValues[4])?.let { m.groupValues[1] + m.groupValues[2] + it } ?: m.value
+            time(m.groupValues[3], m.groupValues[4], p)?.let { m.groupValues[1] + m.groupValues[2] + it } ?: m.value
         }
         // «21:30:15» — с секундами, раньше «21:30»: иначе оставалось «…хвілін:пятнаццаць»
         return TIME.replace(TIME_SEC.replace(s) { m ->
@@ -694,13 +710,27 @@ object BelNumbers {
             time(m.groupValues[1], m.groupValues[2])?.let { t ->
                 if (sec == 0L) t else t.removeSuffix(" роўна") + " " + femCardinal(sec) + " " + plural(sec, "секунда", "секунды", "секунд")
             }?.takeIf { sec < 60 } ?: m.value
-        }) { m -> time(m.groupValues[1], m.groupValues[2]) ?: m.value }
+        }) { m ->
+            val p = TIME_PREP_BEHIND.find(s.substring(maxOf(0, m.range.first - 12), m.range.first))?.groupValues?.get(1)?.lowercase()
+            time(m.groupValues[1], m.groupValues[2], p) ?: m.value
+        }
     }
+    private val TIME_PREP_BEHIND = Regex("""(?<![\p{L}])(а|з|са|ад|да|каля|пасля)\s+$""", RegexOption.IGNORE_CASE)
 
-    private fun time(hRaw: String, miRaw: String): String? {
+    /** Время словами; [prep] перед ним: «з/да/каля…» — родны, как у русского («з васьмі гадзін да дваццаці гадзін»), «а» —
+     * порядковое месны («а сёмай гадзіне трыццаць хвілін»), иначе назоўны («у васямнаццаць гадзін»). Не проверено носителем. */
+    private fun time(hRaw: String, miRaw: String, prep: String? = null): String? {
         val h = hRaw.toIntOrNull() ?: return null
         val mi = miRaw.toIntOrNull() ?: return null
         if (h !in 0..23 || mi !in 0..59) return null
+        fun gen(n: Long, one: String, many: String) =
+            cardinal(n, Case.GEN, fem = true) + " " + if (n % 10 == 1L && n % 100 != 11L) one else many
+        when (prep) {
+            null, "у", "ў", "па", "перад" -> {}
+            "а" -> return ordinal(h.toLong(), Case.PRE, Gender.F) + " гадзіне" +
+                (if (mi > 0) " " + femCardinal(mi.toLong()) + " " + plural(mi.toLong(), "хвіліна", "хвіліны", "хвілін") else "")
+            else -> return gen(h.toLong(), "гадзіны", "гадзін") + (if (mi > 0) " " + gen(mi.toLong(), "хвіліны", "хвілін") else "")
+        }
         val hb = StringBuilder(femCardinal(h.toLong()))
         hb.append(' ').append(plural(h.toLong(), "гадзіна", "гадзіны", "гадзін"))
         if (mi > 0) {
@@ -931,7 +961,7 @@ object BelNumbers {
         add(Gender.M, "раздзел", "раздзела", "раздзелу", "раздзел", "раздзелам", "раздзеле")
     }
     private val CHAPTER_RE = Regex("""(?<![\p{L}])(${CHAPTER_FORMS.keys.sortedByDescending { it.length }.joinToString("|")})\s+(\d{1,3})""" +
-        """(?![\d.,:/]|\s*[-–—]\s*\d|-\p{L})""", RegexOption.IGNORE_CASE)
+        """(?![\d:/]|[.,]\d|\s*[-–—]\s*\d|-\p{L})""", RegexOption.IGNORE_CASE)
 
     /** Пункты списка после двоеточия (правило numbers, как у русского listsAndOrdinals): «Прычыны: 1) голад; 2) холад» →
      * «першае, голад; другое, холад». Скобка у номера без двоеточия во фразе — не пункт. */

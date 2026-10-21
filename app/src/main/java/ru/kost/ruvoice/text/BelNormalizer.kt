@@ -362,12 +362,15 @@ object BelNormalizer {
      * ставим за ней вторую, отдельным знаком: она переживает разворот. «г.» за «дд.мм» — горад («15.06 г. Мінск»), регистр — до lowercase.
      * Вторая точка до конца разворотов — меткой [ABBR_DOT]: сокращение не развернулось (его правило выключено) — точка его
      * осталась, и метка уходит без следа, иначе было бы «км..». */
-    private val ABBR_END_RE = Regex("""(?:(?<=\d-х[ \x{A0}])гг|(?<=\d[ \x{A0}]?|\d-я[ \x{A0}]|(?:тыс|млн|млрд)\.?[ \x{A0}])""" +
+    // Регистр: IGNORE_CASE на всё, регистрозависимое — в (?-i:), как у русского: встроенный (?i:) без флага на JVM кириллицу
+    // не видел («ГБ.», «мА·г.» теряли точку в тестах, на Android — нет)
+    private val ABBR_END_RE = Regex("""(?:(?-i:(?<=\d-х[ \x{A0}])гг)|(?-i:(?<=\d[ \x{A0}]?|\d-я[ \x{A0}]|(?:тыс|млн|млрд)\.?[ \x{A0}]))""" +
         // сокращения единиц ([BelNumbers.UNITS] на букву; регистр — любой: «МВт.», «кВт.»), «гг», «г» не за «дд.мм»
-        """(?:(?i:${BelNumbers.UNITS.keys.filter { it.last().isLetter() && it != "г" }.sortedByDescending { it.length }.joinToString("|") { Regex.escape(it) }})""" +
-        """|гг|(?<!\.\d\d[ \x{A0}]?)г)""" +
+        """(?:${BelNumbers.UNITS.keys.filter { it.last().isLetter() && it != "г" }.sortedByDescending { it.length }.joinToString("|") { Regex.escape(it) }}""" +
+        """|(?-i:гг|(?<!\.\d\d[ \x{A0}]?)г))""" +
         // только там, где [WORD_ABBR] их развернёт: иначе точка осталась бы двойной
-        """|(?<=(?<!\p{L})і\s{1,3}[гт]\.\s{0,3})д|(?<=(?<!\p{L})і\s{1,3})(?:інш|пад)|(?<=(?<!\p{L})н\.\s{0,3})э)\.(?=\s+\p{Lu}|\s*$)""")
+        """|(?-i:(?<=(?<!\p{L})і\s{1,3}[гт]\.\s{0,3})д|(?<=(?<!\p{L})і\s{1,3})(?:інш|пад)|(?<=(?<!\p{L})н\.\s{0,3})э))\.(?-i:(?=\s+\p{Lu}|\s*$))""",
+        RegexOption.IGNORE_CASE)
     /** Символ частной области Unicode. В тексте он бывает разве что значком шрифта — такой [prepare] сразу делает пробелом,
      * как сделал бы фильтр. */
     private val ABBR_DOT = Char(0xE000)
@@ -440,7 +443,7 @@ object BelNormalizer {
     private val EDGE_WORDS = setOf("што", "хто", "дзе", "два", "тры", "сто", "мне", "для", "дні", "дно", "дна", "дня", "зло", "зла",
         "сны", "сна", "рта", "рту", "пса", "псы", "мха", "шва", "швы", "акт", "іск", "арт", "ост", "спа", "бра", "трэ", "збо")
     private val DIGIT_BEFORE_RE = Regex("""\d\s?$""")
-    private val CYR_TOKEN_RE = Regex("""(?<!\d-)(?<![\p{L}\d'’])[А-ЯЁІЎ]{2,6}(?![\p{L}\d'’])(?!-\d)""")
+    private val CYR_TOKEN_RE = Regex("""(?<!\d-)(?<![\p{L}\d'’])[А-ЯЁІЎ]{2,6}(?![\p{L}\d'’])""")
     private val CAPS_BEFORE_RE = Regex("""(?<![\p{L}\d])[А-ЯЁІЎ]{4,}[\s,:;—–-]*$""")
     private val CAPS_AFTER_RE = Regex("""^[\s,:;—–-]*[А-ЯЁІЎ]{4,}(?![\p{L}\d])""")
     /** Инициал перед фамилией или вторым инициалом; второй инициал после первого («Я. К. Чорны», «Шамякін І. П.»). */
@@ -521,10 +524,11 @@ object BelNormalizer {
         "дац" to NounAbbr("дацэнт дацэнта дацэнту дацэнта дацэнтам дацэнце", false, true))
     /** Сокращение с точкой: перед ним предлог (по желанию); за ним римское (третья группа, его заменяем вместе с сокращением),
      * цифра, «+», «(», «:» номера (четвёртая) или слово с заглавной. */
-    private val NOUN_ABBR_RE = Regex("""(?:(?<![\p{L}\d])((?i:${BelNumbers.SIGN_PREP.keys.sortedByDescending { it.length }.joinToString("|")}))\s+)?""" +
-        """(?<![\p{L}\d.])((?i:${NOUN_ABBRS.keys.sortedByDescending { it.length }.joinToString("|")}))\.\s*""" +
-        """(?:((?:[IVX]|І(?=[IVXІХ]|\s*$))[IVXІХ]*)(?![\p{L}\d])|(?=([\d+(:]))|(?=[А-ЯЁІЎ]))""")
-    private val ROMAN_OR_DIGIT_BEHIND = Regex("""(?:[IVXІХ]+|\d+)\s*$""")
+    private val NOUN_ABBR_RE = Regex("""(?:(?<![\p{L}\d])(${BelNumbers.SIGN_PREP.keys.sortedByDescending { it.length }.joinToString("|")})\s+)?""" +
+        """(?<![\p{L}\d.])(${NOUN_ABBRS.keys.sortedByDescending { it.length }.joinToString("|")})\.\s*""" +
+        """(?-i:(?:((?:[IVX]|І(?=[IVXІХ]|\s*$))[IVXІХ]*)(?![\p{L}\d])|(?=([\d+(:]))|(?=[А-ЯЁІЎ])))""", RegexOption.IGNORE_CASE)
+    // и «мм рт. ст. Далей» — ртутны слуп, не станцыя
+    private val ROMAN_OR_DIGIT_BEHIND = Regex("""(?:[IVXІХ]+|\d+|рт\.)\s*$""")
     private val GP_RE = Regex("""(?<![\p{L}\d.])[Гг]\.\s*п\.\s*(?=[А-ЯЁІЎ])""")
 
     private val WORD_ABBR = listOf(
@@ -608,7 +612,7 @@ object BelNormalizer {
     private fun uAfterNumber(s: String) = U_AFTER_WORD_RE.replace(s) { m ->
         if (m.groupValues[1] in NUM_VOWEL_WORDS) m.groupValues[1] + m.groupValues[2] + "ў" else m.value
     }
-    private val U_AFTER_WORD_RE = Regex("""(?<![\p{L}])(\p{L}+)( +)у(?=\p{L})""")
+    private val U_AFTER_WORD_RE = Regex("""(?<![\p{L}])(\p{L}+)( +)у(?=\p{L}|\s)""")
     /** Все формы количественных и порядковых ([BelNumbers.cardinal], [BelNumbers.ordinal]), что кончаются на гласную. */
     private val NUM_VOWEL_WORDS: Set<String> by lazy {
         val base = (0L..19L) + (20L..90L step 10) + (100L..900L step 100) + listOf(1000L, 1_000_000L)
