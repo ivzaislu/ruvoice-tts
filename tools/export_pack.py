@@ -43,6 +43,11 @@ PACKS = {
                    'https://models.silero.ai/models/tts/ru/v5_cis_ext.pt', 'ukr_mykyta'),
 }
 TEXT = 'прив+ет, м+ир.'
+# язык: (источники --cand для строки лицензии пака, они же в шапке stress.txt)
+CAND = {'uk': ('Wiktionary via kaikki.org, eugenysilin/russian-ukrainian-stress-data',
+               'Викисловарь\n# (английский, через kaikki.org, https://kaikki.org/dictionary/Ukrainian/) и eugenysilin/russian-ukrainian-stress-data\n'
+               '# (https://github.com/eugenysilin/russian-ukrainian-stress-data), CC BY-SA 4.0; tools/uk_stress.py;\n'
+               '# файл распространяется на условиях CC BY-SA 4.0\n')}
 
 
 def tts_args(pk, text, sr=48000):
@@ -71,13 +76,19 @@ class Accentor2(torch.nn.Module):
         return logits, torch.zeros(logits.size(0), 1)
 
 
-def export_accentor(pt, out_path, cand=()):
-    """accentor-<lang>.pt → accentor.ptl. Эмбеддинги n-грамм в пакете int8 — деквантуем, как load_accentor
-    в silero-stress. Проверка: lite против исходной модели на 50 словах из её exceptions (у ukr их нет — из cand),
-    логиты один в один."""
+def load_accentor(pt):
+    """accentor-<lang>.pt из silero-stress: объект с model и exceptions. Эмбеддинги n-грамм в пакете int8 —
+    деквантуем, как load_accentor в silero-stress."""
     a = torch.package.PackageImporter(pt).load_pickle('accentor_models', 'accentor').accentor
     m = a.model
     m.embedding.weight.data = m.scale * (m.embedding.weight.data.clone() - m.zero_point)
+    return a
+
+
+def export_accentor(pt, out_path, cand=()):
+    """accentor-<lang>.pt → accentor.ptl. Проверка: lite против исходной модели на 50 словах из её exceptions
+    (у ukr их нет — из cand), логиты один в один."""
+    a = load_accentor(pt); m = a.model
     torch.jit.script(Accentor2(m))._save_for_lite_interpreter(out_path)
     src = sorted(a.exceptions or cand)
     words = src[::max(1, len(src) // 50)][:50]
@@ -120,6 +131,29 @@ def normalize(v, lang):
     return '-'.join(parts) if '+' in ''.join(parts) else None
 
 
+def acute_to_plus(s, letters):
+    """Форма с акутом (и грависом) после ударной гласной → «+» перед ней; нижний регистр, апостроф снят. None — пусто,
+    буквы не из letters или дефис с края."""
+    s = s.strip().lower()
+    for a in APOS: s = s.replace(a, '')
+    out = []
+    for ch in s:
+        if ch in '́̀':
+            if out: out.insert(len(out) - 1, '+')
+        else:
+            out.append(ch)
+    v = ''.join(out); w = v.replace('+', '')
+    return v if w and set(w) <= letters and w[0] != '-' and w[-1] != '-' else None
+
+
+def first_max(p, row, lang):
+    """Разметка части слова акцентором, как BelStress.kt: первый максимум логитов среди гласных, но не дальше выходов
+    модели; p с «+» перед ударной."""
+    at = [j for j, c in enumerate(p) if c in VOWELS[lang]]
+    k = max(range(min(len(at), len(row))), key=row.__getitem__)
+    return p[:at[k]] + '+' + p[at[k]:]
+
+
 def grammardb_stress(path):
     """GrammarDB slovy-2008-stress.txt: форма с акутом после ударной гласной → «+» перед ней. Только слова с одним
     вариантом ударения: омографы («за+мак»/«зам+ок») одним ударением не фиксируем."""
@@ -127,17 +161,8 @@ def grammardb_stress(path):
     letters = set('абвгдеёжзійклмнопрстуўфхцчшыьэюя-')
     with open(path, encoding='utf-8') as f:
         for line in f:
-            s = line.strip().lower()
-            for a in APOS: s = s.replace(a, '')
-            out = []
-            for ch in s:
-                if ch in '́̀':
-                    if out: out.insert(len(out) - 1, '+')
-                else:
-                    out.append(ch)
-            v = ''.join(out); w = v.replace('+', '')
-            if not w or not set(w) <= letters or w[0] == '-' or w[-1] == '-': continue
-            variants.setdefault(w, set()).add(normalize(v, 'be'))
+            v = acute_to_plus(line, letters)
+            if v: variants.setdefault(v.replace('+', ''), set()).add(normalize(v, 'be'))
     return {w: next(iter(vs)) for w, vs in variants.items() if len(vs) == 1 and None not in vs}
 
 
@@ -171,9 +196,7 @@ def lang_stress(exceptions, lite, path, lang, cand, head):
         for i in range(0, len(parts), 4096):
             chunk = parts[i:i + 4096]
             for p, row in zip(chunk, lite(chunk)[0].tolist()):
-                at = [j for j, c in enumerate(p) if c in VOWELS[lang]]
-                k = max(range(min(len(at), len(row))), key=row.__getitem__)
-                pred[p] = p[:at[k]] + '+' + p[at[k]:]
+                pred[p] = first_max(p, row, lang)
     out = [f'{w} {v}\n' for w, v in sorted(cand.items()) if '-'.join(pred.get(p, p) for p in w.split('-')) != v]
     with open(path, 'w', encoding='utf-8', newline='\n') as f:
         f.write(head)
@@ -203,21 +226,23 @@ if __name__ == '__main__':
     pt, keep, types, title, lic, source, golden_speaker = PACKS[pack_id]
     lang = LANGS.get(pack_id, ('ru',))[0]
     if args.grammardb and not args.stress: lic += '; stress.txt — CC BY-SA 4.0 (GrammarDB)'
-    if args.cand and not args.stress:
-        lic += '; stress.txt — CC BY-SA 4.0 (Wiktionary via kaikki.org, eugenysilin/russian-ukrainian-stress-data)'
+    if args.cand and lang not in CAND: ap.error(f'--cand: источник кандидатов для языка «{lang}» не описан в CAND')
+    if args.cand and not args.stress: lic += f'; stress.txt — CC BY-SA 4.0 ({CAND[lang][0]})'
     if args.morph: lic += '; morph.bin — ' + ('CC BY-NC-SA 4.0 (VESUM, brown-uk/dict_uk)' if lang == 'uk' else 'CC BY-SA 4.0 (GrammarDB)')
     cand, head = {}, ''
     if pack_id in LANGS:
-        head = f'# слова, где акцентор ставит ударение иначе: исключения акцентора silero-stress ({LANGS[pack_id][1][9:-3]}, MIT)\n'
+        acc = LANGS[pack_id][1][9:-3]
+        head = f'# слова, где акцентор ставит ударение иначе: исключения акцентора silero-stress ({acc}, MIT)\n'
         if args.grammardb:
             cand = grammardb_stress(args.grammardb)
             head += ('# и Беларуская граматычная база (GrammarDB, https://github.com/Belarus/GrammarDB, CC BY-SA 4.0);\n'
                      '# файл распространяется на условиях CC BY-SA 4.0\n')
         if args.cand:
-            cand.update((w, v) for w, v in read_cand(args.cand).items() if normalize(v, lang) == v)
-            head += ('# и Викисловарь (английский, через kaikki.org, https://kaikki.org/dictionary/Ukrainian/) и\n'
-                     '# eugenysilin/russian-ukrainian-stress-data (https://github.com/eugenysilin/russian-ukrainian-stress-data),\n'
-                     '# CC BY-SA 4.0; tools/uk_stress.py; файл распространяется на условиях CC BY-SA 4.0\n')
+            got = read_cand(args.cand)
+            ok = {w: v for w, v in got.items() if normalize(v, lang) == v}
+            print(f'--cand: {len(got)} слов, отброшено normalize {len(got) - len(ok)}')
+            cand.update(ok)
+            head = f'# слова, где акцентор silero-stress ({acc}, MIT) ставит ударение иначе, чем словарь: {CAND[lang][1]}'
     PT = os.path.join(HERE, pt)
     big = torch.package.PackageImporter(PT).load_pickle('tts_models', 'model')
     pk = big.packages[0]
