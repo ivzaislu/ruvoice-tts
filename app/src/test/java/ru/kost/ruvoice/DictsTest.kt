@@ -197,15 +197,20 @@ class DictsTest {
         val root = tmp.root
         for (kind in Dicts.Kind.values()) Dicts.dir(root, kind).mkdirs()
         Dicts.file(root, Dicts.Kind.STRESS, Dicts.SYSTEM).writeText("")
-        Dicts.file(root, Dicts.Kind.STRESS, Dicts.MAIN).writeText("потом пот+ом\n")
+        Dicts.file(root, Dicts.Kind.STRESS, Dicts.MAIN).writeText("потом пот+ом\nкому-то ком+у-то\n")
         Dicts.file(root, Dicts.Kind.REPLACE, Dicts.SYSTEM).writeText(
-            "потом = п+отом\nобливаясь потом = обливаясь п+отом\nстарый замок = старый зам+ок\nворон = в+орон\nкот = к+от\n")
-        Dicts.file(root, Dicts.Kind.REPLACE, Dicts.MAIN).writeText("замок = з+амок\nВорон = вор+он\n")
+            "потом = п+отом\nобливаясь потом = обливаясь п+отом\nстарый замок = старый зам+ок\nворон = в+орон\nкот = к+от\n" +
+            "кому-то = к+омуто\nв кому = в к+ому\nгде-то там = гд+ето т+ам\n")
+        Dicts.file(root, Dicts.Kind.REPLACE, Dicts.MAIN).writeText("замок = з+амок\nВорон = вор+он\nгде-то = гд+е-то\n")
         val r = DictCache.replacements(Dicts.files(root, Dicts.Kind.REPLACE), stress = Dicts.files(root, Dicts.Kind.STRESS))
         assertEquals("обливаясь потом", r.apply("обливаясь потом"))
         assertEquals("старый з+амок", r.apply("старый замок"))
         assertEquals("вор+он", r.apply("ворон"))
         assertEquals("к+от", r.apply("кот"))
+        // слово через дефис целиком: своё «кому-то» снимает системное, «в кому» остаётся
+        assertEquals("кому-то", r.apply("кому-то"))
+        assertEquals("в к+ому", r.apply("в кому"))
+        assertEquals("гд+е-то там", r.apply("где-то там"))
     }
 
     @Test fun systemDictsFromAssetsParse() {

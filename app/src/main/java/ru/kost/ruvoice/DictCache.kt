@@ -62,6 +62,8 @@ object DictCache {
     }
 
     private val wordRe = Regex("[\\p{L}\\d]+")
+    /** Слово через дефис целиком: своё «кому-то» снимает системное «кому-то = к+омуто», а «в кому» не трогает. */
+    private val compoundRe = Regex("[\\p{L}\\d]+(?:-[\\p{L}\\d]+)+")
 
     /** Слова, о которых пользователь сказал сам: ключи своих списков ударений и однословные ключи своих замен. */
     private fun userWords(replace: List<File>, stress: List<File>): Set<String> {
@@ -69,7 +71,7 @@ object DictCache {
         for (f in stress) if (!Dicts.isSystem(Dicts.name(f))) f.forEachLine { l -> DictLines.parseStress(l)?.let { out += it.first.lowercase() } }
         for (f in replace) if (!Dicts.isSystem(Dicts.name(f))) f.forEachLine { l ->
             val k = Replacements.split(l)?.first?.removePrefix("$")?.lowercase() ?: return@forEachLine
-            if (!k.startsWith("~") && wordRe.matches(k)) out += k
+            if (!k.startsWith("~") && (wordRe.matches(k) || compoundRe.matches(k))) out += k
         }
         return out
     }
@@ -87,8 +89,8 @@ object DictCache {
         val lines = files.flatMap { f ->
             if (user.isEmpty() || Dicts.name(f) != Dicts.SYSTEM) f.readLines()
             else f.readLines().filter { l ->
-                val k = Replacements.split(l)?.first ?: return@filter true
-                k.startsWith("~") || wordRe.findAll(k.lowercase()).none { it.value in user }
+                val k = Replacements.split(l)?.first?.lowercase() ?: return@filter true
+                k.startsWith("~") || (wordRe.findAll(k).none { it.value in user } && ('-' !in k || compoundRe.findAll(k).none { it.value in user }))
             }
         }
         val r = Replacements.parse(lines, onProgress?.let { cb -> { done -> cb(if (lines.isEmpty()) 100 else done * 100 / lines.size) } })

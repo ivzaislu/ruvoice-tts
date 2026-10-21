@@ -64,6 +64,13 @@ class StressTest {
         assertEquals("Мам+а", s.apply("Мама"))
     }
 
+    @Test fun userDictHyphenatedWord() {
+        // слово через дефис — целиком, без такого ключа — по частям; часть с «+» из замены не трогаем
+        val s = Stress(d, firstVowel, mapOf("мама-то" to "мам+а-то", "папа" to "пап+а"))
+        assertEquals("Мам+а-то, пап+а-то", s.apply("Мама-то, папа-то"))
+        assertEquals("м+ама-то", s.apply("м+ама-то"))
+    }
+
     @Test fun nbspTreatedAsWordSeparator() {
         // NBSP (U+00A0): JVM \s его не матчит, Python \s матчит. «в» без гласной остаётся как есть,
         // у «доме» firstVowel-заглушка ставит ударение перед первой гласной («о»): «д+оме».

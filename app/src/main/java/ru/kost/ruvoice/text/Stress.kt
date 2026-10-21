@@ -619,24 +619,31 @@ class Stress(private val d: SileroData, private val models: StressModels, privat
     }
 
     // ---- user dictionary ----
+    /** Слово через дефис ищется в словаре целиком («кому-то ком+у-то»), потом по частям — как в BelStress. */
+    private val dictWordRe = Regex("[а-яё+]+(?:-[а-яё+]+)*", RegexOption.IGNORE_CASE)
+
     private fun userDictPass(sentence: String, original: String, preset: Set<String>): String {
         if (userDict.isEmpty()) return sentence
         // ключ — слово из исходного текста: проходы выше могли поставить «ё» («узна+ёт» из homodict, «бёдра» из gram-таблицы),
         // и «узнает» из словаря не нашлось бы; авторское «ё» в тексте так и остаётся другим словом
         val src = wordRe.findAll(original).map { it.value.replace("+", "").lowercase() }.toList()
-        var i = -1
-        return wordRe.replace(sentence) { m ->
-            i++
-            if (m.value.lowercase() in preset) return@replace m.value
-            val orig = m.value.replace("+", "")
-            val key = src.getOrNull(i)?.takeIf { it.replace('ё', 'е') == orig.lowercase().replace('ё', 'е') } ?: orig.lowercase()
-            val value = userDict[key] ?: return@replace m.value
+        fun key(i: Int, orig: String) = src.getOrNull(i)?.takeIf { it.replace('ё', 'е') == orig.lowercase().replace('ё', 'е') } ?: orig.lowercase()
+        fun cased(orig: String, value: String): String {
             val stressIdx = value.indexOf('+')
-            var cased = value.replace("+", "")
+            val out = value.replace("+", "")
                 .mapIndexed { k, c -> if (k < orig.length && orig[k].isLowerCase()) c.lowercaseChar() else if (k < orig.length) c.uppercaseChar() else c }
                 .joinToString("")
-            if (stressIdx >= 0) cased = cased.substring(0, stressIdx) + "+" + cased.substring(stressIdx)
-            cased
+            return if (stressIdx >= 0) out.substring(0, stressIdx) + "+" + out.substring(stressIdx) else out
+        }
+        var i = 0   // номер слова без дефисов, как в src
+        return dictWordRe.replace(sentence) { m ->
+            val parts = m.value.split('-'); val at = i; i += parts.size
+            val bare = parts.map { it.replace("+", "") }
+            if (parts.size > 1 && parts.none { it.lowercase() in preset })
+                userDict[bare.indices.joinToString("-") { key(at + it, bare[it]) }]?.let { return@replace cased(bare.joinToString("-"), it) }
+            parts.indices.joinToString("-") { k ->
+                if (parts[k].lowercase() in preset) parts[k] else userDict[key(at + k, bare[k])]?.let { cased(bare[k], it) } ?: parts[k]
+            }
         }
     }
 }
