@@ -35,6 +35,14 @@ class BelStressTest {
         assertEquals(listOf("намі"), m.asked)
     }
 
+    @Test fun hardSignFromApostropheKeptAndLookedUpWithout() {
+        // «абъём» (апостроф → «ъ» в BelNormalizer) ищем как «абём»: словарь и акцентор знают слово без апострофа
+        val m = Fake(arrayOf(floatArrayOf(0.1f, 0.9f)))
+        assertEquals("абъ+ём", Stress(d, m, emptyMap(), Rules(), layer = BeLayer).apply("абъём"))
+        assertEquals(listOf("абём"), m.asked)
+        assertEquals("сямъ+я", Stress(d, Fake(arrayOf(floatArrayOf(0.9f))), mapOf("сямя" to "сям+я"), Rules(), layer = BeLayer).apply("сямъя"))
+    }
+
     @Test fun userDictWinsOverAccentor() {
         val stress = Stress(d, Fake(arrayOf(floatArrayOf(0.1f, 0.9f))), mapOf("дзякуй" to "дз+якуй"), Rules(), layer = BeLayer)
         assertEquals("дз+якуй", stress.apply("дзякуй"))

@@ -318,6 +318,7 @@ object BelNormalizer {
      * модели не доходит, «аб'ява» читается «абява». Тем же классом его снимает [BeLayer.dictWord] в словах словаря
      * языка, в поправках пака тоже (список «Системный be», [ru.kost.ruvoice.Dicts.syncPacks]). */
     val APOSTROPHE = Regex("[’'`´ʼ‘]")
+    private val SEPARATING_APOS_RE = Regex("(?<=[а-яёіўА-ЯЁІЎ])[’'`´ʼ‘](?=[яеёюіЯЕЁЮІ])")
     /** Градусы Цельсия латинской или кириллической «C» — к одной записи «°с» (кириллица), Фаренгейта — «°ф». Шкала через
      * пробел — только заглавной, как у русского: «30° с ухілам» — предлог. */
     private val CELSIUS_RE = Regex("°(?:[CcСс]|\\s+[CС])(?!\\p{L})")
@@ -668,7 +669,8 @@ object BelNormalizer {
             if (mid) m.value else "${m.value} $ABBR_DOT"
         }.lowercase()
         step("degrees") { ANGLE_APOS_RE.replace(it, "′") }
-        s = s.replace(APOSTROPHE, "")
+        // разделительный апостроф — «ъ», как в русском «подъезд»: без него «аб'ём» звучало «абём»; [BelStress] ищет слово без «ъ»
+        s = SEPARATING_APOS_RE.replace(s, if ('ъ' in allowed) "ъ" else "").replace(APOSTROPHE, "")
         step("abbrev") { WORD_ABBR.fold(it) { t, (re, rep) -> re.replace(t, rep) } }   // до «г.» — «горад» и до года
         s = TILDE_RE.replace(s, "прыблізна ")
         // телефоны — разбор русского слоя ([Normalizer.phones]: +375, скобки, слитный номер), группы — нашими числами

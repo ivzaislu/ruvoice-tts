@@ -35,12 +35,28 @@ class BelStress(private val models: StressModels, private val userDict: Map<Stri
             "дзе", "калі", "так", "ну", "вось", "што", "чым", "каб", "але", "або", "усе", "усё")
 
         /** Слово с «+» (готовое ударение не режем на куски) и через дефис целиком: его ищем в словаре, потом по частям. */
-        val wordRe = Regex("[а-яёіў+]+(?:-[а-яёіў+]+)*", RegexOption.IGNORE_CASE)
+        val wordRe = Regex("[а-яёіўъ+]+(?:-[а-яёіўъ+]+)*", RegexOption.IGNORE_CASE)
+
+        fun bare(w: String) = if ('ъ' in w || 'Ъ' in w) w.filter { it != 'ъ' && it != 'Ъ' } else w
+
+        /** «ъ» ([BelNormalizer] ставит его на место апострофа) — обратно в слово [marked] с «+», найденное без него. */
+        fun withHard(orig: String, marked: String): String {
+            if ('ъ' !in orig) return marked
+            val sb = StringBuilder(marked.length + 1)
+            var j = 0
+            for (c in marked) {
+                while (j < orig.length && orig[j].lowercaseChar() == 'ъ') { sb.append(orig[j]); j++ }
+                sb.append(c)
+                if (c != '+') j++
+            }
+            return sb.toString()
+        }
     }
 
     /** Ставит «+» перед ударной гласной: `дзякуй` → `дз+якуй`. */
     fun apply(sentence: String): String {
-        val words = wordRe.findAll(sentence).map { it.value.lowercase() }.filter { dict(it) == null }
+        // словарь и акцентор знают слово без апострофа: «абъём» ищем как «абём»
+        val words = wordRe.findAll(sentence).map { bare(it.value).lowercase() }.filter { dict(it) == null }
             .flatMap { it.split('-') }
             .filter { w -> '+' !in w && dict(w) == null && w !in noMark && w.count { c -> c in vowels } >= 2 }
             .distinct().toList()
@@ -73,8 +89,9 @@ class BelStress(private val models: StressModels, private val userDict: Map<Stri
         }
         for (m in wordRe.findAll(sentence)) {
             out.appendRange(sentence, last, m.range.first)
-            val w = m.value
-            out.append(dict(w.lowercase())?.let { cased(w, it) } ?: w.split('-').joinToString("-", transform = ::one))
+            val w = bare(m.value)
+            val r = dict(w.lowercase())?.let { cased(w, it) } ?: w.split('-').joinToString("-", transform = ::one)
+            out.append(if (r.replace("+", "").equals(w, true)) withHard(m.value, r) else r)
             last = m.range.last + 1
         }
         out.appendRange(sentence, last, sentence.length)

@@ -35,9 +35,11 @@ class LayersTest {
     @Test fun belPrepare() {
         // числа словами, латиница транслитом, фильтр по символам модели
         assertEquals("дзве тысячы дваццаць шэсць", BeLayer.prepare("2026", cis, Rules()))
-        // «!» и апостроф в модель не идут (служебные символы cis-пака); апостроф — во всех написаниях
-        assertEquals("прывет.", BeLayer.prepare("Прыв'ет!", cis, Rules()))
-        for (a in listOf("'", "’", "`", "´", "ʼ", "‘")) assertEquals("абява", BeLayer.prepare("аб${a}ява", cis, Rules()))
+        // «!» и апостроф в модель не идут (служебные символы cis-пака); разделительный апостроф во всех написаниях — «ъ»,
+        // как в русском «подъезд» (слушатель: «абём» звучало мягко), прочий — без следа
+        assertEquals("прывъет.", BeLayer.prepare("Прыв'ет!", cis, Rules()))
+        for (a in listOf("'", "’", "`", "´", "ʼ", "‘")) assertEquals("абъява", BeLayer.prepare("аб${a}ява", cis, Rules()))
+        assertEquals("слова", BeLayer.prepare("'слова'", cis, Rules()))
         // «?!» — вопрос, как у русского cis («что?»), а не «?.»
         assertEquals("што?", BeLayer.prepare("Што?!", cis, Rules()))
         assertEquals("што?", BeLayer.prepare(Splitter.sentences("Што!?").single(), cis, Rules()))
@@ -213,8 +215,8 @@ class LayersTest {
         assertEquals(null, BeLayer.symbolName('!'))
         assertEquals(null, BeLayer.symbolName(','))
         // апостроф «двукроп'е», «шматкроп'е» снимает BelNormalizer — слово целое
-        assertEquals("двукропе", BeLayer.prepare(BeLayer.symbolName(':', punct = true)!!, cis, Rules()))
-        assertEquals("шматкропе", BeLayer.prepare(BeLayer.symbolName('…', punct = true)!!, cis, Rules()))
+        assertEquals("двукропъе", BeLayer.prepare(BeLayer.symbolName(':', punct = true)!!, cis, Rules()))
+        assertEquals("шматкропъе", BeLayer.prepare(BeLayer.symbolName('…', punct = true)!!, cis, Rules()))
         // прочие знаки — белорусскими именами, не русскими
         assertEquals("рашотка", BeLayer.symbolName('#'))
         assertEquals("сабака", BeLayer.symbolName('@', punct = true))

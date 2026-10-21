@@ -103,6 +103,13 @@ class SplitterTest {
             Splitter.sentences("Как Дисней поглумится над вселенной ЗВ. Интересно, как?"))
     }
 
+    @Test fun belarusianAbbrevBeforeNumberOrNameKeepsSentence() {
+        // кусок, разрезанный после них, нормализатор уже не разворачивал: «воз» словом, «ст.» станцыей
+        for (t in listOf("Глядзіце п. 2 арт. 15.", "Улетку мы ездзілі на воз. Нарач.", "Пра гэта напісана ў кн. II.",
+                "Атмасферны ціск 760 мм рт. ст.", "Чытайце гл. 3, т. 2.", "Гл. рыс. 4 і табл. 2."))
+            assertEquals(listOf(t), Splitter.sentences(t))
+    }
+
     @Test fun okIsNotAnAbbreviationStopWord() {
         // review t17 п.6 (Splitter.kt:10): «ок» — разговорное слово в диалогах, не сокращение.
         assertEquals(listOf("Хорошо, ок.", "Идём дальше."), Splitter.sentences("Хорошо, ок. Идём дальше."))
