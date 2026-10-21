@@ -72,6 +72,8 @@ class Emoji(lines: Sequence<String>) {
         @Volatile var shared: Emoji? = null
         /** Белорусские имена (emoji_be.tsv) — для [BelNormalizer]; ставит SileroModels.data(). */
         @Volatile var be: Emoji? = null
+        /** Украинские имена (emoji_uk.tsv) — для [UkNormalizer]; ставит SileroModels.data(). */
+        @Volatile var uk: Emoji? = null
 
         fun open(context: Context, name: String = "emoji_ru.tsv"): Emoji {
             val t = System.nanoTime()

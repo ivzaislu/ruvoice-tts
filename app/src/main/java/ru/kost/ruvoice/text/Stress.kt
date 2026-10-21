@@ -22,7 +22,7 @@ internal fun verbLike(t: String, morph: Morph?) = t.isNotEmpty() && (morph == nu
 
 /** morph — таблица морфологии для согласования с прилагательным в gramPass; null — правило выключено. По умолчанию та же,
  * что у нормализатора (SileroModels.data() ставит её раз на процесс; в JVM-тестах без ассета — null).
- * layer — язык текста (по полю lang пака): у белорусского ударения ставит [BelStress] по акцентору пака и словарю
+ * layer — язык текста (по полю lang пака): у белорусского и украинского ударения ставит [LangStress] по акцентору пака и словарю
  * языка (в нём и поправки пака); русский конвейер (таблицы, омографы, «ё», акцентор) остаётся как был. */
 class Stress(private val d: SileroData, private val models: StressModels, private val userDict: Map<String, String> = emptyMap(),
              private val rules: Rules = Rules(), private val morph: Morph? = Normalizer.morph, private val yo: YoDict? = YoDict.shared,
@@ -505,14 +505,14 @@ class Stress(private val d: SileroData, private val models: StressModels, privat
         if (rules.on("end_oxy") && oxy && t.endsWith(".") && !t.endsWith("..")) return t.dropLast(1) to false
         return accented to false
     }
-    /** Последнее слово: есть гласная до ударной, после ударной — только согласные. «і» — белорусская гласная
-     * («дар+огі» не ударное на конце); в русском тексте её нет. */
-    private val oxytoneEndRe = Regex("[аеёиоуыэюяі]\\S*\\+[аеёиоуыэюяі][^\\sаеёиоуыэюяі]*$", RegexOption.IGNORE_CASE)
+    /** Последнее слово: есть гласная до ударной, после ударной — только согласные. «і» — белорусская и украинская гласная
+     * («дар+огі» не ударное на конце), «є», «ї» — украинские («зн+ає»); в русском тексте их нет. */
+    private val oxytoneEndRe = Regex("[аеёиоуыэюяієї]\\S*\\+[аеёиоуыэюяієї][^\\sаеёиоуыэюяієї]*$", RegexOption.IGNORE_CASE)
     /** Кусок из одного слова в 2–3 буквы с единственной гласной на конце («— Да.», «Кто?», «Всё.»): последней букве куска
      * модель всегда даёт 13 кадров (162 мс, symb_durs и durs_rate не действуют), при ускорении от «да» остаётся «д'».
      * Сдвоенная гласная — 255–330 мс, на слух лучше (30.09.2026). После ёфикации, длину меняет: tokens/подсветка — по accented. */
-    // «ў» и «і» — белорусские («ўсё», «ці»), в русском тексте их нет
-    private val shortWordRe = Regex("^([^\\p{L}]*[бвгджзйклмнпрстфхцчшщў]{1,2}\\+?)([аеёиоуыэюяі])(?=[.!?…][^\\p{L}]*$)", RegexOption.IGNORE_CASE)
+    // «ў» и «і» — белорусские («ўсё», «ці»), «ґ», «є», «ї» — украинские («ґ+е» — имя буквы); в русском тексте их нет
+    private val shortWordRe = Regex("^([^\\p{L}]*[бвгґджзйклмнпрстфхцчшщў]{1,2}\\+?)([аеёиоуыэюяієї])(?=[.!?…][^\\p{L}]*$)", RegexOption.IGNORE_CASE)
     /** «пишут см+и.»: то же на конце куска после других слов — только для «СМИ» (жалоба «И глотается», 30.09.2026). */
     private val smiEndRe = Regex("(?<![\\p{L}+])(см\\+)(и)(?=[.!?…][^\\p{L}]*$)", RegexOption.IGNORE_CASE)
     fun stretchShort(accented: String) =
@@ -619,7 +619,7 @@ class Stress(private val d: SileroData, private val models: StressModels, privat
     }
 
     // ---- user dictionary ----
-    /** Слово через дефис ищется в словаре целиком («кому-то ком+у-то»), потом по частям — как в BelStress. */
+    /** Слово через дефис ищется в словаре целиком («кому-то ком+у-то»), потом по частям — как в LangStress. */
     private val dictWordRe = Regex("[а-яё+]+(?:-[а-яё+]+)*", RegexOption.IGNORE_CASE)
 
     private fun userDictPass(sentence: String, original: String, preset: Set<String>): String {

@@ -274,6 +274,8 @@ class SileroModels(private val context: Context) : StressModels {
                 // белорусские имена эмодзи и знаков — 170 КБ, читаются за десятки мс; вместе с русскими, чтобы не ждать на первой фразе
                 Emoji.be = runCatching { Emoji.open(ctx, "emoji_be.tsv") }.onFailure { e -> Log.e(TAG, "emoji_be.tsv не открылся", e) }.getOrNull()
                 SymbolNames.cldrBe = runCatching { SymbolNames.open(ctx, "symbols_be.tsv") }.onFailure { e -> Log.e(TAG, "symbols_be.tsv не открылся", e) }.getOrNull()
+                Emoji.uk = runCatching { Emoji.open(ctx, "emoji_uk.tsv") }.onFailure { e -> Log.e(TAG, "emoji_uk.tsv не открылся", e) }.getOrNull()
+                SymbolNames.cldrUk = runCatching { SymbolNames.open(ctx, "symbols_uk.tsv") }.onFailure { e -> Log.e(TAG, "symbols_uk.tsv не открылся", e) }.getOrNull()
                 d.also { shared = it }
             }
         }

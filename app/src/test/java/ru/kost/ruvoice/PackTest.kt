@@ -76,7 +76,7 @@ class PackTest {
         fun install(lang: String, vararg extra: String) = Packs.install(ByteArrayInputStream(zip(JSONObject(packJson.toString())
             .put("id", "p_$lang").put("format", 3).put("lang", lang).toString(), *models, extras = extra.associateWith { byteArrayOf(1) })), filesDir)
         // языка нет в Layers — читать его нечем
-        val unknown = assertThrows(UserError::class.java) { install("uk", Packs.ACCENTOR) }
+        val unknown = assertThrows(UserError::class.java) { install("kk", Packs.ACCENTOR) }
         assertEquals(R.string.err_pack_lang, unknown.res)
         // не русский без своего акцентора — слова считались бы русским
         assertEquals(R.string.err_pack_accentor, assertThrows(UserError::class.java) { install("be") }.res)

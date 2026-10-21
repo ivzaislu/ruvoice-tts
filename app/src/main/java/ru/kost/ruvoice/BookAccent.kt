@@ -293,8 +293,8 @@ object BookAccent {
 
     private const val MAX_CELLS = 4_000_000L   // 16 МБ на абзац; длиннее — редкость (сплошной текст без абзацев)
     private const val MAX_ALIGN = 1_000_000L
-    // «і» — белорусская гласная (книга белорусским голосом), в русском тексте её нет
-    private const val VOWELS = "аеёиоуыэюяі"
+    // «і» — белорусская и украинская гласная, «є», «ї» — украинские (книга голосом этих языков), в русском тексте их нет
+    private const val VOWELS = "аеёиоуыэюяієї"
     private const val KEEP = ".,;:!?…–—-«»\"'„“”()[]{}*"
     private val wordRe = Regex("\\S+")
     private val plusRe = Regex("\\+(.)")

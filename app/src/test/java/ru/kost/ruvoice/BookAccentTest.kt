@@ -20,6 +20,14 @@ class BookAccentTest {
         assertEquals("сі́ні", BookAccent.apply("сіні", BookAccent.edits("сіні", listOf("с+іні")), BookAccent.Mode.ACUTE))
     }
 
+    @Test fun ukrainianStressOnYiAndYe() {
+        // книга украинским голосом: «ї», «є» — гласные
+        assertEquals("кра+їна", plus("країна", "кра+їна"))
+        assertEquals("мо+є", plus("моє", "мо+є"))
+        // апостроф книги против «ъ» прочтения: ударение встаёт, апостроф остаётся как был
+        assertEquals("П'ятн+иця м’+ясо", plus("П'ятниця м’ясо", "пъятн+иця мъ+ясо"))
+    }
+
     @Test fun hyphenAndSeveralStresses() {
         // «кт+о-то»: в слове две гласные — знак ставится
         assertEquals("с+еверо-з+апад, кт+о-то", plus("северо-запад, кто-то", "с+еверо-з+апад, кт+о-то"))

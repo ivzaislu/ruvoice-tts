@@ -5,8 +5,8 @@ import ru.kost.ruvoice.SileroData
 object SentenceType {
     private val quoteOpen = setOf('"', '«', '“', '„')
     private val quoteClose = setOf('"', '»', '”', '’')
-    // «і», «ў» — белорусские («калі», «колькі»), в русском тексте их нет
-    private val wordRe = Regex("[а-яёіўa-z]+", RegexOption.IGNORE_CASE)
+    // «і», «ў» — белорусские («калі», «колькі»), «є», «ї», «ґ» — украинские («чиє», «чиї»); в русском тексте их нет
+    private val wordRe = Regex("[а-яёіўєїґa-z]+", RegexOption.IGNORE_CASE)
     private val sentSplit = Regex("(?<=[.!?])\\s+")
     private val wsRe = Regex("\\s+")
 

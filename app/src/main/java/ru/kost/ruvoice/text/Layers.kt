@@ -26,10 +26,10 @@ interface QuestionLists {
  * У каждого языка своя подготовка текста (числа, сокращения, латиница) и свои ударения: за ударения
  * отвечает [Stress], которому слой передаётся вместе со словарём (в нём и системный список пака).
  *
- * Новый язык CIS-модели добавляется ещё одной строкой в [Layers]: пока в таблице только `ru` и `be`.
+ * Новый язык CIS-модели добавляется ещё одной строкой в [Layers]: в таблице `ru`, `be`, `uk`.
  */
 interface TextLayer {
-    /** Код языка, как в `pack.json`: `ru`, `be`. */
+    /** Код языка, как в `pack.json`: `ru`, `be`, `uk`. */
     val code: String
 
     /** Язык и страна голосов в TTS API: ISO-3 из неё система спрашивает язык и выбирает голос. */
@@ -95,7 +95,7 @@ object BeLayer : TextLayer {
     override fun questions(d: SileroData): QuestionLists = BE_QUESTIONS
     override fun dictWord(w: String): String = w.replace(BelNormalizer.APOSTROPHE, "")
     override fun stress(models: StressModels, userDict: Map<String, String>, rules: Rules) =
-        BelStress(models, userDict, rules.on("accentor"))::apply
+        LangStress(models, userDict, rules.on("accentor"))::apply
     /** Белорусские имена букв, латиница — как в аббревиатурах [Latin]; «+» перед первой гласной, как у русских.
      * Второе слово («нескладовае») ударение получает от акцентора. */
     override fun letterName(c: Char, lone: Boolean, end: Boolean) = (BE_LETTERS[c.lowercaseChar()] ?: Latin.letterName(c))?.let { n ->
@@ -164,9 +164,89 @@ private object BE_QUESTIONS : QuestionLists {
     override fun verb(w: String, morph: Morph?) = (morph == null || morph.tags(w) == 0) && verbRe.matches(w) && w !in notVerb
 }
 
+/** Украинский слой: [UkNormalizer], ударения [LangStress] с [UK_STRESS]. */
+object UkLayer : TextLayer {
+    override val code = "uk"
+    override val locale = Locale("uk", "UA")
+    /** Те же, что у белорусского: русских ударений нет, у cis-голосов нет входа focus (Pack.types = false). */
+    override val unsupported = BeLayer.unsupported
+    override fun prepare(text: String, allowed: String, rules: Rules): String = UkNormalizer.prepare(text, allowed, rules)
+    override fun questions(d: SileroData): QuestionLists = UK_QUESTIONS
+    /** «м'ясо» в словаре — «мясо»: так слово ищет [LangStress] (нормализатор ставит «ъ», поиск идёт без него). */
+    override fun dictWord(w: String): String = w.replace(UkNormalizer.APOSTROPHE, "")
+    override fun stress(models: StressModels, userDict: Map<String, String>, rules: Rules) =
+        LangStress(models, userDict, rules.on("accentor"), UK_STRESS)::apply
+    /** Украинские имена букв; латиница — по-украински ([UK_LATIN]). «+» перед первой гласной, если в имени его нет. */
+    override fun letterName(c: Char, lone: Boolean, end: Boolean) =
+        (UK_LETTERS[c.lowercaseChar()] ?: UK_LATIN[c.lowercaseChar()])?.let { n ->
+            val i = n.indexOfFirst { it in UK_STRESS.vowels }
+            if ('+' in n || i < 0) n else n.substring(0, i) + "+" + n.substring(i)
+        }
+    /** Пунктуация — только в эхе ([punct]), прочие знаки — [SymbolNames.ofUk] (своя таблица и CLDR uk). */
+    override fun symbolName(c: Char, punct: Boolean) = (if (punct) UK_SYMBOLS[c] else null) ?: SymbolNames.ofUk(c)
+    override fun keepHyphen(before: String, after: String) = UK_HYPHEN.matches("$before-$after")
+}
+
+// Дефисные написания по правопису 2019: «по-» — у наречий на -ськи, -цьки, -зьки и -ому/-єму («по-українськи»,
+// «по-моєму», «по-новому») и «по-перше…по-десяте»; «будь-», «казна-», «хтозна-», «бозна-»; «аби-» — у местоимений
+// («аби-хто», но «абияк», «абиякий» слитно); «з-за», «з-під», «з-поміж», «з-понад», «з-посеред», «з-попід», «з-проміж»; частицы
+// «-небудь», «-то», «-таки», «-от» («як-от»). Голого «-ки» нет: «по-\nмилки», «по-\nкупки» — перенос. Не проверено носителем.
+// ponytail: «-то» и «по-…му» ловят и перенос («міс-\nто», «по-\nчому»), как у русского; пополнять по жалобам
+private val UK_HYPHEN = Regex("по-(?:.*(?:ськи|цьки|зьки|му)|перше|друге|третє|четверте|п[’'`´ʼ‘]?яте|шосте|сьоме|восьме|" +
+    "дев[’'`´ʼ‘]?яте|десяте)|(?:будь|казна|хтозна|бозна)-.+|аби-(?:хто|кого|кому|ким|що|чого|чому|чим|де|куди|коли|звідки|чий|чия|" +
+    "чиє|чиї)|з-(?:за|під|поміж|понад|посеред|попід|проміж)|.+-(?:небудь|то|таки|от)", RegexOption.IGNORE_CASE)
+
+// не проверено носителем
+private val UK_SYMBOLS = mapOf(
+    ',' to "кома", '.' to "крапка", '!' to "знак оклику", '?' to "знак питання", ':' to "двокрапка", ';' to "крапка з комою",
+    '—' to "тире", '–' to "коротке тире", '-' to "дефіс", '…' to "три крапки", '"' to "лапки",
+    '«' to "відкривні лапки", '»' to "закривні лапки", '(' to "відкривна дужка", ')' to "закривна дужка")
+
+// «м'як+ий»: ударение не на первом слоге — в имени сразу; апостроф UkNormalizer делает «ъ»
+private val UK_LETTERS = mapOf(
+    'а' to "а", 'б' to "бе", 'в' to "ве", 'г' to "ге", 'ґ' to "ґе", 'д' to "де", 'е' to "е", 'є' to "є", 'ж' to "же",
+    'з' to "зе", 'и' to "и", 'і' to "і", 'ї' to "ї", 'й' to "йот", 'к' to "ка", 'л' to "ел", 'м' to "ем", 'н' to "ен",
+    'о' to "о", 'п' to "пе", 'р' to "ер", 'с' to "ес", 'т' to "те", 'у' to "у", 'ф' to "еф", 'х' to "ха", 'ц' to "це",
+    'ч' to "че", 'ш' to "ша", 'щ' to "ща", 'ь' to "м'як+ий знак", 'ю' to "ю", 'я' to "я")
+
+/** Латинские буквы, как их называют в украинской школе (математика, «ікс», «ігрек»). Не проверено носителем. */
+private val UK_LATIN = mapOf(
+    'a' to "а", 'b' to "бе", 'c' to "це", 'd' to "де", 'e' to "е", 'f' to "еф", 'g' to "ге", 'h' to "аш", 'i' to "і",
+    'j' to "йот", 'k' to "ка", 'l' to "ель", 'm' to "ем", 'n' to "ен", 'o' to "о", 'p' to "пе", 'q' to "ку", 'r' to "ер",
+    's' to "ес", 't' to "те", 'u' to "у", 'v' to "ве", 'w' to "д+убль-ве", 'x' to "ікс", 'y' to "+ігрек", 'z' to "зет")
+
+/** Списки украинского слоя, как [BE_QUESTIONS]. «ё» в них нет — нормализация [SentenceType] (ё → е) их не меняет. */
+private object UK_QUESTIONS : QuestionLists {
+    /** Буквы слова для границ: украинские, русские и апостроф внутри слова («п'ять»). */
+    private const val L = "а-яёєіїґ’'`´ʼ‘"
+    override val whForms = setOf(
+        "хто", "що", "де", "коли", "чому", "навіщо", "нащо", "як", "який", "яка", "яке", "які", "чий", "чия", "чиє", "чиї",
+        "скільки", "куди", "звідки", "котрий", "кого", "чого", "кому", "чим")
+    override val leadingFillers = setOf("ну", "ось", "а", "так", "то", "може", "хіба", "невже", "адже", "отже", "чи")
+    // хвост — в конце после запятой: «Ти прийдеш, правда?»; «Це правда?» — общий вопрос
+    override val tagRe = Regex(",\\s*(?:правда(?:\\s+ж)?|чи\\s+не\\s+так|так\\s+же|адже\\s+так)\\s*\\?$", RegexOption.IGNORE_CASE)
+    // «Так чи ні?» — альтернатива: «так» не вводное перед «чи»
+    private val starters = (leadingFillers - "чи" - "так").joinToString("|")
+    // «або» — альтернатива; «чи» — только между словами («Чай чи каву?»): в начале, после вводного, тире и запятой — частица
+    // общего вопроса («— Чи прийдеш?», «А чи знаєш?», «Скажи, чи прийдеш?»), как белорусское «ці»
+    override val altRe = Regex("(?<![$L])або(?![$L])|" +
+        "(?<=[$L]\\s)(?<!^[^$L]{0,3}(?:(?:$starters)[^$L]{1,3})?(?:$starters)\\s)чи(?![$L])", RegexOption.IGNORE_CASE)
+    // «будь ласка» — не вопрос «як?»; после начального «чи» — придаточное («Чи знаєш ти, що завтра свято?»); «що», «як» за
+    // глаголом 2 лица или прошедшего и запятой — союз («Ти знаєш, що він прийде?», «Ви чули, як він співає?»), а «Скажи, як
+    // пройти?» — вопрос. Повтор вводных — притяжательный «*+»: без него JVM на «ну »×200 падала StackOverflowError
+    override val notWhRe = Regex("(?<![$L])будь\\s+ласка(?![$L])|(?<=[$L](?:єш|еш|иш|їш|ете|ите|єте|ли))\\s*,\\s*(?:що|як)(?![$L]).*|" +
+        "^[^$L]*(?:(?:$starters)[^$L]+)*+чи(?![$L]).*", RegexOption.IGNORE_CASE)
+    // Окончания глагола: инфинитив -ти, -ть; 2 л. -еш, -иш, -єш, -їш; 1 мн. -емо, -имо, -ємо; 2 мн. -ете, -ите, -єте; прош.
+    // -в, -ла, -ло, -ли; возвратные -ся, -сь. Без морфологии, как у белорусского (правило question у uk скрыто). Известные
+    // ложные: «Київ», «Львів», «любов» (-в), «школа», «сила» (-ла), «мить», «путь» (-ть); числительные — в [notVerb]
+    private val verbRe = Regex("[$L]+(?:ти|ть|еш|иш|єш|їш|емо|имо|ємо|ете|ите|єте|ла|ло|ли|в|ся|сь)", RegexOption.IGNORE_CASE)
+    private val notVerb = setOf("п'ять", "шість", "дев'ять", "десять", "коли", "мати", "пам'ять")
+    override fun verb(w: String, morph: Morph?) = (morph == null || morph.tags(w) == 0) && verbRe.matches(w) && w !in notVerb
+}
+
 /** Таблица языков: язык берётся по коду пака, остальной код о языках не знает. */
 object Layers {
-    private val all = listOf(RuLayer, BeLayer)
+    private val all = listOf(RuLayer, BeLayer, UkLayer)
     private val table: Map<String, TextLayer> = all.associateBy { it.code }
 
     /** Русский — умолчание: так читаются паки без поля `lang` и встроенная модель. */
@@ -177,6 +257,6 @@ object Layers {
     /** Есть ли слой для кода пака: пак на языке, которого приложение не знает, не ставится. */
     fun has(code: String) = code in table
 
-    /** Слой по языку из TTS API (ISO-3: «rus», «bel»); null — такого языка нет. */
+    /** Слой по языку из TTS API (ISO-3: «rus», «bel», «ukr»); null — такого языка нет. */
     fun ofIso3(lang: String?): TextLayer? = all.firstOrNull { it.locale.isO3Language == lang }
 }

@@ -80,7 +80,7 @@ class BelRulesTest {
 
     @Test fun unsupportedKeysDoNotChangeOutput() {
         assertTrue(BeLayer.unsupported.all { it in Rules.KEYS })
-        // акцентор белорусский тоже читает (BelStress), он не в списке
+        // акцентор белорусский тоже читает (LangStress), он не в списке
         assertFalse("accentor" in BeLayer.unsupported)
         for (k in BeLayer.unsupported) {
             val flipped = Rules().with(k, !Rules().on(k))
