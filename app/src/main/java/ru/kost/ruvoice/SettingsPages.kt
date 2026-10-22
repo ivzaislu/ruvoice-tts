@@ -287,9 +287,6 @@ class RulesFragment : PageFragment(R.layout.fragment_rules) {
         v.findViewById<View>(R.id.rulesLangHint).visibility = View.VISIBLE
         v.findViewById<TabLayout>(R.id.rulesTabs).apply {
             visibility = View.VISIBLE
-            // три языка и больше — прокрутка: при шрифте 200 % в трети ширины «Белорусские» не влезает и в две строки
-            // (A32: «Белор», «Украи»); два языка остаются fixed (xml), там подпись переносится
-            if (langs.size > 2) tabMode = TabLayout.MODE_SCROLLABLE
             for (code in langs) addTab(newTab().setText(langLabel(code)).setTag(code), code == lang)
             // до перестройки — сохранить тумблеры прежней вкладки; фокус остаётся на вкладке, TalkBack скажет «выбрано»
             addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {

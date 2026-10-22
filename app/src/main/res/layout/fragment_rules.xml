@@ -14,20 +14,17 @@
 
         <!-- Вкладки языков голосов (RulesFragment.loadTabs): только если на телефоне голоса двух языков и больше,
              с пояснением под ними (rulesHint ниже остаётся). Без ViewPager: вкладка перестраивает список ниже.
-             fixed, а не auto: при шрифте 200 % auto делает полосу прокручиваемой и вторая вкладка уходит за край,
-             в fixed подпись переносится на две строки. Три языка и больше — scrollable (SettingsPages.loadTabs): в трети
-             ширины при 200 % «Белорусские» не влезает и в две строки. tabMaxWidth 0 — вкладка до ширины экрана без 56 dp
-             (иначе 264 dp): в scrollable подпись при 200 % остаётся в одну строку, вторую срезала бы высота полосы 48 dp. -->
-        <!-- ponytail: две вкладки в fixed при 200 % по расчёту ширины тоже переносят «Белорусские голоса», и высота 48 dp
-             срезала бы вторую строку (на A32 с двумя паками не замерено); если подтвердится — scrollable и для двух -->
+             scrollable при любом числе вкладок, tabMaxWidth 0 (вкладка до ширины экрана без 56 dp, а не 264 dp): подпись
+             остаётся в одну строку. В fixed при шрифте 200 % подпись делит ширину и переносится («Белор», «Украи» в трети
+             ширины A32), а вторую строку срезает высота полосы 48 dp. Не влезли — полоса прокручивается, вкладки по центру. -->
         <com.google.android.material.tabs.TabLayout
             android:id="@+id/rulesTabs"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:visibility="gone"
-            app:tabMode="fixed"
+            app:tabMode="scrollable"
             app:tabMaxWidth="0dp"
-            app:tabGravity="fill" />
+            app:tabGravity="center" />
         <TextView
             android:id="@+id/rulesLangHint"
             style="@style/SectionHint"

@@ -208,7 +208,21 @@ class NewFeaturesDeviceTest {
 
     // ---- помощники ----
 
+    /** Тексты тестов русские, а системный список замен действует только на русские голоса: выбран голос другого языка
+     * (cis_be у владельца телефона) — ставим первый русский (штатный xenia, если есть); @After вернёт prefs. Русских
+     * голосов нет — пропуск. */
+    private fun ruVoice() {
+        val packs = Packs.installed(ctx.filesDir)
+        val builtin = SileroModels.speakers(ctx)
+        val cur = Speaker.currentName(Prefs(ctx).voice, builtin, packs)
+        if (cur != null && Speaker.lang(cur, packs) == "ru") return
+        val ru = Speaker.names(builtin, packs).filter { Speaker.lang(it, packs) == "ru" }
+        org.junit.Assume.assumeTrue("русских голосов нет", ru.isNotEmpty())
+        Prefs(ctx).voice = ru.firstOrNull { it == "xenia" } ?: ru.first()
+    }
+
     private fun tts(body: (TextToSpeech) -> Unit) {
+        ruVoice()
         val ready = CountDownLatch(1); var status = -1
         val t = TextToSpeech(ctx, { s -> status = s; ready.countDown() }, "ru.kost.ruvoice")
         assertTrue(ready.await(60, TimeUnit.SECONDS)); assertEquals(TextToSpeech.SUCCESS, status)
