@@ -1461,7 +1461,7 @@ object Normalizer {
         """длит(?:ся|ься)|длил(?:ся|ась|ось)|каждую|всю|целую|ещё|еще)\s+$""", RegexOption.IGNORE_CASE)
     private val unitTriggerAlt = unitTriggerCase.keys.joinToString("|") { it.replace(" ", "\\s+") }
     private val unitRe = Regex(
-        """(?:(?<![\p{L}])($unitTriggerAlt)\s+)?(?<![\d/])(\d+(?:[.,]\d+)?)(?:\s*[-–]\s*(?=\p{L}{2})|\s*)($unitAltPattern)(?![\p{L}\d/])(?!\.\d)(?:\.(?=\s*(?-i:[а-яё,;:])))?""",
+        """(?:(?<![\p{L}])($unitTriggerAlt|ок\.)\s+)?(?<![\d/])(\d+(?:[.,]\d+)?)(?:\s*[-–]\s*(?=\p{L}{2})|\s*)($unitAltPattern)(?![\p{L}\d/])(?!\.\d)(?:\.(?=\s*(?-i:[а-яё,;:])))?""",
         RegexOption.IGNORE_CASE
     )
     // Диапазон с единицей: «между 2 и 5 км» — оба числа и единица в творительном, «с/от 2 до 5 км»
@@ -1585,7 +1585,11 @@ object Normalizer {
         if (volts) unitKey = "В"
         val u = if (versts) verstForms else unitOf(unitKey) ?: return@replace m.value
         val hasFrac = numStr.contains(',') || numStr.contains('.')
-        val head = if (trigger.isEmpty()) "" else "$trigger "
+        // «ок. 2 км» — «около двух километров»: «ок.» раскрывается здесь, единице нужен его падеж (было «около двух километра»;
+        // ревью ru-fixes-2 M-4)
+        val ok = trigger.equals("ок.", true)
+        val head = if (trigger.isEmpty()) "" else if (ok) (if (trigger[0].isUpperCase()) "Около " else "около ") else "$trigger "
+        if (ok) trigger = "около"
         val inAcc = trigger.lowercase() in setOf("в", "во") &&
             (unitKey in timeUnitKeys || unitInAccBehindRe.containsMatchIn(text.substring(0, m.range.first)))
         run {
@@ -2733,6 +2737,14 @@ object Normalizer {
         return (if (minus.isEmpty()) "" else "минус ") + Declension.cardinal(n, Case.GEN, feminine = true) +
             (if (one(n)) " целой " else " целых ") + Declension.cardinal(f, Case.GEN, feminine = true) + " " + stem + (if (one(f)) "ой" else "ых")
     }
+    // «около 1 млн человек» — «около одного миллиона» (было «одного миллионов»: число склонял предлог, а «млн» потом scales()
+    // читал родительным множественного), «к 2 млн» — «к двум миллионам»: разряд склоняется вместе с числом.
+    private fun scaleCaseRe(alt: String) = Regex(
+        """(?<![\p{L}-])$alt(?![\p{L}])(?:\s+$amplifierRe(?![\p{L}]))*\s+(\d{1,3})\s*(тыс|млн|млрд|трлн)(?:\.(?=\p{L})|\.?(?![\p{L}\d]))""",
+        RegexOption.IGNORE_CASE)
+    private val scaleCaseRes by lazy { listOf(scaleCaseRe(genTriggerAlt) to Case.GEN, scaleCaseRe(datTriggerAlt) to Case.DAT,
+        scaleCaseRe(insTriggerAlt) to Case.INS, scaleCaseRe(preTriggerAlt) to Case.PRE) }
+    private val scaleMult = mapOf("тыс" to 1_000L, "млн" to 1_000_000L, "млрд" to 1_000_000_000L, "трлн" to 1_000_000_000_000L)
     private val datTriggerRe = triggerRe(datTriggerAlt)
     private val insTriggerRe = triggerRe(insTriggerAlt)
     private val preTriggerRe = triggerRe(preTriggerAlt)
@@ -3014,6 +3026,16 @@ object Normalizer {
             val n1 = m.groupValues[1].toLongOrNull() ?: return@replace m.value
             val n2 = m.groupValues[2].toLongOrNull() ?: return@replace m.value
             m.withGroupReplaced(1 to Declension.cardinal(n1, Case.GEN), 2 to Declension.cardinal(n2, Case.GEN))
+        }
+        for ((re, case) in scaleCaseRes) s = re.replace(s) { m ->
+            val n = m.groupValues[1].toLong() * scaleMult.getValue(m.groupValues[2].lowercase())
+            // «тыс.рублей» вплотную — точку меняем на пробел
+            val rest = s.substring(m.range.last + 1)
+            val glued = m.value.endsWith(".") && rest.firstOrNull()?.isLetter() == true
+            // точка предложения — как у одиночного «тыс.» (dotAfter): заглавные смотрим у самого сокращения, не у предлога
+            val dot = m.value.endsWith(".") && sentenceEndRe.containsMatchIn(rest) &&
+                !(m.groupValues[2].any { it.isUpperCase() } && capsWordAheadRe.containsMatchIn(rest))
+            m.value.substring(0, m.groups[1]!!.range.first - m.range.first) + Declension.cardinal(n, case) + if (glued) " " else if (dot) "." else ""
         }
         // Окончание «-ами/-ьми» сильнее предлога: «больше чем 2 людьми» — творительный.
         s = applyCase(s, insEndingPluralRe, Case.INS)
