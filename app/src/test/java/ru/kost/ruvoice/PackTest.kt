@@ -199,6 +199,29 @@ class PackTest {
         assertTrue((File(filesDir, "packs").listFiles() ?: emptyArray()).none { it.name.startsWith(".tmp") })
     }
 
+    /** Обновление или удаление пака снимает его морфологию у слоя, даже когда загружен голос другого языка (тройка и
+     * акцентор не из этого пака), и не трогает морфологию другого языка. */
+    @Test fun releasePackDropsItsMorphOnly() {
+        val m = SileroModels(android.content.ContextWrapper(null))
+        @Suppress("UNCHECKED_CAST")
+        val dirs = SileroModels::class.java.getDeclaredField("morphDirs").apply { isAccessible = true }.get(m) as HashMap<String, String>
+        val saved = ru.kost.ruvoice.text.UkNumbers.morph to ru.kost.ruvoice.text.BelNumbers.morph
+        try {
+            val morph = ru.kost.ruvoice.text.Morph.open(File(TestData.root(), "app/src/test/resources/morph_uk_test.bin"))
+            ru.kost.ruvoice.text.UkNumbers.morph = morph; ru.kost.ruvoice.text.BelNumbers.morph = morph
+            dirs["uk"] = File(filesDir, "packs/cis_uk").path; dirs["be"] = File(filesDir, "packs/cis_be").path
+            m.releasePack("cis_uk_ext")
+            assertEquals(setOf("uk", "be"), dirs.keys); assertNotNull(ru.kost.ruvoice.text.UkNumbers.morph)
+            m.releasePack("cis_uk")
+            assertEquals(setOf("be"), dirs.keys)
+            assertNull(ru.kost.ruvoice.text.UkNumbers.morph); assertSame(morph, ru.kost.ruvoice.text.BelNumbers.morph)
+            m.releasePack("cis_be")
+            assertTrue(dirs.isEmpty()); assertNull(ru.kost.ruvoice.text.BelNumbers.morph)
+        } finally {
+            ru.kost.ruvoice.text.UkNumbers.morph = saved.first; ru.kost.ruvoice.text.BelNumbers.morph = saved.second
+        }
+    }
+
     @Test fun reinstallReplaces() {
         Packs.install(ByteArrayInputStream(full), filesDir)
         File(filesDir, "packs/cis_ru/stray.txt").writeText("x")

@@ -51,7 +51,8 @@ class UkLayerReferenceGen {
         val zip = File(root, "dist/ruvoice-pack-cis_uk.zip")
         Assume.assumeTrue("нет $zip", zip.exists())
         val build = File(root, "app/build").also { it.mkdirs() }
-        val morphFile = File(build, "uk_layer_morph.bin")
+        // свой файл на прогон: full и lite идут параллельно, общий путь в app/build они перезаписывали бы друг у друга
+        val morphFile = File.createTempFile("uk_layer_morph", ".bin")
         val packJson = ZipFile(zip).use { z ->
             z.getInputStream(z.getEntry("morph.bin")).use { i -> morphFile.outputStream().use { i.copyTo(it) } }
             z.getInputStream(z.getEntry("pack.json")).bufferedReader().readText()

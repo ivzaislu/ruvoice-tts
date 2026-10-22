@@ -107,14 +107,10 @@ object BelNormalizer {
     }
 
     /** Число по цифрам: «80291234567» → «восем нуль два…». */
-    fun digits(raw: String) = raw.map { UNITS[it.digitToInt()] }.joinToString(" ")
+    fun digits(raw: String) = CisNumbers.digits(raw, UNITS)
 
     /** Группа цифр как написана: нули в начале — словом каждый («029» — «нуль дваццаць дзевяць», «05» в дроби). */
-    fun group(raw: String): String {
-        val rest = raw.trimStart('0')
-        val tail = rest.takeIf { it.isNotEmpty() }?.let { r -> r.toLongOrNull()?.let { cardinal(it) } ?: digits(r) }
-        return (List(raw.length - rest.length) { UNITS[0] } + listOfNotNull(tail)).joinToString(" ")
-    }
+    fun group(raw: String) = CisNumbers.group(raw, UNITS) { cardinal(it) }
 
     /** С миллиарда — по цифрам: разрядов дальше нет (телефон, номер карты), а under1000 на них падал. */
     private const val BIG = 1_000_000_000L
@@ -484,7 +480,7 @@ object BelNormalizer {
         val case = if ((p == "з" || p == "са") && a.place) Case.GEN else BelNumbers.SIGN_PREP[p] ?: Case.NOM
         (if (prep.isEmpty()) "" else "$prep ") + a.forms[case.ordinal] + " " +
             // «кн. II», «т. III» — номер римскими: порядковое в роде слова («кніга другая»), латиница прочла бы «і-і»
-            if (roman.isEmpty()) "" else BelNumbers.ordinal(BelNumbers.romanValue(roman), case, a.gender) + " "
+            if (roman.isEmpty()) "" else BelNumbers.ordinal(CisNumbers.romanValue(roman), case, a.gender) + " "
     }
     private class NounAbbr(forms: String, val digit: Boolean, val name: Boolean = false, val place: Boolean = false, val gender: Gender = Gender.M) {
         val forms = forms.split(' ')

@@ -71,14 +71,10 @@ object UkNumbers {
     private const val BIG = 1_000_000_000L
 
     /** Число по цифрам: «80441234567» → «вісім нуль чотири…». */
-    fun digits(raw: String) = raw.map { UNITS[it.digitToInt()] }.joinToString(" ")
+    fun digits(raw: String) = CisNumbers.digits(raw, UNITS)
 
     /** Группа цифр как написана: нули в начале — словом каждый («044» — «нуль сорок чотири», «007»). */
-    fun group(raw: String): String {
-        val rest = raw.trimStart('0')
-        val tail = rest.takeIf { it.isNotEmpty() }?.let { r -> r.toLongOrNull()?.let { cardinal(it) } ?: digits(r) }
-        return (List(raw.length - rest.length) { UNITS[0] } + listOfNotNull(tail)).joinToString(" ")
-    }
+    fun group(raw: String) = CisNumbers.group(raw, UNITS) { cardinal(it) }
 
     /** Форма существительного после числа: 1 — [one], 2–4 — [few], прочие — [many]. */
     fun plural(n: Long, one: String, few: String, many: String) = when {
@@ -1137,7 +1133,7 @@ object UkNumbers {
         var s = ROMAN.replace(src) { m ->
             // кириллическое «І» одно — союз: «І віку не вистачило»
             if (m.groupValues[1] == "І" || !rules.on("roman")) return@replace m.value
-            val n = romanValue(m.groupValues[1])
+            val n = CisNumbers.romanValue(m.groupValues[1])
             val noun = m.groupValues[2]
             val c = CENTURY_CASE[noun.lowercase()] ?: Case.NOM
             val case = if (c == Case.NOM && WORD_BEFORE_RE.find(src.substring(maxOf(0, m.range.first - 40), m.range.first))
@@ -1151,8 +1147,8 @@ object UkNumbers {
             if (nums == listOf("І") || !rules.on("roman")) return@replace m.value
             // без предлога I–IV — ступінь, родовий: «орден Слави III ст.» → «третього ступеня», «I–II ст.» → «першого — другого
             // ступенів»; с «н. е.» за ним — век
-            if (m.groupValues[1].isEmpty() && m.groupValues[7].isEmpty() && nums.all { romanValue(it) <= 4 })
-                return@replace nums.joinToString(" — ") { r -> ordinal(romanValue(r), Case.GEN) } +
+            if (m.groupValues[1].isEmpty() && m.groupValues[7].isEmpty() && nums.all { CisNumbers.romanValue(it) <= 4 })
+                return@replace nums.joinToString(" — ") { r -> ordinal(CisNumbers.romanValue(r), Case.GEN) } +
                     (if (nums.size > 1) " ступенів" else " ступеня") + (if (m.groups[6] != null) " ." else "")
             val upTo = m.groupValues[3].trim().lowercase() == "до"
             val case = if (upTo) Case.GEN else when (m.groupValues[1].trim().lowercase()) {
@@ -1171,7 +1167,7 @@ object UkNumbers {
             // точка «ст.» в конце предложения остаётся; перед заглавной после одного предлога в начале фразы («У XX ст.
             // Україна…») — середина, как «У 1941 р. Німеччина»
             val mid = m.groupValues[1].isNotEmpty() && m.groupValues[6].isNotBlank() && st.substring(0, m.range.first).none(Char::isLetter)
-            m.groupValues[1] + nums.joinToString(if (upTo) " до " else " — ") { r -> ordinal(romanValue(r), case, Gender.N) } + " " + noun +
+            m.groupValues[1] + nums.joinToString(if (upTo) " до " else " — ") { r -> ordinal(CisNumbers.romanValue(r), case, Gender.N) } + " " + noun +
                 (if (m.groups[6] != null && !mid) " ." else "")
         }
         // ponytail: род по имени: ж. р. — [FEM_NAMES] и родовий на -и не из [MASC_A_NAMES] («за Іоанни I» — «першої»), прочее
@@ -1187,13 +1183,13 @@ object UkNumbers {
                     r == "І" && (next == "." || next.lastOrNull()?.isUpperCase() == true)))
                 return@replace m.value
             val (case, gender) = nameCase(name.replace(APOS_HARD_RE, "'")) ?: return@replace m.value
-            "$name ${ordinal(romanValue(r), case, gender)}"
+            "$name ${ordinal(CisNumbers.romanValue(r), case, gender)}"
         }
         if (!rules.on("roman")) return s
         // прочие римские от двух букв — порядковым в согласии со словом за ним ([romanAgreed]): «Після II світової війни» →
         // «після другої світової війни». Одна буква («I», «Х», «V») — не трогаем: местоимение, союз, буква, инициал
         val g = s
-        return ROMAN_ANY.replace(g) { m -> romanAgreed(romanValue(m.value), g.substring(0, m.range.first), g.substring(m.range.last + 1)) }
+        return ROMAN_ANY.replace(g) { m -> romanAgreed(CisNumbers.romanValue(m.value), g.substring(0, m.range.first), g.substring(m.range.last + 1)) }
     }
 
     /** Порядковое римского [n] по соседям: слово главы перед ним («розділ IV», «у главі II») — его род и падеж; иначе слово за
@@ -1293,15 +1289,6 @@ object UkNumbers {
     /** Предлоги с заглавной в начале фразы — не имя перед римским; «Літера І у…» — сама буква. */
     private val NOT_NAMES = setOf("Після", "До", "Від", "Під", "На", "За", "При", "Про", "По", "Біля", "Для", "Без", "Через",
         "Протягом", "Літера", "Буква", "Над", "Перед", "Між")
-
-    internal fun romanValue(r: String): Long {
-        var n = 0; var prev = 0
-        for (c in r.reversed()) {
-            val v = when (c) { 'I', 'І' -> 1; 'V' -> 5; else -> 10 }
-            if (v < prev) n -= v else { n += v; prev = v }
-        }
-        return n.toLong()
-    }
 
     /** I–XXX латиницей или кириллицей: непустое. */
     private const val ROMAN_NUM = """(?-i:(?=[IVXІХ])[XХ]{0,3}(?:[IІ][XХ]|[IІ]V|V?[IІ]{0,3}))"""

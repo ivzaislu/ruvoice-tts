@@ -56,7 +56,7 @@ object SymbolNames {
         '✖' to "крыжык", '★' to "чорная зорка", '☆' to "белая зорка", '♥' to "сэрца", '♡' to "белае сэрца", '¶' to "знак абзаца",
         '№' to "нумар", '₽' to "рубель", '₴' to "грыўня", '₸' to "тэнге", 'µ' to "мікра", '†' to "крыжык", '‡' to "падвойны крыжык",
     )
-    @Volatile var cldrBe: Map<Char, String>? = null
+    var cldrBe: Map<Char, String>? by AssetTable("symbols_be.tsv", ::open)
     fun ofBe(c: Char): String? = NAMES_BE[c] ?: cldrBe?.get(c)
 
     /** Украинские имена: свои поверх CLDR (symbols_uk.tsv), где у CLDR громоздко («символ решітки», «комерційне ет»,
@@ -75,7 +75,7 @@ object SymbolNames {
         '✖' to "хрестик", '★' to "чорна зірка", '☆' to "біла зірка", '♥' to "серце", '♡' to "біле серце", '¶' to "знак абзацу",
         '№' to "номер", '₽' to "рубль", '₴' to "гривня", '₸' to "тенге", 'µ' to "мікро", '†' to "хрестик", '‡' to "подвійний хрестик",
     )
-    @Volatile var cldrUk: Map<Char, String>? = null
+    var cldrUk: Map<Char, String>? by AssetTable("symbols_uk.tsv", ::open)
     fun ofUk(c: Char): String? = NAMES_UK[c] ?: cldrUk?.get(c)
 
     fun parse(lines: Sequence<String>): Map<Char, String> = lines

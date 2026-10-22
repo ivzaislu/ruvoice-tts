@@ -985,7 +985,7 @@ object BelNumbers {
         var s = ROMAN.replace(text) { m ->
             // кириллическое «І» одно — союз: «І веку не хапіла»
             if (m.groupValues[1] == "І" || !rules.on("roman")) return@replace m.value
-            val n = romanValue(m.groupValues[1])
+            val n = CisNumbers.romanValue(m.groupValues[1])
             val noun = m.groupValues[2]
             val word = when (noun.lowercase()) {
                 "стагоддзе" -> neuter(n)
@@ -1001,7 +1001,7 @@ object BelNumbers {
             if (nums == listOf("І") || !rules.on("roman")) return@replace m.value
             // без предлога I–IV — скорее ступень («ордэн … II ст.», «Дыплом I ст.»): не трогаем; с «н. э.» за ним — век
             // («Курган III ст. да н. э.»)
-            if (m.groupValues[1].isEmpty() && m.groupValues[7].isEmpty() && nums.all { romanValue(it) <= 4 }) return@replace m.value
+            if (m.groupValues[1].isEmpty() && m.groupValues[7].isEmpty() && nums.all { CisNumbers.romanValue(it) <= 4 }) return@replace m.value
             // «ад XV да XVII ст.» — оба родным, «стагоддзя» адно
             val upTo = m.groupValues[3].trim().lowercase() == "да"
             val form = if (upTo) BelNormalizer.Form.GEN else when (m.groupValues[1].trim().lowercase()) {
@@ -1020,7 +1020,7 @@ object BelNumbers {
             val mid = m.groupValues[1].isNotEmpty() && m.groupValues[6].isNotBlank() &&
                 st.substring(0, m.range.first).none(Char::isLetter)
             m.groupValues[1] + nums.joinToString(if (upTo) " да " else " — ") { r ->
-                romanValue(r).let { if (form == null) neuter(it) else BelNormalizer.ordinal(it, form) }
+                CisNumbers.romanValue(r).let { if (form == null) neuter(it) else BelNormalizer.ordinal(it, form) }
             } + " " + noun + (if (m.groups[6] != null && !mid) " ." else "")
         }
         // ponytail: род по имени: ж. р. — только [FEM_NAMES] (и латиница на «a»), прочее на -а/-я — родны м. р. («Указ
@@ -1039,10 +1039,10 @@ object BelNumbers {
                 return@replace m.value
             val last = name.last().lowercaseChar()
             val word = when {
-                name.replace(BelNormalizer.APOSTROPHE, "'") in FEM_NAMES || last == 'a' -> gender(romanValue(r), "ая", FEMININE)
-                last == 'а' || last == 'я' -> BelNormalizer.ordinal(romanValue(r), BelNormalizer.Form.GEN)
+                name.replace(BelNormalizer.APOSTROPHE, "'") in FEM_NAMES || last == 'a' -> gender(CisNumbers.romanValue(r), "ая", FEMININE)
+                last == 'а' || last == 'я' -> BelNormalizer.ordinal(CisNumbers.romanValue(r), BelNormalizer.Form.GEN)
                 last in "еёіоуыэюeiouy" -> return@replace m.value
-                else -> BelNormalizer.ordinal(romanValue(r))
+                else -> BelNormalizer.ordinal(CisNumbers.romanValue(r))
             }
             "$name $word"
         }
@@ -1057,15 +1057,6 @@ object BelNumbers {
      * «Літара І ў…» — сама буква. */
     private val NOT_NAMES = setOf("Пасля", "Да", "Ад", "Падчас", "На", "За", "Пры", "Пра", "Па", "Каля", "Для", "Без", "Праз",
         "Літара")
-
-    internal fun romanValue(r: String): Long {
-        var n = 0; var prev = 0
-        for (c in r.reversed()) {
-            val v = when (c) { 'I', 'І' -> 1; 'V' -> 5; else -> 10 }
-            if (v < prev) n -= v else { n += v; prev = v }
-        }
-        return n.toLong()
-    }
 
     /** Порядковое другого рода или числа из мужского: меняется окончание последнего слова («дваццаць першае»); «другі»,
      * «трэці» на «-і» заменой окончания не выводятся — [special]. */

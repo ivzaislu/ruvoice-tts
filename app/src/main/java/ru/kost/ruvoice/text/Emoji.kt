@@ -70,15 +70,42 @@ class Emoji(lines: Sequence<String>) {
 
         /** Общий на процесс, ставит SileroModels.data(); null — правило ничего не делает (JVM-тесты без ассета). */
         @Volatile var shared: Emoji? = null
-        /** Белорусские имена (emoji_be.tsv) — для [BelNormalizer]; ставит SileroModels.data(). */
-        @Volatile var be: Emoji? = null
-        /** Украинские имена (emoji_uk.tsv) — для [UkNormalizer]; ставит SileroModels.data(). */
-        @Volatile var uk: Emoji? = null
+        /** Белорусские имена (emoji_be.tsv) — для [BelNormalizer]; читаются при первом обращении слоя ([AssetTable]). */
+        var be: Emoji? by AssetTable("emoji_be.tsv", ::open)
+        /** Украинские имена (emoji_uk.tsv) — для [UkNormalizer]; читаются при первом обращении слоя ([AssetTable]). */
+        var uk: Emoji? by AssetTable("emoji_uk.tsv", ::open)
 
         fun open(context: Context, name: String = "emoji_ru.tsv"): Emoji {
             val t = System.nanoTime()
             return context.assets.open(name).bufferedReader().useLines { Emoji(it) }
                 .also { Log.i("RuVoice", "$name: ${it.size} эмодзи, ${(System.nanoTime() - t) / 1_000_000} мс") }
         }
+    }
+}
+
+/** Таблица ассета [name], нужная только слою своего языка (эмодзи и знаки CLDR be, uk): читается при первом обращении
+ * слоя, а не в SileroModels.data() у каждого пользователя — у русского без паков ни разу. [context] ставит
+ * SileroModels.data(); пока его нет (JVM-тесты) — только поставленное руками. Поставленное руками (и null) не перечитывается,
+ * не открывшийся ассет — тоже: ошибка в журнале, слой читает без таблицы, как без правила. */
+class AssetTable<T : Any>(private val name: String, private val open: (Context, String) -> T) {
+    @Volatile private var value: T? = null
+    @Volatile private var done = false
+
+    operator fun getValue(thisRef: Any?, p: kotlin.reflect.KProperty<*>): T? {
+        if (done) return value
+        val ctx = context ?: return value
+        synchronized(this) {
+            if (!done) {
+                value = runCatching { open(ctx, name) }.onFailure { e -> Log.e("RuVoice", "$name не открылся", e) }.getOrNull()
+                done = true
+            }
+        }
+        return value
+    }
+
+    operator fun setValue(thisRef: Any?, p: kotlin.reflect.KProperty<*>, v: T?) = synchronized(this) { value = v; done = true }
+
+    companion object {
+        @Volatile var context: Context? = null
     }
 }

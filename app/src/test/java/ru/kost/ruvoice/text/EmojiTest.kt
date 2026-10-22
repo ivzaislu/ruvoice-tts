@@ -48,4 +48,18 @@ class EmojiTest {
             assertEquals("привет", Normalizer.prepare("Привет 😀", allowed, Rules(off = setOf("emoji"))))
         } finally { Emoji.shared = null }
     }
+
+    /** Таблица языка слоя ([Emoji.be], [Emoji.uk], CLDR-знаки be/uk): без контекста — только поставленное руками; с
+     * контекстом — читается один раз при первом обращении; поставленное руками (и null) больше не перечитывается. */
+    @Test fun assetTableLazy() {
+        var opened = 0
+        var v: String? by AssetTable("x.tsv") { _, name -> opened++; name }
+        assertEquals(null, v); assertEquals(0, opened)
+        AssetTable.context = android.content.ContextWrapper(null)
+        try {
+            assertEquals("x.tsv", v); assertEquals("x.tsv", v); assertEquals(1, opened)
+            v = null
+            assertEquals(null, v); assertEquals(1, opened)
+        } finally { AssetTable.context = null }
+    }
 }

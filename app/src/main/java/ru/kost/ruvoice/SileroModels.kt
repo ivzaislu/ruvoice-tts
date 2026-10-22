@@ -9,6 +9,7 @@ import org.pytorch.Module
 import org.pytorch.Tensor
 import org.pytorch.executorch.EValue
 import ru.kost.ruvoice.bin.StressBin
+import ru.kost.ruvoice.text.AssetTable
 import ru.kost.ruvoice.text.BelNumbers
 import ru.kost.ruvoice.text.Emoji
 import ru.kost.ruvoice.text.Morph
@@ -143,9 +144,14 @@ class SileroModels(private val context: Context) : StressModels {
     }
 
     /** Пак [id] поставлен заново или удалён: выгружаем, только если из него загружена тройка или акцентор — установка
-     * чужого пака не должна заставлять TalkBack грузить модели заново. */
+     * чужого пака не должна заставлять TalkBack грузить модели заново. Морфологию пака снимаем всегда: она у слоя языка,
+     * а не у тройки, и после обновления пака, пока читает голос другого языка, слой держал бы удалённый morph.bin. */
     @Synchronized fun releasePack(id: String) {
         if (loadedPack == id || accLoadedDir?.let { File(it).name } == id) release()
+        for (lang in morphDirs.filterValues { File(it).name == id }.keys) {
+            morphDirs.remove(lang)
+            if (lang == "uk") UkNumbers.morph = null else BelNumbers.morph = null
+        }
     }
 
     /** BERT-омографы — только русские (ассет штатной модели). */
@@ -274,11 +280,9 @@ class SileroModels(private val context: Context) : StressModels {
                 HardE.shared = runCatching { HardE.open(ctx) }.onFailure { e -> Log.e(TAG, "hard_e.txt не открылся", e) }.getOrNull()
                 Emoji.shared = runCatching { Emoji.open(ctx) }.onFailure { e -> Log.e(TAG, "emoji_ru.tsv не открылся", e) }.getOrNull()
                 SymbolNames.cldr = runCatching { SymbolNames.open(ctx) }.onFailure { e -> Log.e(TAG, "symbols_ru.tsv не открылся", e) }.getOrNull()
-                // белорусские имена эмодзи и знаков — 170 КБ, читаются за десятки мс; вместе с русскими, чтобы не ждать на первой фразе
-                Emoji.be = runCatching { Emoji.open(ctx, "emoji_be.tsv") }.onFailure { e -> Log.e(TAG, "emoji_be.tsv не открылся", e) }.getOrNull()
-                SymbolNames.cldrBe = runCatching { SymbolNames.open(ctx, "symbols_be.tsv") }.onFailure { e -> Log.e(TAG, "symbols_be.tsv не открылся", e) }.getOrNull()
-                Emoji.uk = runCatching { Emoji.open(ctx, "emoji_uk.tsv") }.onFailure { e -> Log.e(TAG, "emoji_uk.tsv не открылся", e) }.getOrNull()
-                SymbolNames.cldrUk = runCatching { SymbolNames.open(ctx, "symbols_uk.tsv") }.onFailure { e -> Log.e(TAG, "symbols_uk.tsv не открылся", e) }.getOrNull()
+                // белорусские и украинские имена эмодзи и знаков (по 170 КБ) читает слой своего языка при первом обращении:
+                // русскому пользователю без паков они не нужны
+                AssetTable.context = ctx
                 d.also { shared = it }
             }
         }

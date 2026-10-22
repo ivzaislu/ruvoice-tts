@@ -3,8 +3,8 @@
 Основа — формы английского Викисловаря из kaikki.org (https://kaikki.org/dictionary/Ukrainian/, CC BY-SA 4.0):
 ударение U+0301 после гласной → «+» перед ней, побочное U+0300 снимаем, апостроф снимаем (слой ищет слово без него),
 нижний регистр; формы с пробелом не берём. Омографы одним ударением не фиксируем: слово, у которого в kaikki два
-разных ударения, и слово из heteronyms.tsv (lang-uk/ukrainian-heteronyms-dictionary; только фильтр, в пак не идёт)
-отбрасываем. Добавка — eugenysilin/russian-ukrainian-stress-data uk-stress-dict.gz (CC BY-SA 4.0; строка
+разных ударения в разных местах (статьях или формах), и слово из heteronyms.tsv (lang-uk/ukrainian-heteronyms-dictionary;
+только фильтр, в пак не идёт) отбрасываем. Равноправные варианты одной формы («ко́штують»/«кошту́ють») — первый по статье. Добавка — eugenysilin/russian-ukrainian-stress-data uk-stress-dict.gz (CC BY-SA 4.0; строка
 «слово<TAB>позиция сразу после ударной»): только слова, которых нет в kaikki, без омографов и только формы,
 которые есть в VESUM (иначе там обрезанные основы «сахарн», «витвицьк» и русские слова; VESUM тоже только фильтр).
 Нормализация — normalize() из export_pack: служебные слова без «+», ровно один «+» в размечаемой части.
@@ -28,16 +28,32 @@ def bare(s):
 
 
 def kaikki(path):
-    """Слово → множество вариантов ударения (None — форма, которую normalize не принял)."""
-    variants = {}
+    """Слово → множество вариантов ударения (None — форма, которую normalize не принял) и слово → вариант по умолчанию
+    у равноправных вариантов. Равноправные — когда каждое место слова в статьях (статья и теги формы) даёт один и тот же
+    набор ударений: «ко́штують»/«кошту́ють» (3 мн. одного глагола), «за́вжди»/«завжди́» — одно слово, не омограф. Берём
+    первый вариант статьи (основной в шаблоне Викисловаря). Разные места — омограф: «ру́ки» (наз. мн.) и «руки́» (род.
+    одн.), «за́мок» и «замо́к» (две статьи); их одним ударением не фиксируем. Статьи-формы («ко́штують» — форма
+    «коштувати») мест не дают: они повторяют строку таблицы своей леммы, часто одним вариантом."""
+    variants, slots = {}, {}
     with open(path, encoding='utf-8') as f:
-        for line in f:
-            for fm in json.loads(line).get('forms', ()):
+        for n, line in enumerate(f):
+            e = json.loads(line)
+            form_of = all('form_of' in sn for sn in e.get('senses', ())) and e.get('senses')
+            for fm in e.get('forms', ()):
                 s = fm['form']
                 if '́' not in s or ' ' in s: continue
                 v = acute_to_plus(s.replace('̀', ''), LETTERS)   # побочное ударение — не «+»
-                if v: variants.setdefault(v.replace('+', ''), set()).add(normalize(v, 'uk'))
-    return variants
+                if not v: continue
+                w, nv = v.replace('+', ''), normalize(v, 'uk')
+                variants.setdefault(w, set()).add(nv)
+                if form_of: continue
+                slot = slots.setdefault(w, {}).setdefault((n, tuple(sorted(fm.get('tags', ())))), [])
+                if nv not in slot: slot.append(nv)
+    free = {}
+    for w, vs in variants.items():
+        sets = {frozenset(s) for s in slots.get(w, {}).values()}
+        if len(vs) > 1 and None not in vs and sets == {frozenset(vs)}: free[w] = next(iter(slots[w].values()))[0]
+    return variants, free
 
 
 def heteronyms(path):
@@ -52,10 +68,12 @@ def vesum_forms(path):
 
 
 def build(a):
-    var = kaikki(a.kaikki)
+    var, free = kaikki(a.kaikki)
     het = heteronyms(a.heteronyms)
     cand = {w: next(iter(vs)) for w, vs in var.items() if len(vs) == 1 and None not in vs and w not in het}
-    two = sum(1 for vs in var.values() if len(vs - {None}) > 1)
+    n_free = sum(w not in het for w in free)
+    cand.update((w, v) for w, v in free.items() if w not in het)
+    two = sum(1 for vs in var.values() if len(vs - {None}) > 1) - n_free
     n_k, n_kh = len(cand), sum(1 for w, vs in var.items() if len(vs) == 1 and None not in vs and w in het)
     # формы нет в VESUM — почти всегда мусор: обрезанные основы («сахарн», «витвицьк»), русские слова («ехать»), склейки
     forms = vesum_forms(a.vesum)
@@ -77,7 +95,7 @@ def build(a):
     # не у всех форм), «+» не на гласной
     lost = [w for w, vs in var.items() if None in vs and any(markable(p, 'uk') for p in w.split('-'))]
     print(f'{a.o}: {len(cand)} слов; kaikki {len(var)}: взято {n_k}, омографы {n_kh}, два ударения {two}, потеряны '
-          f'normalize {len(lost)} (с дефисом {sum("-" in w for w in lost)}); eugenysilin {len(rows)}: взято {e["eug"]}, '
+          f'normalize {len(lost)} (с дефисом {sum("-" in w for w in lost)}), равноправные варианты {n_free}; eugenysilin {len(rows)}: взято {e["eug"]}, '
           f'есть в kaikki {e["kaikki"]}, омографы {e["het"]}, не те буквы {e["letters"]}, нет в VESUM {e["vesum"]}, '
           f'потеряны normalize {e["normalize"]}; в кандидатах с дефисом {sum("-" in w for w in cand)}')
 

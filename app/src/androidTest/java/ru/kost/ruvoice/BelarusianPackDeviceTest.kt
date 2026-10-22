@@ -68,11 +68,15 @@ class BelarusianPackDeviceTest {
 
     private val packs get() = Packs.installed(ctx.filesDir)
 
-    /** Текущий голос пользователя, если он русский; иначе (lite только с cis_be, выбран белорусский) — пропуск. */
+    /** Русский голос как выбранный: текущий, если он русский, иначе первый русский (штатный xenia, если есть) ставится в
+     * prefs — @AfterClass вернёт голос пользователя. Пропуск — только если русских голосов нет совсем (lite без пака ru). */
     private fun ruCurrent(): String {
-        val cur = Speaker.currentName(Prefs(ctx).voice, SileroModels.speakers(ctx), packs)
-        assumeTrue("текущий голос $cur не русский", cur != null && Speaker.lang(cur, packs) == "ru")
-        return cur!!
+        val builtin = SileroModels.speakers(ctx)
+        val cur = Speaker.currentName(Prefs(ctx).voice, builtin, packs)
+        if (cur != null && Speaker.lang(cur, packs) == "ru") return cur
+        val ru = Speaker.names(builtin, packs).filter { Speaker.lang(it, packs) == "ru" }
+        assumeTrue("русских голосов нет", ru.isNotEmpty())
+        return (ru.firstOrNull { it == "xenia" } ?: ru.first()).also { Prefs(ctx).voice = it }
     }
 
     @Test fun packInstalledWithLanguage() {

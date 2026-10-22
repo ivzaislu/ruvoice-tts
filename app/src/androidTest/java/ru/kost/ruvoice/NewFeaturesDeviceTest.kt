@@ -245,11 +245,12 @@ class NewFeaturesDeviceTest {
         return f
     }
 
-    /** Строка «в модель: …» журнала для этого текста. */
+    /** Строка «в модель: …» журнала для этого текста: только строки после запроса — по номеру, не по размеру журнала
+     * (он держит 200 строк, полный не растёт, и строка прошлого запроса сошла бы за эту). */
     private fun forModel(t: TextToSpeech, text: String): String {
-        val n = SileroTtsService.journal().size
+        val n = SileroTtsService.journalSeq()
         synth(t, text, "m${System.nanoTime()}")
-        val lines = SileroTtsService.journal().takeLast((SileroTtsService.journal().size - n).coerceAtLeast(0) + 5)
+        val lines = SileroTtsService.journalSince(n)
         Log.i("RuVoiceTest", lines.joinToString("\n"))
         return lines.lastOrNull { it.contains("в модель") } ?: fail("нет строки «в модель»: $lines").let { "" }
     }

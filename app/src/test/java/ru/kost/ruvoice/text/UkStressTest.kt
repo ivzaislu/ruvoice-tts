@@ -34,6 +34,12 @@ class UkStressTest {
         assertEquals(listOf("столі"), m.asked)
     }
 
+    @Test fun lowConfidenceStillMarked() {
+        // silero-stress в python ставит «+», только если вероятность выше 0,5: «завжди» (0,47 и 0,43), «десять» (0,45 и
+        // 0,44), «дванадцять» — у него без «+». Слой, как и lang_stress в export_pack, берёт первый максимум всегда
+        assertEquals("з+авжди д+есять", stress(Fake(floatArrayOf(0.47f, 0.43f))).apply("завжди десять"))
+    }
+
     @Test fun userDictWinsOverAccentor() {
         val m = Fake(floatArrayOf(0.1f, 0.9f))
         assertEquals("м+ама", stress(m, mapOf("мама" to "м+ама")).apply("мама"))

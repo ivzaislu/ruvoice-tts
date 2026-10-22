@@ -229,10 +229,11 @@ object UkNormalizer {
             if (!whole) chainCase = case.takeIf { digit && (p.isNotEmpty() || chained) }
             chainEnd = m.range.last + 1
             (if (prep.isEmpty()) "" else "$prep ") + a.forms[case.ordinal] + (if (end) "." else " ") +
-                if (roman.isEmpty()) "" else UkNumbers.ordinal(UkNumbers.romanValue(roman), case, a.gender) + " "
+                if (roman.isEmpty()) "" else UkNumbers.ordinal(CisNumbers.romanValue(roman), case, a.gender) + " "
         }
     }
-    /** «пов.» за числом (оголошення): перед зданием (можно через прикметник: «9-пов. цегляний будинок») — прикметник без
+    /** «пов.» за числом (оголошення): сразу перед зданием (в дефисной записи и через прикметник: «9-пов. цегляний будинок»;
+     * без дефиса прикметник между ними — это поверх: «5 пов. нашого будинку») — прикметник без
      * предлога, после «у/в» и всегда в дефисной записи: «5 пов. будинок» → «п'ятиповерховий будинок», «у 9 пов. будинку» → «у
      * дев'ятиповерховому будинку», «з 16-пов. будинку» → «з шістнадцятиповерхового»; окончание — по форме здания, «будинку»,
      * «будівлі» — по предлогу (родовий или місцевий). Иначе после предлога — порядковое в падеже предлога («на 5 пов.» → «на
@@ -247,7 +248,8 @@ object UkNormalizer {
         val case = if (p in FROM_PREPS) Case.GEN else UkNumbers.SIGN_PREP[p] ?: Case.NOM
         val hyphen = m.groupValues[3].isNotEmpty()
         if (p.isEmpty() || p == "у" || p == "в" || hyphen) (FLOOR_NOUN_RE.find(rest)?.let { w ->
-            FLOOR_ADJ[w.groupValues[1]] ?: w.groupValues[2].takeIf { ADJ_END_RE.containsMatchIn(w.groupValues[1]) }?.let { FLOOR_ADJ[it] }
+            // без дефиса — только здание сразу за «пов.»: «5 пов. нашого будинку» — поверх нашого будинку
+            FLOOR_ADJ[w.groupValues[1]] ?: w.groupValues[2].takeIf { hyphen && ADJ_END_RE.containsMatchIn(w.groupValues[1]) }?.let { FLOOR_ADJ[it] }
         } ?: if (hyphen && p.isEmpty()) FLOOR_NOUN_BEFORE_RE.find(text.substring(0, m.range.first))?.let { FLOOR_ADJ[it.groupValues[1].lowercase()] } else null
         )?.let { ending ->
             val e = if (case == Case.PRE || case == Case.DAT) ending.replace("ого", "ому").replace("ої", "ій") else ending
@@ -258,7 +260,8 @@ object UkNormalizer {
     private val FLOOR_FORMS = "поверх поверху поверху поверх поверхом поверсі".split(' ')
     private val FLOOR_RE = Regex("""(?:(?<![\p{L}\d])(${UkNumbers.SIGN_PREP.keys.sortedByDescending { it.length }.joinToString("|")})\s+)?""" +
         """(?<![\d.,])(\d{1,3})(?:\s*|(-))пов\.\s*""", RegexOption.IGNORE_CASE)
-    /** Слова за «5 пов.» — строчные: здание из [FLOOR_ADJ] первым или вторым после прикметника ([ADJ_END_RE]). */
+    /** Слова за «5 пов.» — строчные: здание из [FLOOR_ADJ] первым или (только в дефисной записи) вторым после прикметника
+     * ([ADJ_END_RE]). */
     private val FLOOR_NOUN_RE = Regex("""^(?-i:(\p{Ll}{3,}))(?!\p{L})(?:\s+(?-i:(\p{Ll}{3,}))(?!\p{L}))?""", RegexOption.IGNORE_CASE)
     private val ADJ_END_RE = Regex("""(?:ий|ій|ого|ому|им|ім|а|я|ої|ою|е|і|их|ими)$""", RegexOption.IGNORE_CASE)
     /** Здание перед дефисной записью: «Будинок 5-пов.» — «п'ятиповерховий». */
