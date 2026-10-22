@@ -1124,17 +1124,8 @@ object UkNumbers {
             if (r.length == 1 && (r[0] !in "IІ" || name.last().code < 128 ||
                     r == "І" && (next == "." || next.lastOrNull()?.isUpperCase() == true)))
                 return@replace m.value
-            val last = name.last().lowercaseChar()
-            val plain = name.replace(APOS_HARD_RE, "'")
-            val word = when {
-                plain in FEM_NAMES || last == 'a' -> ordinal(romanValue(r), Case.NOM, Gender.F)
-                // родовий жіночого: «Катерини II» → «другої», «Марії I» → «першої»
-                (last == 'и' || last == 'ї') && listOf("а", "я").any { plain.dropLast(1) + it in FEM_NAMES } -> ordinal(romanValue(r), Case.GEN, Gender.F)
-                last == 'а' || last == 'я' || last == 'и' -> ordinal(romanValue(r), Case.GEN)
-                last in "еєіїуюyeiu" -> return@replace m.value
-                else -> ordinal(romanValue(r))
-            }
-            "$name $word"
+            val (case, gender) = nameCase(name.replace(APOS_HARD_RE, "'")) ?: return@replace m.value
+            "$name ${ordinal(romanValue(r), case, gender)}"
         }
         if (!rules.on("roman")) return s
         // прочие римские от двух букв — порядковым в согласии со словом за ним ([romanAgreed]): «Після II світової війни» →
@@ -1197,6 +1188,43 @@ object UkNumbers {
         "Ізабелла", "Ізабела", "Жанна", "Вікторія", "Кристина", "Маргарита", "Тереза", "Урсула", "Варвара", "Клара", "Рогніда",
         "Елізабет", "Elizabeth", "Анастасія", "Олена", "Ірина", "Христина",
         "Частина", "Книга", "Глава", "Фаза", "Серія", "Група", "Категорія", "Зона", "Ліга")
+    /** Мужские имена на -а/-я (називний): «Микола II» → «другий», не родовий «Петра». Не проверено носителем. */
+    private val MASC_A_NAMES = setOf("Микола", "Сава", "Ілля", "Лука", "Микита", "Кузьма", "Хома", "Фома", "Ярема", "Данила", "Гаврила")
+    /** Имена на «-ем» в називному — не орудний («Артем I»). */
+    private val NOM_EM = setOf("Артем")
+
+    /** Падеж и род имени перед римским ([roman]) — по окончанию, род — по спискам [FEM_NAMES] и [MASC_A_NAMES] (основа + «а»/«я»),
+     * иначе мужской с основой на согласную: «з Катериною II» → «другою», «Катерину II» → «другу», «при Катерині II» → «другій»,
+     * «з Петром I» → «першим», «Петру I», «при Петрові I», «при Петрі I» → «першому», «з Миколою II» → «другим», «Миколу II» →
+     * «другого» (знахідний істоти), «Миколі II» → «другому». В VESUM имён нет (:prop не берём), морфология здесь не поможет.
+     * null — не трогаем («-е», «-є», латинская гласная). Не проверено носителем. */
+    private fun nameCase(name: String): Pair<Case, Gender>? {
+        // слово главы с заглавной («Розділу II», «Главі III») — его род и падеж, не окончание имени
+        CHAPTER_FORMS[name.lowercase()]?.let { (g, c) -> return c to g }
+        val last = name.last().lowercaseChar()
+        fun stemIn(cut: Int, set: Set<String>) = listOf("а", "я").any { name.dropLast(cut) + it in set }
+        fun ends(vararg e: String) = e.any { name.endsWith(it) }
+        return when {
+            name in FEM_NAMES || last == 'a' -> Case.NOM to Gender.F
+            name in MASC_A_NAMES -> Case.NOM to Gender.M
+            ends("ою", "ею", "єю") -> Case.INS to (if (stemIn(2, MASC_A_NAMES)) Gender.M else Gender.F)
+            ends("ові", "еві", "єві") -> Case.DAT to Gender.M
+            // основа от трёх букв: «Петром», «Ігорем»; «Том II» — том, називний
+            ends("ом", "ем", "єм") && name.length >= 5 && name !in NOM_EM -> Case.INS to Gender.M
+            last == 'у' || last == 'ю' -> when {
+                stemIn(1, FEM_NAMES) -> Case.ACC to Gender.F
+                stemIn(1, MASC_A_NAMES) -> Case.GEN to Gender.M   // знахідний істоти = родовий
+                else -> Case.DAT to Gender.M
+            }
+            // давальний и місцевий у этих форм совпадают: «другій», «другому»
+            last == 'і' -> Case.PRE to (if (stemIn(1, FEM_NAMES)) Gender.F else Gender.M)
+            // родовий жіночого: «Катерини II» → «другої», «Марії I» → «першої»
+            (last == 'и' || last == 'ї') && stemIn(1, FEM_NAMES) -> Case.GEN to Gender.F
+            last == 'а' || last == 'я' || last == 'и' -> Case.GEN to Gender.M
+            last in "еєїyeiu" -> null
+            else -> Case.NOM to Gender.M
+        }
+    }
     /** Предлоги с заглавной в начале фразы — не имя перед римским; «Літера І у…» — сама буква. */
     private val NOT_NAMES = setOf("Після", "До", "Від", "Під", "На", "За", "При", "Про", "По", "Біля", "Для", "Без", "Через",
         "Протягом", "Літера", "Буква", "Над", "Перед", "Між")
