@@ -99,19 +99,39 @@ class LargeTextTest {
         ActivityScenario.launch<RulesActivity>(english()).use { assertNoClippedText() }
     }
 
-    /** Вкладки языков на «Правилах» — только с паком второго языка (cis_be), иначе пропуск: подписи вкладок
-     * и пояснение под ними не обрезаны, каждая вкладка — тоже. */
+    /** Вкладки языков на «Правилах» — только с паком второго языка (cis_be, cis_uk), иначе пропуск: подписи вкладок
+     * и пояснение под ними не обрезаны, каждая вкладка — тоже. С паками be и uk вкладок три, у каждой треть ширины. */
     @Test fun rulesLanguageTabs() {
         val packs = Packs.installed(ctx.filesDir)
         val langs = Speaker.langs(SileroModels.speakers(ctx), packs)
         org.junit.Assume.assumeTrue("голоса одного языка", langs.size >= 2)
         ActivityScenario.launch(RulesActivity::class.java).use {
+            assertTabLabelsWhole(langs.size)
             for (code in langs) {
                 val label = ctx.getString(ctx.resources.getIdentifier("rules_lang_$code", "string", ctx.packageName))
                 onView(allOf(withText(label), isDescendantOfA(withId(R.id.rulesTabs)))).perform(click())
                 assertNoClippedText()
             }
         }
+    }
+
+    /** Подписи вкладок языков целиком: у вкладки TabLayout свой maxLines (2), [assertNoClippedText] её пропускает, а при
+     * 200 % и трёх вкладках «Белорусские голоса» могли бы уйти в многоточие или потерять строку. Вкладок — [count]. */
+    private fun assertTabLabelsWhole(count: Int) = onView(withId(R.id.rulesTabs)).check { tabs, _ ->
+        val bad = ArrayList<String>()
+        val labels = ArrayList<TextView>()
+        fun walk(v: View) {
+            if (v is TextView && v.text.isNotEmpty()) labels += v
+            if (v is ViewGroup) for (i in 0 until v.childCount) walk(v.getChildAt(i))
+        }
+        walk(tabs)
+        if (labels.size != count) fail("вкладок ${labels.size}, языков $count")
+        for (v in labels) {
+            val layout = v.layout ?: continue
+            val cut = (0 until layout.lineCount).any { layout.getEllipsisCount(it) > 0 } || layout.getLineEnd(layout.lineCount - 1) < v.text.length
+            if (cut || !v.isShown) bad += "«${v.text}»: ${layout.lineCount} строк, ширина ${v.width} px"
+        }
+        if (bad.isNotEmpty()) fail("Подпись вкладки обрезана при шрифте 200 %:\n" + bad.joinToString("\n"))
     }
 
     @Test fun helperScreens() {

@@ -1,12 +1,14 @@
 package ru.kost.ruvoice
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import ru.kost.ruvoice.text.QuestionLists
 import ru.kost.ruvoice.text.Rules
 import ru.kost.ruvoice.text.RuLayer
 import ru.kost.ruvoice.text.TextLayer
+import ru.kost.ruvoice.text.UkLayer
 import java.io.File
 import java.util.Locale
 import javax.xml.parsers.DocumentBuilderFactory
@@ -31,7 +33,7 @@ class RulesScreenTest {
                 assertTrue("$loc: rule_${key}_hint", "rule_${key}_hint" in n)
             }
             for (s in Rules.SECTIONS.values) assertTrue("$loc: rules_section_$s", "rules_section_$s" in n)
-            for (s in listOf("rules_lang_ru", "rules_lang_be", "rules_lang_hint")) assertTrue("$loc: $s", s in n)
+            for (s in listOf("rules_lang_ru", "rules_lang_be", "rules_lang_uk", "rules_lang_hint")) assertTrue("$loc: $s", s in n)
         }
         // подсказка вкладки языка (rule_<key>_hint_<код>) — во всех трёх или ни в одной, и только у настоящего ключа
         val langHint = Regex("rule_(.+)_hint_([a-z]{2})")
@@ -40,6 +42,29 @@ class RulesScreenTest {
             assertTrue("$name: нет ключа ${m.groupValues[1]}", m.groupValues[1] in Rules.KEYS)
             for ((loc, n) in all) assertTrue("$loc: $name", name in n)
         }
+    }
+
+    /** Текст <string> по имени из strings.xml локали. */
+    private fun text(loc: String, name: String): String {
+        val nodes = DocumentBuilderFactory.newInstance().newDocumentBuilder()
+            .parse(File(TestData.root(), "app/src/main/res/$loc/strings.xml")).getElementsByTagName("string")
+        return (0 until nodes.length).map { nodes.item(it) }.single { it.attributes.getNamedItem("name").nodeValue == name }.textContent
+    }
+
+    @Test fun ukrainianTabHasBelarusianHints() {
+        // украинская вкладка подписана так же полно, как белорусская: у каждого rule_<key>_hint_be есть _hint_uk, и только
+        // у ключей, которые слой читает
+        for (loc in locales) {
+            val n = names(loc)
+            val be = n.mapNotNull { Regex("rule_(.+)_hint_be").matchEntire(it)?.groupValues?.get(1) }.toSet()
+            val uk = n.mapNotNull { Regex("rule_(.+)_hint_uk").matchEntire(it)?.groupValues?.get(1) }.toSet()
+            assertEquals(loc, be, uk)
+            assertTrue(loc, uk.none { it in UkLayer.unsupported })
+        }
+        // вкладок теперь бывает три: в общей подсказке нет «обеих вкладок»
+        assertFalse(text("values", "rules_lang_hint"), "обеих" in text("values", "rules_lang_hint"))
+        assertFalse(text("values-en", "rules_lang_hint"), "both" in text("values-en", "rules_lang_hint"))
+        assertFalse(text("values-zh", "rules_lang_hint"), "两个" in text("values-zh", "rules_lang_hint"))
     }
 
     /** Слой с выбранными [unsupported]; остальное экрану правил не нужно. */

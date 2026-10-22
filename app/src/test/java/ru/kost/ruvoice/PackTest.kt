@@ -122,6 +122,31 @@ class PackTest {
         assertFalse(list.exists())
     }
 
+    @Test fun twoUkrainianPacksShareOneList() {
+        // cis_uk и cis_uk_ext — один язык: оба ставятся, «Системный uk» один (копия пака, первого по id); удаление одного
+        // оставляет список от второго, даже при той же длине файла; русский список им не нужен
+        fun install(id: String, stress: String, accentor: Boolean = true) = Packs.install(ByteArrayInputStream(zip(JSONObject(packJson.toString())
+            .put("id", id).put("format", 3).put("lang", "uk").put("default", "ru_marat").toString(), "tts_mel.ptl", "backbone.pte", "head.ptl",
+            extras = mapOf(Packs.STRESS to stress.toByteArray()) + if (accentor) mapOf(Packs.ACCENTOR to byteArrayOf(1)) else emptyMap())), filesDir)
+        assertEquals(R.string.err_pack_accentor, assertThrows(UserError::class.java) { install("cis_uk", "кіт к+іт\n", accentor = false) }.res)
+        assertTrue(Packs.installed(filesDir).isEmpty())
+        assertEquals("uk", install("cis_uk_ext", "кіт кі+т\n").lang)
+        val list = Dicts.file(filesDir, Dicts.Kind.STRESS, "Системный uk")
+        assertEquals("кіт кі+т\n", list.readText())
+        // та же длина, другой источник: копию меняет mtime (в тесте установки могли попасть в одну мс — разводим)
+        File(filesDir, "packs/cis_uk_ext/${Packs.STRESS}").setLastModified(System.currentTimeMillis() - 10_000)
+        Dicts.syncPacks(filesDir, Packs.installed(filesDir))
+        assertEquals("uk", install("cis_uk", "кіт к+іт\n").lang)
+        assertEquals(listOf("cis_uk", "cis_uk_ext"), Packs.installed(filesDir).map { it.id })
+        assertEquals("кіт к+іт\n", list.readText())
+        assertEquals(listOf("Системный uk"), Dicts.files(filesDir, Dicts.Kind.STRESS).map { Dicts.name(it) })
+        Packs.delete(filesDir, "cis_uk")
+        assertEquals("кіт кі+т\n", list.readText())
+        assertEquals(listOf("cis_uk_ext"), Packs.installed(filesDir).map { it.id })
+        Packs.delete(filesDir, "cis_uk_ext")
+        assertFalse(list.exists())
+    }
+
     @Test fun packListFailureKeepsInstall() {
         // копия не легла (место временного файла занято каталогом) — пак всё равно стоит, недописанного списка нет
         val json = JSONObject(packJson.toString()).put("id", "cis_be").put("format", 3).put("lang", "be").toString()

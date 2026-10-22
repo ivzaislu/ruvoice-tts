@@ -65,6 +65,32 @@ class DictCacheTest {
         val files = listOf(Dicts.SYSTEM, Dicts.REMOVED, Dicts.MAIN, Dicts.NAMES).map { File(tmp.root, "$it.txt") }
         assertEquals(files, Dicts.forLang(files, "ru"))
         assertEquals(listOf(Dicts.MAIN, Dicts.NAMES), Dicts.forLang(files, "be").map { Dicts.name(it) })
+        // украинскому голосу — свои и «Системный uk», ни русского, ни белорусского системного; русскому — без «Системный uk»
+        val withPacks = files + listOf("Системный be", "Системный uk").map { File(tmp.root, "$it.txt") }
+        assertEquals(listOf(Dicts.MAIN, Dicts.NAMES, "Системный uk"), Dicts.forLang(withPacks, "uk").map { Dicts.name(it) })
+        assertEquals(files, Dicts.forLang(withPacks, "ru"))
+    }
+
+    /** Два украинских пака — один «Системный uk» (копия пака, первого по id), снятие одного оставляет список от второго. */
+    @Test fun twoPacksOneLanguageOneList() {
+        val root = tmp.newFolder("uk")
+        val json = JSONObject(File(TestData.root(), "app/src/test/resources/golden_pack.json").readText()).getJSONObject("pack")
+        fun pack(id: String, stress: String) = tmp.newFolder(id).let { d ->
+            File(d, Packs.STRESS).writeText(stress)
+            Pack(JSONObject(json.toString()).put("id", id).put("format", 3).put("lang", "uk").toString(), d)
+        }
+        val base = pack("cis_uk", "мʼята мʼ+ята\n"); val ext = pack("cis_uk_ext", "мʼята мʼят+а\n")
+        File(ext.dir, Packs.STRESS).setLastModified(System.currentTimeMillis() - 10_000)
+        Dicts.syncPacks(root, listOf(ext, base))
+        val list = Dicts.file(root, Dicts.Kind.STRESS, "Системный uk")
+        assertEquals(listOf("Системный uk"), Dicts.files(root, Dicts.Kind.STRESS).map { Dicts.name(it) })
+        assertEquals("мʼята мʼ+ята\n", list.readText())
+        // слово ищется без апострофа, вариант тоже без него — как его отдаёт UkLayer.dictWord
+        assertEquals(mapOf("мята" to "м+ята"), HashMap(DictCache.stress(Dicts.forLang(Dicts.files(root, Dicts.Kind.STRESS), "uk"), lang = "uk")))
+        Dicts.syncPacks(root, listOf(ext))
+        assertEquals("мʼята мʼят+а\n", list.readText())
+        Dicts.syncPacks(root, emptyList())
+        assertFalse(list.exists())
     }
 
     /** Системный список пака и русский пак со stress.txt русскому голосу ничего не меняют: те же файлы, та же карта,

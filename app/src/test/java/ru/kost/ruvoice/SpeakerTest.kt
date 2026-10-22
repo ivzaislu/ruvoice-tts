@@ -26,6 +26,49 @@ class SpeakerTest {
         .put("speakers", JSONObject(listOf("aze_gamat", "bel_anatoliy", "bel_dmitriy", "bel_larisa", "ukr_igor").withIndex().associate { it.value to it.index }))
         .toString(), File("."))
 
+    /** Украинские паки с настоящими id, именами голосов и полем default (dist/ruvoice-pack-cis_uk*.zip, 22.10.2026). */
+    private fun uk(id: String, default: String, vararg speakers: String) = Pack(JSONObject(File(TestData.root(), "app/src/test/resources/golden_pack.json").readText())
+        .getJSONObject("pack").put("id", id).put("lang", "uk").put("format", 3).put("default", default)
+        .put("speakers", JSONObject(speakers.withIndex().associate { it.value to it.index })).toString(), File("."))
+    private val cisUk = uk("cis_uk", "ukr_igor", "ukr_igor", "ukr_roman")
+    private val cisUkExt = uk("cis_uk_ext", "ukr_mykyta", "ukr_kateryna", "ukr_lada", "ukr_mykyta", "ukr_oleksa", "ukr_tetiana")
+
+    @Test fun ukrainianTwoPacks() {
+        val packs = listOf(pack, cisBe("bel_larisa"), cisUk, cisUkExt)
+        val names = Speaker.names(d, packs)
+        val tts = names.map { Speaker.ttsName(it, packs) }
+        // все имена TTS — штатные, cis_ru, cis_be и семь украинских — разные и читаются обратно
+        assertEquals(tts.groupBy { it }.filterValues { it.size > 1 }.keys.toString(), names.size, tts.toSet().size)
+        for ((n, t) in names.zip(tts)) assertEquals(n, Speaker.fromTtsName(t, names, packs))
+        assertEquals(listOf("igor-uk-cis", "roman-uk-cis", "kateryna-uk-cis-ext", "lada-uk-cis-ext", "mykyta-uk-cis-ext",
+            "oleksa-uk-cis-ext", "tetiana-uk-cis-ext"), names.filter { Speaker.lang(it, packs) == "uk" }.map { Speaker.ttsName(it, packs) })
+        // украинский голос в белорусском паке своё «ukr» сохраняет и с украинскими не совпадает
+        assertEquals("ukr-igor-be-cis", Speaker.ttsName("cis_be/ukr_igor", packs))
+        // голос для «uk»: при одном паке — его default, при обоих — default первого пака (installed() идёт по id)
+        fun forUk(ps: List<Pack>) = Speaker.defaultFor("uk", "kseniya", "ru", Speaker.names(d, ps), ps)
+        assertEquals("cis_uk/ukr_igor", forUk(listOf(pack, cisUk)))
+        assertEquals("cis_uk_ext/ukr_mykyta", forUk(listOf(pack, cisUkExt)))
+        assertEquals("cis_uk/ukr_igor", forUk(packs))
+        // выбран голос ext — украинский запрос читает он, а не default другого пака
+        assertEquals("cis_uk_ext/ukr_lada", Speaker.defaultFor("uk", "cis_uk_ext/ukr_lada", "ru", names, packs))
+        // голоса двух паков одного языка — один профиль, русский — другой
+        assertTrue(Speaker.followsProfile("cis_uk_ext/ukr_lada", "cis_uk/ukr_igor", packs))
+        assertFalse(Speaker.followsProfile("cis_uk/ukr_igor", "xenia", packs))
+        assertFalse(Speaker.followsProfile("cis_uk/ukr_igor", "cis_be/bel_larisa", packs))
+        // вкладки «Правил»: русский, белорусский, украинский — язык один раз, хоть паков два
+        assertEquals(listOf("ru", "be", "uk"), Speaker.langs(d.speakers.keys, packs))
+        lite {
+            // lite с cis_ru и cis_uk без пака ru, голос не выбран: русский текст — русским голосом
+            assertEquals("cis_ru/ru_aigul", Speaker.currentName("", d.speakers.keys, listOf(cisUk, pack)))
+            assertEquals("cis_ru/ru_aigul", Speaker.defaultName(d.speakers.keys, listOf(cisUkExt, cisUk, pack)))
+            // только украинские паки — default первого
+            assertEquals("cis_uk/ukr_igor", Speaker.default(d, listOf(cisUk, cisUkExt))!!.name)
+            assertEquals("cis_uk_ext/ukr_mykyta", Speaker.default(d, listOf(cisUkExt))!!.name)
+            // удалили cis_uk — выбранный его голос заменяется голосом оставшегося пака
+            assertEquals("cis_uk_ext/ukr_mykyta", Speaker.currentName("cis_uk/ukr_roman", d.speakers.keys, listOf(cisUkExt)))
+        }
+    }
+
     @Test fun ttsNamesCarryPackLanguage() {
         assertEquals("marat-ru-cis", Speaker.ttsName("cis_ru/ru_marat", listOf(pack)))
         // из имени убирается только свой язык: русский голос в белорусском паке свой «ru» сохраняет

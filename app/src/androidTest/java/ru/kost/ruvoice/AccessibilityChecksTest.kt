@@ -123,6 +123,14 @@ class AccessibilityChecksTest {
                 onView(withId(R.id.rulesFilter)).perform(clearText(), closeSoftKeyboard())
                 assertKeyboardReachable()
             }
+            // поворот экрана (пересоздание окна) оставляет выбранной ту же вкладку, а не язык голоса: с паками be и uk —
+            // последнюю, украинскую
+            val last = ctx.getString(ctx.resources.getIdentifier("rules_lang_${langs.last()}", "string", ctx.packageName))
+            onView(allOf(withText(last), isDescendantOfA(withId(R.id.rulesTabs)))).perform(click())
+            it.recreate()
+            onView(allOf(withText(last), isDescendantOfA(withId(R.id.rulesTabs)))).check { v, _ ->
+                assertTrue("после поворота вкладка «$last» не выбрана", v.isSelected)
+            }
         }
     }
 
