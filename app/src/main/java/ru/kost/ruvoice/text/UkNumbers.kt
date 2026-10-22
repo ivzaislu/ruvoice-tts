@@ -784,16 +784,25 @@ object UkNumbers {
      * и «≥» между буквами выпадали фильтром. Не проверено носителем. */
     internal fun algebra(text: String) = FORMULA_RE.replace(text) { m ->
         if (m.value.none { it in 'a'..'z' || it in 'A'..'Z' }) return@replace m.value
+        val ops = FORMULA_OP_RE.findAll(m.value).map { o -> o.groupValues.drop(1).first { it.isNotEmpty() } }.toList()
+        // тире — минус только рядом с другим знаком: «a — b» в тексте — тире
+        if (ops.all { it in DASHES }) return@replace m.value
+        // одни заглавные через «+» без чисел — сочетание клавиш («A + B», «Shift + A»): буквы английскими именами, как в тексте
+        if (ops.all { it == "+" } && m.value.none { it.isDigit() || it in 'a'..'z' }) return@replace m.value
         val s = FORMULA_LETTER_RE.replace(m.value) { l ->
             val name = SCHOOL_LATIN.getValue(l.groupValues[1].lowercase()[0])
             val pow = when (l.groupValues[2]) { "²" -> " ${uv(name)} квадраті"; "³" -> " ${uv(name)} кубі"; else -> "" }
             (if (l.range.first > 0 && m.value[l.range.first - 1].isDigit()) " " else "") + name + pow
         }
-        FORMULA_OP_RE.replace(s) { o -> o.groupValues.drop(1).first { it.isNotEmpty() }.let { " " + (COMPARE_WORDS[it] ?: ARITH_OPS.getValue(it)) + " " } }
+        FORMULA_OP_RE.replace(s) { o -> o.groupValues.drop(1).first { it.isNotEmpty() }.let {
+            " " + (if (it in DASHES) "мінус" else COMPARE_WORDS[it] ?: ARITH_OPS.getValue(it)) + " " } }
     }
-    private const val TERM = """(?:\d+(?:[.,]\d+)?[A-Za-z]?|[A-Za-z])[²³]?"""
-    // «<», «>» — только в пробелах, как [COMPARE_RE]
-    private const val FORMULA_OP = """\s*([=+−×÷≥≤≠])\s*|\s+([<>])\s+"""
+    // коэффициент — только строчной буквой: «2x», «10a»; «4G», «3D», «4K» — не формула
+    private const val TERM = """(?:\d+(?:[.,]\d+)?[a-z]?|[A-Za-z])[²³]?"""
+    // «<», «>» — только в пробелах, как [COMPARE_RE]; минус в пробелах до слоя уже стал тире (Normalizer.punctuation): «x − 1 = 0»
+    // приходит как «x — 1 = 0»
+    private const val FORMULA_OP = """\s*([=+−×÷≥≤≠])\s*|\s+([<>—–])\s+"""
+    private val DASHES = setOf("—", "–")
     private val FORMULA_RE = Regex("""(?<![\p{L}\d.,])$TERM(?:(?:$FORMULA_OP)[-−]?$TERM)+(?![\p{L}\d])""")
     private val FORMULA_LETTER_RE = Regex("""(?<![A-Za-z])([A-Za-z])([²³]?)""")
     private val FORMULA_OP_RE = Regex(FORMULA_OP)

@@ -133,16 +133,18 @@ object UkNormalizer {
         var s = CARD_RE.replace(text) { m -> spell(listOf(1, 3, 4, 5, 6).mapNotNull { m.groups[it]?.value }.joinToString(" ")) }
         s = CARD_MASK_RE.replace(s) { m -> spell(m.groupValues[1], whole = true) }
         s = REQUISITE_RE.replace(s) { m -> m.groupValues[1] + m.groupValues[2] + spell(m.groupValues[3]) }
+        s = POSTAL_RE.replace(s) { m -> m.groupValues[1] + m.groupValues[2] + spell(m.groupValues[3]) }
         s = CODE_AFTER_WORD_RE.replace(s) { m -> m.groupValues[1] + m.groupValues[2] + spell(m.groupValues[3]) }
         return CODE_BEFORE_WORD_RE.replace(s) { m -> spell(m.groupValues[1]) }
     }
     private val DIGIT_NAMES = Array(10) { UkNumbers.digits(it.toString()) }
     private const val CODE_WORD = """(?:пін-?код|код|пароль|одноразовий\s+пароль|pin|cvc2?|cvv2?|otp|code|passcode)"""
-    // «поштовий індекс 01001» — по цифрам: числом «нуль одна тисяча один»
-    private const val CODE_WORD_FORMS = """(?:пін-?код(?:у|а|ом|і|и|ів)?|код(?:у|а|ом|і|и|ів)?|парол(?:ь|я|ю|ем|і|ів)|pin|cvc2?|cvv2?|otp|code|passcode|""" +
-        """поштов(?:ий|ого|ому|им)\s+індекс(?:у|ом|і)?)"""
+    private const val CODE_WORD_FORMS = """(?:пін-?код(?:у|а|ом|і|и|ів)?|код(?:у|а|ом|і|и|ів)?|парол(?:ь|я|ю|ем|і|ів)|pin|cvc2?|cvv2?|otp|code|passcode)"""
+    /** «поштовий індекс 01001» — пять цифр сразу за словами, по цифрам (числом было бы «нуль одна тисяча один»); «поштовий
+     * індекс змінився у 2020 році» — не индекс. */
+    private val POSTAL_RE = Regex("""(?<!\p{L})(поштов\p{L}*\s+індекс\p{L}*)(\s*:?\s*)(\d{5})(?![\d\p{L}]|[.,]\d)""", RegexOption.IGNORE_CASE)
     private const val CODE_DIGITS = """\d{2,4}(?:[ -]\d{2,4}){1,2}|\d{3,8}"""
-    private const val CODE_NOT_AFTER = """(?!\d|[.,:]\d|\s*(?:%|₴|\$|€|°|грн|руб|р\.|рік|рок|шт|хв|сек|раз|км|кг|м(?!\p{L})))"""
+    private const val CODE_NOT_AFTER = """(?!\d|[.,:]\d|\s*(?:%|₴|\$|€|°|грн|руб|р\.|рік|рок|році|шт|хв|сек|раз|км|кг|м(?!\p{L})))"""
     private val CODE_AFTER_WORD_RE = Regex("""(?<![\p{L}\d])($CODE_WORD_FORMS)(?!\p{L})([^\d.!?\n]{0,40}?)(?<![\p{L}\d,.])($CODE_DIGITS)$CODE_NOT_AFTER""",
         RegexOption.IGNORE_CASE)
     private val CODE_BEFORE_WORD_RE = Regex("""(?<![\p{L}\d,.+])(\d{4,8})(?!\d|[.,]\d)(?=\s*[-–—:]?\s*(?:це\s+)?(?:ваш[аі]?\s+)?$CODE_WORD(?!\p{L}))""",
@@ -334,11 +336,11 @@ object UkNormalizer {
         add("переїзд поїздка поїздку повернення переселення подорож", "_")
     }
     /** «див. с. 45», «Див. табл. 3» — знахідний: «дивись сторінку», «дивись таблицю»; и дальше по перечню через «і», «та»,
-     * запятую: «див. мал. 4 і табл. 2» — «і таблицю». */
-    private val SEE_BEFORE_RE = Regex("""(?<!\p{L})(?:див\.?|дивись|дивіться)\s*(?:\p{L}{1,6}\.\s*\d+[\d.,]*\s*(?:,|і|й|та)\s+)*$""",
+     * запятую: «див. мал. 4 і табл. 2» — «і таблицю»; так же после «читай(те)»: «Читайте розд. 3, т. 2, с. 45» — «сторінку». */
+    private val SEE_BEFORE_RE = Regex("""(?<!\p{L})(?:див\.?|дивись|дивіться|читай|читайте)\s*(?:\p{L}{1,6}\.\s*\d+[\d.,]*\s*(?:,|і|й|та)\s+)*$""",
         RegexOption.IGNORE_CASE)
     /** Часть документа с номером перед целым: «п. 2 ст. 15» — «пункт два статті п'ятнадцять», «ч. 1 ст. 5». Не проверено носителем. */
-    private val PART_BEFORE_RE = Regex("""(?<!\p{L})(?:п|пп|підп|ч)\.\s*\d+[\d.,]*\s*$""", RegexOption.IGNORE_CASE)
+    private val PART_BEFORE_RE = Regex("""(?<!\p{L})(?:п|пп|підп|ч)\.\s*\d+(?:[.,]\d+)*\s*$""", RegexOption.IGNORE_CASE)
     private val WHOLE_ABBRS = setOf("ст", "розд", "гл", "дод")
     /** «смт Ворохта» пишут без точки: перед назвою — с точкой, как прочие сокращения [NOUN_ABBR_RE]. */
     private val SMT_RE = Regex("""(?<![\p{L}\d.])смт(?=\s+(?-i:\p{Lu}))""", RegexOption.IGNORE_CASE)
