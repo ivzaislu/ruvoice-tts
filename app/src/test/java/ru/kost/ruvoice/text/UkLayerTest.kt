@@ -18,7 +18,7 @@ import java.io.File
 class UkLayerTest {
     private val cis = TestData.cisAllowed
     private fun prep(t: String, r: Rules = Rules()) = UkLayer.prepare(t, cis, r)
-    private fun full(t: String, r: Rules = Rules()) = Splitter.sentences(t, r).joinToString(" | ") { prep(it, r) }
+    private fun full(t: String, r: Rules = Rules()) = Splitter.sentences(t, r, layer = UkLayer).joinToString(" | ") { prep(it, r) }
     private fun plan(t: String, r: Rules = Rules()) =
         Pipeline.plan(t, TestData.data(), 0, 0, rules = r, layer = UkLayer, allowed = cis).joinToString(" | ") { it.text }
 
@@ -184,7 +184,7 @@ class UkLayerTest {
             "бага" to "то", "міс" to "то", "жи" to "то", "лі" to "то", "зо" to "лото"))
             assertFalse("$a-$b", UkLayer.keepHyphen(a, b))
         // как на телефоне: Splitter.paragraphs (dehyphen по слою), потом Splitter.sentences
-        fun split(t: String) = Splitter.paragraphs(t, Rules(), UkLayer).flatMap { Splitter.sentences(it) }.joinToString(" | ")
+        fun split(t: String) = Splitter.paragraphs(t, Rules(), UkLayer).flatMap { Splitter.sentences(it, layer = UkLayer) }.joinToString(" | ")
         assertEquals("Тут багато людей, велике місто і жито.", split("Тут бага-\nто людей, велике міс-\nто і жи-\nто."))
         assertEquals("Тому-то він прийшов, а абихто ні.", split("Тому-\nто він прийшов, а аби-\nхто ні."))
         // через Splitter: перенос склеивается, дефисное написание остаётся; слово с апострофом целиком

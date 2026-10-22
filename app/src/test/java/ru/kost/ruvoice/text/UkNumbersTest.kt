@@ -14,10 +14,10 @@ import ru.kost.ruvoice.TestData
 class UkNumbersTest {
     private val cis = TestData.cisAllowed
     private fun prep(t: String, r: Rules = Rules()) = UkLayer.prepare(t, cis, r)
-    private fun path(t: String, r: Rules = Rules()) = Splitter.sentences(t, r).joinToString(" | ") { prep(it, r) }
+    private fun path(t: String, r: Rules = Rules()) = Splitter.sentences(t, r, layer = UkLayer).joinToString(" | ") { prep(it, r) }
     /** Символы пака плюс цифры: недочитанная цифра доходит до вывода, проверка «цифр нет» может упасть. */
     private val cisDigits = cis + "0123456789"
-    private fun pathD(t: String) = Splitter.sentences(t).joinToString(" | ") { UkLayer.prepare(it, cisDigits, Rules()) }
+    private fun pathD(t: String) = Splitter.sentences(t, layer = UkLayer).joinToString(" | ") { UkLayer.prepare(it, cisDigits, Rules()) }
 
     @Test fun cardinalCases() {
         // склоняется каждое слово (VESUM numr); основная форма — первая в Правописе 2019 («п'ятьма», «сьома», «вісьма»)

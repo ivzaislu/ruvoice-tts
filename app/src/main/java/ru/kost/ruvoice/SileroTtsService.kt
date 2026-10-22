@@ -147,7 +147,7 @@ object Pipeline {
             pieces += txt.substring(from)
             for ((pi, piece) in pieces.withIndex()) {
                 val lastPiece = pi == pieces.size - 1
-                val sents = Splitter.sentences(piece, rules, measure.takeIf { rules.on(Rules.SCREEN_READER) })
+                val sents = Splitter.sentences(piece, rules, measure.takeIf { rules.on(Rules.SCREEN_READER) }, layer)
                 for ((i, s) in sents.withIndex()) {
                     val lastInPiece = i == sents.size - 1
                     // {pause:N} на конце абзаца — маркер про паузу предложения (ruling, task 26/п.11

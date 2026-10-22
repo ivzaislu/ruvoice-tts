@@ -185,7 +185,14 @@ object UkNormalizer {
             if (!digit && (key[0].isUpperCase() || ROMAN_OR_DIGIT_BEHIND.containsMatchIn(t.substring(maxOf(0, m.range.first - 8), m.range.first))))
                 return@replace m.value
             val p = prep.lowercase()
-            val case = if (p in FROM_PREPS && a.place) Case.GEN else UkNumbers.SIGN_PREP[p] ?: Case.NOM
+            val before = t.substring(maxOf(0, m.range.first - 30), m.range.first)
+            val case = when {
+                p in FROM_PREPS && a.place -> Case.GEN
+                // «Їду в м. Київ» — куди: знахідний; «живе в м. Києві» — місцевий
+                p in MOTION_PREPS && a.place && MOTION_BEFORE_RE.containsMatchIn(before) -> Case.ACC
+                p.isEmpty() && SEE_BEFORE_RE.containsMatchIn(before) -> Case.ACC
+                else -> UkNumbers.SIGN_PREP[p] ?: Case.NOM
+            }
             (if (prep.isEmpty()) "" else "$prep ") + a.forms[case.ordinal] + " " +
                 if (roman.isEmpty()) "" else UkNumbers.ordinal(UkNumbers.romanValue(roman), case, a.gender) + " "
         }
@@ -194,6 +201,7 @@ object UkNormalizer {
         val forms = forms.split(' ').map { it.replace('_', ' ') }
     }
     private val FROM_PREPS = setOf("з", "із", "зі", "зо")
+    private val MOTION_PREPS = setOf("в", "у", "на")
     private val DIGIT_ABBRS = mapOf(
         "буд" to NounAbbr("будинок будинку будинку будинок будинком будинку"),
         "кв" to NounAbbr("квартира квартири квартирі квартиру квартирою квартирі", gender = Gender.F),
@@ -242,7 +250,14 @@ object UkNormalizer {
     private val NOUN_ABBR_RE = Regex("""(?:(?<![\p{L}\d])(${UkNumbers.SIGN_PREP.keys.sortedByDescending { it.length }.joinToString("|")})\s+)?""" +
         """(?<![\p{L}\d.])(${(DIGIT_ABBRS.keys + NAME_ABBRS.keys).sortedByDescending { it.length }.joinToString("|")})\.\s*""" +
         """(?-i:(?:((?:[IVX]|І(?=[IVXІХ]|\s*$))[IVXІХ]*)(?![\p{L}\d])|(?=([\d+(:]))|(?=\p{Lu})))""", RegexOption.IGNORE_CASE)
-    private val ROMAN_OR_DIGIT_BEHIND = Regex("""(?-i:(?:[IVXІХ]+|\d+|рт\.)\s*$)""", RegexOption.IGNORE_CASE)
+    /** «м.» после числа, римского, «рт.», «кв.», «куб.», «пог.» — метр, а не місто: «50 кв. м. Далі», «5 млн куб. м. Газу». */
+    private val ROMAN_OR_DIGIT_BEHIND = Regex("""(?-i:(?:[IVXІХ]+|\d+|рт\.|(?<!\p{L})(?:кв|куб|пог)\.?)\s*$)""", RegexOption.IGNORE_CASE)
+    /** Глагол движения перед «в/у/на» — знахідний: «Їду в м. Київ» → «в місто», а не «в місті». Не проверено носителем. */
+    private val MOTION_BEFORE_RE = Regex("""(?<!\p{L})(?:(?:по|при|пере|ви|від|до|за|з|роз|в|у|об)?(?:їд|їзд|їжджа|їха)\p{L}*|""" +
+        """прибу\p{L}*|поверн\p{L}*|поверта\p{L}*|вируш\p{L}*|відправ\p{L}*|переселил\p{L}*|(?:при|ви|по|пере|за|від|до)(?:лет|літа)\p{L}*|""" +
+        """летів|летіла|летіли|лечу|(?:пі|при|зай|увій|прий|ві|ви)ш(?:ов|ла|ли|ло)|піду|підемо|йду|іду|прийду)\s+$""", RegexOption.IGNORE_CASE)
+    /** «див. с. 45», «Див. табл. 3» — знахідний: «дивись сторінку», «дивись таблицю». */
+    private val SEE_BEFORE_RE = Regex("""(?<!\p{L})(?:див\.?|дивись|дивіться)\s*$""", RegexOption.IGNORE_CASE)
     /** «смт Ворохта» пишут без точки: перед назвою — с точкой, как прочие сокращения [NOUN_ABBR_RE]. */
     private val SMT_RE = Regex("""(?<![\p{L}\d.])смт(?=\s+(?-i:\p{Lu}))""", RegexOption.IGNORE_CASE)
 
@@ -366,7 +381,7 @@ object UkNormalizer {
         mapOf('Ё' to "йо", 'Ы' to "и", 'Э' to "е", 'Ъ' to "твердий знак")
     private const val CYR_VOWELS = "АЕЄИІЇОУЮЯЁЫЭ"
     /** С гласными, но по буквам; не проверено носителем. */
-    private val SPELL = setOf("ЄС", "АЕС", "АТ", "ПАТ", "ЄІБ", "ОДА", "ОСББ", "ЄСПЛ", "ЕС")
+    private val SPELL = setOf("ЄС", "АЕС", "АТ", "ПАТ", "ЄІБ", "ОДА", "ОСББ", "ЄСПЛ", "ОБСЄ", "ЄБРР", "ОАЕ", "ЕС")
     /** Частые слова из трёх букв с гласной с краю — не сокращение и капсом. ponytail: стоп-лист, пополнять по жалобам. */
     private val EDGE_WORDS = setOf("хто", "два", "три", "сто", "для", "дні", "дно", "зло", "сни", "все", "всі", "вся", "зле", "вже",
         "пси", "пса", "шви", "акт", "арт", "ост", "спа", "бра", "зно", "тре", "мла", "мрі", "дня", "сну")

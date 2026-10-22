@@ -63,6 +63,10 @@ interface TextLayer {
      * «кто-\nто»), а не перенос слова. Части — в нижнем регистре; false — склеивать (заглавную после переноса Splitter
      * не склеивает и так). */
     fun keepHyphen(before: String, after: String): Boolean = false
+
+    /** Слово [word] с точкой в конце куска — сокращение языка, и кусок [next] за ним — продолжение того же предложения
+     * ([Splitter.sentences]). Общие русские и белорусские сокращения Splitter знает сам; здесь — только свои слоя. */
+    fun keepsSentence(word: String, next: String): Boolean = false
 }
 
 /** Русский слой — ровно то, что было до появления второго языка: [Normalizer] и данные stress.bin. */
@@ -185,7 +189,19 @@ object UkLayer : TextLayer {
     /** Пунктуация — только в эхе ([punct]), прочие знаки — [SymbolNames.ofUk] (своя таблица и CLDR uk). */
     override fun symbolName(c: Char, punct: Boolean) = (if (punct) UK_SYMBOLS[c] else null) ?: SymbolNames.ofUk(c)
     override fun keepHyphen(before: String, after: String) = UK_HYPHEN.matches("$before-$after")
+    /** Украинские сокращения ([UkNormalizer]): строчными и с заглавной в начале фразы («Див. також»), не капсом. */
+    override fun keepsSentence(word: String, next: String) = word.replaceFirstChar(Char::lowercaseChar).let { w ->
+        w in UK_ABBR_STOPS || w in UK_ABBR_STOPS_BEFORE_LOWER && next.firstOrNull()?.isLowerCase() == true
+    }
 }
+
+// перед номером, назвою, именем: «просп. Перемоги», «буд. 5», «доц. Петренко», «ім. Шевченка», «тел. 044…», «Див. Додаток 2»,
+// «та ін. Потім» (точку сокращения в конце фразы сохраняет UkNormalizer)
+private val UK_ABBR_STOPS = setOf("просп", "буд", "смт", "розд", "доц", "пров", "дод", "пов", "вип", "ім", "підп", "стор", "мкрн",
+    "ін", "тел", "див")
+// и концом предложения бывают («Зібрали 5 тис. Потім…», «Ціна 100 грн. Тому…», «о 5 год. Потім»): не режем только перед
+// строчной — «1,2 тис. км.», «о 5 год. ранку», «5 млн куб. м.»
+private val UK_ABBR_STOPS_BEFORE_LOWER = setOf("тис", "грн", "рр", "год", "ос", "чол", "екз", "куб", "пог")
 
 // Дефисные написания по правопису 2019: «по-» — у наречий на -ськи, -цьки, -зьки и -ому/-єму («по-українськи»,
 // «по-моєму», «по-новому») и «по-перше…по-десяте»; «будь-», «казна-», «хтозна-», «бозна-»; «з-за», «з-під», «з-поміж»,

@@ -13,7 +13,7 @@ import java.io.File
  * tools/vesum_morph.py --words), как morph.bin пака cis_uk. Текст идёт через [Splitter.sentences] и [UkLayer.prepare]. */
 class UkCasesTest {
     private val cis = TestData.cisAllowed
-    private fun prep(t: String, rules: Rules = Rules()) = Splitter.sentences(t, rules).joinToString(" | ") { UkLayer.prepare(it, cis, rules) }
+    private fun prep(t: String, rules: Rules = Rules()) = Splitter.sentences(t, rules, layer = UkLayer).joinToString(" | ") { UkLayer.prepare(it, cis, rules) }
 
     @Before fun open() { UkNumbers.morph = Morph.open(File(TestData.root(), "app/src/test/resources/morph_uk_test.bin")) }
     @After fun close() { UkNumbers.morph = null }

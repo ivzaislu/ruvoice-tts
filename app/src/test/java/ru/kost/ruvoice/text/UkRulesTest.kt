@@ -19,7 +19,7 @@ class UkRulesTest {
     private fun prep(t: String, rules: Rules = Rules()) = UkLayer.prepare(t, cis, rules)
     private fun off(vararg keys: String) = keys.fold(Rules()) { r, k -> r.with(k, false) }
     /** Путь сервиса: Splitter (его Normalizer.punctuation читает общие ключи) и слой; куски — через « | ». */
-    private fun full(t: String, r: Rules = Rules()) = Splitter.sentences(t, r).joinToString(" | ") { prep(it, r) }
+    private fun full(t: String, r: Rules = Rules()) = Splitter.sentences(t, r, layer = UkLayer).joinToString(" | ") { prep(it, r) }
     private fun plan(t: String, r: Rules = Rules()) =
         Pipeline.plan(t, TestData.data(), 0, 0, rules = r, layer = UkLayer, allowed = cis).joinToString(" | ") { it.text }
 
@@ -143,6 +143,17 @@ class UkRulesTest {
         assertEquals("сімсот шістдесят міліметрів ртутного стовпчика.", full("760 мм рт. ст."))
         // правило abbrev выключено — как написано
         assertEquals("м. київ", full("м. Київ", off("abbrev")))
+        // «м.» после «кв.», «куб.», «пог.» — метр, не місто
+        assertEquals("площа пъятдесят квадратних метрів. далі кухня.", full("Площа 50 кв. м. Далі кухня."))
+        assertFalse(full("Видобуто 5 млн куб. м. Газу багато.").contains("місто"))
+        assertFalse(full("Труба 20 пог. м. Далі.").contains("місто"))
+        // падеж: куди — знахідний после глагола движения, де — місцевий, звідки/до — родовий
+        assertEquals("їду в місто київ.", full("Їду в м. Київ."))
+        assertEquals("переїхав у місто львів.", full("Переїхав у м. Львів."))
+        assertEquals("живу в місті києві.", full("Живу в м. Києві."))
+        assertEquals("доїхав до міста києва.", full("Доїхав до м. Києва."))
+        // после «див.» — знахідний
+        assertEquals("дивись сторінку сорок пъять, дивись таблицю три.", full("Див. с. 45, див. табл. 3."))
         // целые слова, начинающиеся как сокращение, не трогаем
         assertEquals("будинок, дивно, імла, областю, районний, просто", full("Будинок, дивно, імла, областю, районний, просто"))
     }
@@ -192,9 +203,11 @@ class UkRulesTest {
         assertEquals("ю-ес-бі", full("USB"))
         // латиница не пропадает целиком
         assertEquals("ю-ес-бі екс", full("USB x"))
-        assertEquals("ґалаксі ес двадцять чотири", full("Galaxy S24"))
+        assertEquals("галаксі ес двадцять чотири", full("Galaxy S24"))
+        // «g» — «г» (правопис 2019, § 122), «pH» — «пе-аш», буквы не теряются
+        assertEquals("блог, л+огін, пе-+аш, ай-о-+ес", full("blog, login, pH, iOS"))
         assertEquals("пъять джі, три ді-друк", full("5G, 3D-друк"))
-        assertEquals("вайф+ай, айф+он, ґ+уґл", full("Wi-Fi, iPhone, Google"))
+        assertEquals("вайф+ай, айф+он, гугл", full("Wi-Fi, iPhone, Google"))
         assertEquals("ем-пі три", full("MP3"))
         // одна буква — именем: после имени (римское только I), в формуле, сама по себе
         assertEquals("карл ві зрікся.", full("Карл V зрікся."))
@@ -214,7 +227,7 @@ class UkRulesTest {
         assertEquals("кільк+ість", full("кільк+ість"))
         assertEquals("книга", full("Книга FilmBell", off("latin")))
         assertEquals("усб", full("USB", off("spell_lat")))
-        assertEquals("ґалаксі с двадцять чотири", full("Galaxy S24", off("letter_digit")))
+        assertEquals("галаксі с двадцять чотири", full("Galaxy S24", off("letter_digit")))
     }
 
     @Test fun spellCyr() {
@@ -223,6 +236,7 @@ class UkRulesTest {
         assertEquals("ес-ша-а", full("США"))
         assertEquals("навчається в ка-ен-у.", full("Навчається в КНУ."))
         assertEquals("ем-ве-ес, ес-бе-у, пе-де-ве", full("МВС, СБУ, ПДВ"))
+        assertEquals("о-бе-ес-є, є-бе-ер-ер, о-а-е, о-те-ге", full("ОБСЄ, ЄБРР, ОАЕ, ОТГ"))
         // словом: гласных больше одной или в середине, частые слова
         assertEquals("нато, оон, зно, моз", full("НАТО, ООН, ЗНО, МОЗ"))
         // заголовок капсом — словами
@@ -234,7 +248,7 @@ class UkRulesTest {
         assertEquals("те ге шевченко народився.", full("Т. Г. Шевченко народився."))
         assertEquals("шевченко те ге народився.", full("Шевченко Т. Г. народився."))
         for (t in listOf("Автор Є. Ґудзь пише.", "Пише Ї. Петренко.", "Пише І. Франко.", "Пише Ґ. Ґудзь."))
-            assertEquals(t, 1, Splitter.sentences(t).size)
+            assertEquals(t, 1, Splitter.sentences(t, layer = UkLayer).size)
         assertEquals("автор є ґудзь пише.", full("Автор Є. Ґудзь пише."))
         // строчные без гласных — по буквам; единицы и междометия — нет
         assertEquals("ка-ем-ен", full("кмн"))
@@ -273,6 +287,15 @@ class UkRulesTest {
         assertEquals("ю-ес-бі екс", prep(plan("USB x")))
         assertEquals("зе-ес-у", prep(plan("ЗСУ")))
         assertEquals("місто київ", prep(plan("м. Київ")))
+        // Pipeline.plan с украинским голосом режет по украинским сокращениям: «тел.» перед номером — одна фраза
+        fun planned(t: String) = Pipeline.plan(t, TestData.data(), 0, 0, layer = UkLayer, allowed = cis).joinToString(" | ") { prep(it.text) }
+        assertEquals("довідки за телефоном нуль сорок чотири, сто двадцять три, сорок пъять, шістдесят сім.",
+            planned("Довідки за тел. 044 123-45-67."))
+        assertEquals("телефон нуль сорок чотири, сто двадцять три, сорок пъять, шістдесят сім.", planned("Тел. 044 123-45-67."))
+        assertEquals("навчається в ка-ен-у імені шевченка.", planned("Навчається в КНУ ім. Шевченка."))
+        assertEquals("дивись додаток два.", planned("Див. Додаток 2."))
+        // тот же текст русским голосом режется, как до украинских сокращений
+        assertEquals(2, Pipeline.plan("Довідки за тел. 044 123-45-67.", TestData.data(), 0, 0, allowed = cis).size)
     }
 
     /** Латиница и цифры не доходят до модели: фильтр пропускал бы их, но шаги слоя их уже прочли. */
@@ -281,7 +304,7 @@ class UkRulesTest {
         Emoji.uk = File(TestData.root(), "app/src/main/assets/emoji_uk.tsv").bufferedReader().useLines { Emoji(it) }
         try {
             for (r in listOf(Rules(), Rules().screenReader())) for (t in samples + read.values) {
-                val out = Splitter.sentences(t, r).joinToString(" ") { UkLayer.prepare(it, wide, r) }
+                val out = Splitter.sentences(t, r, layer = UkLayer).joinToString(" ") { UkLayer.prepare(it, wide, r) }
                 assertFalse("$t → $out", out.any { it in 'a'..'z' || it in 'A'..'Z' || it.isDigit() })
             }
         } finally { Emoji.uk = null }

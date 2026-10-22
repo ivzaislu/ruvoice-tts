@@ -18,22 +18,13 @@ object Splitter {
     // кусок, разрезанный после них, нормализатор уже не разворачивал — «воз» читалось словом, «ст.» станцыей
     private val abbrevStopWordsLower = setOf("зн", "інш", "зв", "пп", "арт", "мал", "дад", "заўв", "кн", "разд", "пав", "пад",
         "тэл", "пл", "пас", "воз", "мкр", "зав", "бул", "праф", "дац", "вобл", "рт", "хв", "гадз", "шт", "кап", "чал", "экз")
-    // украинские ([UkNormalizer]): «просп. Перемоги», «буд. 5», «доц. Петренко», «ім. Шевченка», «та ін. Потім». Русских слов
-    // среди них нет: строчными и с заглавной в начале фразы («Розд. 3»), не капсом
-    private val ukAbbrevStopWords = setOf("просп", "буд", "смт", "розд", "доц", "пров", "дод", "пов", "вип", "ім", "підп",
-        "стор", "мкрн", "ін")
-    // украинские сокращения, совпадающие с русскими словами («год», «ос», «тис», «див» — «титул чемпионки Див.») или частые в
-    // русском тексте про Украину («грн»): не режем, только если дальше строчная — «о 5 год. ранку», «1,2 тис. км.», «Див. також»;
-    // перед заглавной и цифрой — конец предложения, как было (русское «…за 2021-2022 год. 365 детей…» на корпусе Leipzig).
-    // «тел» здесь нет: русское «тел. 8 012…» режется, как было (RuPathSnapshotTest)
-    private val abbrevBeforeLowerStopWords = setOf("тис", "грн", "рр", "год", "ос", "чол", "екз", "див")
     // Перед сокращением может стоять скобка или кавычка («[прим. ред.]», «(см. ниже)»). «і», «ў» — белорусские («інш»),
     // «є», «ї», «ґ» — украинские.
     private val abbrevWordAtEndRe = Regex("""(?:^|[\s(\[«"])([а-яёіўєїґa-z]+)\.$""", RegexOption.IGNORE_CASE)
 
-    private fun endsWithAbbrev(piece: String, next: String) = abbrevWordAtEndRe.find(piece)?.groupValues?.get(1)
-        ?.let { it.lowercase() in abbrevStopWords || it in abbrevStopWordsLower || it.replaceFirstChar(Char::lowercaseChar).let { w ->
-            w in ukAbbrevStopWords || w in abbrevBeforeLowerStopWords && next.firstOrNull()?.isLowerCase() == true } } == true
+    /** Свои сокращения языка — [TextLayer.keepsSentence]: украинские «ім.», «тел.» не трогают русский и белорусский текст. */
+    private fun endsWithAbbrev(piece: String, next: String, layer: TextLayer) = abbrevWordAtEndRe.find(piece)?.groupValues?.get(1)
+        ?.let { it.lowercase() in abbrevStopWords || it in abbrevStopWordsLower || layer.keepsSentence(it, next) } == true
 
     // Де-гифенация переносов (task 18 п.1): строчная буква после переноса — слово разбито
     // переносом, дефис и \n убираем («со-\nбака» → «собака»). Заглавная — вероятно составное
@@ -67,8 +58,9 @@ object Splitter {
     }
 
     /** [measure] — длина текста для модели (после нормализации); задан — предел куска меряется ею, а не исходником
-     * (у экранного чтеца: ссылка, эмодзи, число раздуваются в 2–3 раза, а длинный кусок держит перебившую фразу). */
-    fun sentences(text: String, rules: Rules = Rules(), measure: ((String) -> Int)? = null): List<String> {
+     * (у экранного чтеца: ссылка, эмодзи, число раздуваются в 2–3 раза, а длинный кусок держит перебившую фразу).
+     * [layer] — язык голоса, который прочтёт текст: его сокращения ([TextLayer.keepsSentence]) не конец предложения. */
+    fun sentences(text: String, rules: Rules = Rules(), measure: ((String) -> Int)? = null, layer: TextLayer = Layers.RU): List<String> {
         // Реальный пайплайн режет на предложения ДО Normalizer.prepare() (review round 1 п.1):
         // без этого «Всё. . . Дальше.» резалось бы по каждой точке многоточия. punctuation()
         // идемпотентна, повторный вызов внутри prepare() ничего не портит.
@@ -76,7 +68,7 @@ object Splitter {
         val maxLen = rules.maxLen
         val merged = mutableListOf<String>()
         for (piece in sentenceEnd.split(cleaned.trim())) {
-            if (merged.isNotEmpty() && endsWithAbbrev(merged.last(), piece)) merged[merged.size - 1] += " $piece"
+            if (merged.isNotEmpty() && endsWithAbbrev(merged.last(), piece, layer)) merged[merged.size - 1] += " $piece"
             else merged += piece
         }
         return merged.filter { it.isNotBlank() }.flatMap { limit(it.trim(), maxLen, measure) }
