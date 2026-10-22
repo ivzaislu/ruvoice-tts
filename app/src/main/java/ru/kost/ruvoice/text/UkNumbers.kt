@@ -739,13 +739,14 @@ object UkNumbers {
      * «у квадраті», «10⁻³» — «у мінус третьому степені» (степінь — ч. р., Правопис). «Тиск 120/80» — «сто двадцять на
      * вісімдесят», «у пропорції 1:4» — «один до чотирьох». «у»/«в» — по милозвучності: после гласной «в» («два в кубі»). */
     fun arith(text: String): String {
-        // «1941 − 1945», «10:30 − 11:30»: два числа через «−» в пробелах, второе больше, — тире диапазона; иначе вычитание
-        // («Обчисліть 7 − 2», «5 − 3 = 2»)
+        // два края через «−» в пробелах: время и даты («22:00 − 06:00», «28.09 − 03.10») — всегда тире диапазона; числа — тире,
+        // только если второе больше («1941 − 1945»), иначе вычитание («Обчисліть 7 − 2», «5 − 3 = 2»)
         var s = NUM_EXPR_RE.replace(text) { m ->
             val ops = NUM_OP_RE.findAll(m.value).toList()
-            val terms = NUM_OP_RE.split(m.value).map(::rangeValue)
-            val a = terms.first(); val b = terms.last()
-            if (ops.size == 1 && ops[0].value == " − " && a != null && b != null && b > a) m.value.replace(" − ", " — ") else m.value
+            val terms = NUM_OP_RE.split(m.value)
+            val range = ops.size == 1 && ops[0].value == " − " && (terms.any { ':' in it || '.' in it } ||
+                terms.map(::rangeValue).let { (a, b) -> a != null && b != null && b > a })
+            if (range) m.value.replace(" − ", " — ") else m.value
         }
         s = dimensions(s)
         s = TIMES_SIZE_RE.replace(s, " на ")
@@ -767,8 +768,14 @@ object UkNumbers {
         s = MINUS_BEFORE_EQUALS_RE.replace(EQUALS_MINUS_RE.replace(s, " дорівнює мінус "), " мінус ")
         s = POWER_OP_RE.replace(s) { m -> m.groupValues[1].toLongOrNull()?.let { cardinal(it) }?.let { b -> "$b ${uv(b)} степені " } ?: m.value }
         s = ARITH_RE.replace(s) { m -> " ${ARITH_OPS.getValue(m.groupValues[1])} " }
-        // «(10 − 4) / 2 = 3»: «/» в пробелах в выражении с «=» — деление (без «=» — «тиск 120 / 80», дробь)
-        if ('=' in s) s = SPACED_DIV_RE.replace(s, " поділити на ")
+        // «(10 − 4) / 2 = 3»: «/» в пробелах при «=» в той же части без запятой — деление (без «=» — «тиск 120 / 80», и
+        // «Тиск 120 / 80, пульс = 70» тоже)
+        val d = s
+        s = SPACED_DIV_RE.replace(d) { m ->
+            val from = d.lastIndexOfAny(charArrayOf(',', ';'), m.range.first) + 1
+            val to = d.indexOfAny(charArrayOf(',', ';'), m.range.last + 1).let { if (it < 0) d.length else it }
+            if ('=' in d.substring(from, to)) " поділити на " else m.value
+        }
         s = EQUALS_RE.replace(s, " дорівнює ")
         // степень — с основанием сразу словами: «у»/«в» по последней букве основы
         return POWER_RE.replace(s) { m ->
@@ -788,11 +795,8 @@ object UkNumbers {
     private val NUM_EXPR_RE = Regex("""(?<![\d.,:/])\d+(?:[.,:/]\d+)*(?:\s*[-+−×÷*=^<>≤≥≠]\s*[-−]?\d+(?:[.,:/]\d+)*)+""")
     private val NUM_OP_RE = Regex("""(?<=\d)\s*[-+−×÷*=^<>≤≥≠]\s*(?=[-−]?\d)""")
     private val SPACED_DIV_RE = Regex("""(?<=[\d)])\s+/\s+(?=[\d(])""")
-    /** Значение края диапазона: «10:30» — в минутах, «1,5» и «12.05» — дробью; «1/2» — null (не диапазон). */
-    private fun rangeValue(t: String): Double? = t.split(':').let { p ->
-        if (p.size == 2) p[0].toDoubleOrNull()?.let { h -> p[1].toDoubleOrNull()?.let { h * 60 + it } }
-        else if (p.size == 1) t.replace(',', '.').toDoubleOrNull() else null
-    }
+    /** Число края диапазона: «1941», «1,5»; «1/2» — null (не диапазон). Время и даты [arith] берёт раньше. */
+    private fun rangeValue(t: String): Double? = t.replace(',', '.').toDoubleOrNull()
     /** Размер «3x4», «5х10 м» — «на»; [UkNormalizer] зовёт до латиницы, иначе латинская «x» стала бы «екс». */
     internal fun dimensions(text: String) = DIMENSION_RE.replace(text, " на ")
     /** Формула с буквой-переменной («x² + y² = z²», «a ≥ b», «2x + 3 = 7»): буквы — шкільними назвами (ікс, ігрек, зет), «²» и «³»
@@ -1269,7 +1273,7 @@ object UkNumbers {
         "Елізабет", "Elizabeth", "Анастасія", "Олена", "Ірина", "Христина", "Іоанна", "Йоанна", "Джованна",
         "Частина", "Книга", "Глава", "Фаза", "Серія", "Група", "Категорія", "Зона", "Ліга")
     /** Мужские имена на -а/-я (називний): «Микола II» → «другий», не родовий «Петра». Не проверено носителем. */
-    private val LOC_PREP_BEFORE_RE = Regex("""(?<!\p{L})(?:при|по|на|у|в|о|об)\s+$""", RegexOption.IGNORE_CASE)
+    private val LOC_PREP_BEFORE_RE = Regex("""(?<!\p{L})(?:при|по|на|о|об)\s+$""", RegexOption.IGNORE_CASE)
     private val MASC_A_NAMES = setOf("Микола", "Сава", "Ілля", "Лука", "Микита", "Никита", "Кузьма", "Хома", "Фома", "Ярема", "Данила", "Гаврила")
     /** Имена на «-ем» в називному — не орудний («Артем I»). */
     private val NOM_EM = setOf("Артем")
@@ -1298,7 +1302,8 @@ object UkNumbers {
                 else -> Case.DAT to Gender.M
             }
             // мужское на «-я» («Ілля»): «Іллі» — и родовий, и давальний/місцевий; місцевий — только после его предлога
-            // («при Іллі I» → «першому»), иначе родовий («За Іллі I», «Указ Іллі I» → «першого»)
+            // («при», «по», «на», «о/об»: «при Іллі I» → «першому»), иначе родовий («За Іллі I», «Указ Іллі I», «У Іллі I було
+            // три сини» — «у кого» → «першого»)
             last == 'і' && name.dropLast(1) + "я" in MASC_A_NAMES ->
                 (if (LOC_PREP_BEFORE_RE.containsMatchIn(before)) Case.PRE else Case.GEN) to Gender.M
             // давальний и місцевий у этих форм совпадают: «другій», «другому»
