@@ -1,6 +1,7 @@
 package ru.kost.ruvoice.text
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import ru.kost.ruvoice.TestData
 
@@ -162,8 +163,8 @@ class SplitterTest {
             Splitter.sentences(ru, Rules(maxLen = 92)))
         // список дробей: режем по запятой с пробелом, не внутри числа
         assertEquals(listOf("Составили 1,2", "3,4 и", "5,6 процента."), Splitter.sentences("Составили 1,2, 3,4 и 5,6 процента.", Rules(maxLen = 18)))
-        // запятой вне числа левее нет — пробел
-        assertEquals(listOf("Вырос на", "27,2."), Splitter.sentences("Вырос на 27,2.", Rules(maxLen = 11)))
+        // запятой вне числа левее нет — пробел, и не между предлогом и числом
+        assertEquals(listOf("Вырос", "на 27,2."), Splitter.sentences("Вырос на 27,2.", Rules(maxLen = 11)))
         // белорусский и украинский путь режет тем же Splitter
         assertEquals(listOf("Прададзена 15 кніг", "у суполцы (27,2 тысячы) і 41,1 тысячы."),
             Splitter.sentences("Прададзена 15 кніг, у суполцы (27,2 тысячы) і 41,1 тысячы.", Rules(maxLen = 50), layer = BeLayer))
@@ -175,33 +176,67 @@ class SplitterTest {
         // мерка чтеца (число раздувается) тоже не ставит разрез внутрь дроби
         val parts = Splitter.sentences("Подписчиков стало 41,1 тысячи, а через год 27,2 тысячи.", Rules(maxLen = 60), { s: String -> s.length * 3 })
         val joined = parts.joinToString(" ")
-        assert("41,1" in joined && "27,2" in joined) { parts }
+        assertTrue(parts.toString(), "41,1" in joined && "27,2" in joined)
     }
 
     @Test fun spaceInsideOrAfterNumberIsNotACut() {
         // пробел между разрядами — не разрез («1 026 | 000» читалось «одна тысяча двадцать шесть | ноль»)
-        assertEquals(listOf("Собрали 15 000 рублей и", "1 026 000 долларов."),
+        assertEquals(listOf("Собрали 15 000 рублей", "и 1 026 000 долларов."),
             Splitter.sentences("Собрали 15 000 рублей и 1 026 000 долларов.", Rules(maxLen = 30)))
         assertEquals(listOf("Всего", "1 026 000."), Splitter.sentences("Всего 1 026 000.", Rules(maxLen = 9)))
         // NBSP и узкий пробел между разрядами не режутся и так; пробел за числом — тоже нет
         assertEquals(listOf("Собрали", "15 000 рублей."), Splitter.sentences("Собрали 15 000 рублей.", Rules(maxLen = 16)))
         assertEquals(listOf("Собрали", "15 000 рублей."), Splitter.sentences("Собрали 15 000 рублей.", Rules(maxLen = 16)))
-        // пробел сразу за числом отрывал его от слова — берём пробел левее
-        assertEquals(listOf("Рост составил", "27,2 тысячи", "человек."), Splitter.sentences("Рост составил 27,2 тысячи человек.", Rules(maxLen = 19)))
-        assertEquals(listOf("Он отдал", "15 рублей за", "хлеб."), Splitter.sentences("Он отдал 15 рублей за хлеб.", Rules(maxLen = 12)))
+        // пробел сразу за числом отрывал его от слова — берём пробел левее (и не перед числом)
+        assertEquals(listOf("Рост", "составил", "27,2 тысячи", "человек."), Splitter.sentences("Рост составил 27,2 тысячи человек.", Rules(maxLen = 19)))
+        assertEquals(listOf("Он", "отдал", "15 рублей за", "хлеб."), Splitter.sentences("Он отдал 15 рублей за хлеб.", Rules(maxLen = 12)))
         // левее пробела нет — режем за числом, а не по пределу посреди слова
         assertEquals(listOf("Цена", "15", "рублей."), Splitter.sentences("Цена 15 рублей.", Rules(maxLen = 9)))
-        assertEquals(listOf("Сабралі 15 000 рублёў і", "1 026 000 долараў."),
+        assertEquals(listOf("Сабралі 15 000 рублёў", "і 1 026 000 долараў."),
             Splitter.sentences("Сабралі 15 000 рублёў і 1 026 000 долараў.", Rules(maxLen = 30), layer = BeLayer))
-        assertEquals(listOf("Зібрали 15 000 гривень і", "1 026 000 доларів."),
+        assertEquals(listOf("Зібрали 15 000 гривень", "і 1 026 000 доларів."),
             Splitter.sentences("Зібрали 15 000 гривень і 1 026 000 доларів.", Rules(maxLen = 30), layer = UkLayer))
         // разряд — только группа из трёх цифр: два отдельных числа через пробел режутся, как раньше
         assertEquals(listOf("12345678", "87654321"), Splitter.sentences("12345678 87654321", Rules(maxLen = 12)))
         // мерка чтеца: число длиннее предела — разрез по пределу не встаёт на пробел между разрядами
         for (layer in listOf(Layers.RU, BeLayer, UkLayer)) {
             val parts = Splitter.sentences("На 1 026 000 000 000 было", Rules(maxLen = 20), { s: String -> s.length * 4 }, layer)
-            assert(parts.zipWithNext().none { (a, b) -> a.last().isDigit() && b.first().isDigit() }) { parts }
+            assertTrue(parts.toString(), parts.zipWithNext().none { (a, b) -> a.last().isDigit() && b.first().isDigit() })
         }
+    }
+
+    @Test fun prepositionAndAbbrevStayWithNumber() {
+        // предел ровно до конца числа: раньше разрез вставал между предлогом (сокращением) и числом
+        fun cutAt(s: String, num: String, layer: TextLayer = Layers.RU) =
+            Splitter.sentences(s, Rules(maxLen = s.indexOf(num) + num.length - 1), layer = layer)
+        assertEquals(listOf("Автобусы ходят каждый день", "с 10:30 до 11:45 без перерыва."),
+            cutAt("Автобусы ходят каждый день с 10:30 до 11:45 без перерыва.", "11:45"))
+        assertEquals(listOf("Лизинговые платежи учитываются по ст. 346.15 и", "ст. 346.17 НК."),
+            cutAt("Лизинговые платежи учитываются по ст. 346.15 и ст. 346.17 НК.", "346.17"))
+        assertEquals(listOf("Компания потеряла в прошлом году", "больше 2 000 000 000 долларов."),
+            cutAt("Компания потеряла в прошлом году больше 2 000 000 000 долларов.", "2 000 000 000"))
+        assertEquals(listOf("Билеты на премьеру в театр продавали", "по 1000 рублей за штуку."),
+            cutAt("Билеты на премьеру в театр продавали по 1000 рублей за штуку.", "1000"))
+        assertEquals(listOf("За отмену закона проголосовали всего", "против 87 депутатов."),
+            cutAt("За отмену закона проголосовали всего против 87 депутатов.", "87"))
+        assertEquals(listOf("Офис компании переехал в соседний дом на улице Ленина", "д. 15 в прошлом месяце."),
+            cutAt("Офис компании переехал в соседний дом на улице Ленина д. 15 в прошлом месяце.", "15"))
+        assertEquals(listOf("Аўтобусы ходзяць кожны дзень", "з 10:30 да 11:45 без перапынку."),
+            cutAt("Аўтобусы ходзяць кожны дзень з 10:30 да 11:45 без перапынку.", "11:45", BeLayer))
+        assertEquals(listOf("Плацяжы ўлічваюцца паводле арт. 346 і", "арт. 347 падатковага кодэкса."),
+            cutAt("Плацяжы ўлічваюцца паводле арт. 346 і арт. 347 падатковага кодэкса.", "347", BeLayer))
+        assertEquals(listOf("Автобуси ходять щодня", "з 10:30 до 11:45 без перерви на обід."),
+            cutAt("Автобуси ходять щодня з 10:30 до 11:45 без перерви на обід.", "11:45", UkLayer))
+        assertEquals(listOf("Платежі враховуються за ст. 346 і", "ст. 347 податкового кодексу."),
+            cutAt("Платежі враховуються за ст. 346 і ст. 347 податкового кодексу.", "347", UkLayer))
+        assertEquals(listOf("Компанія втратила минулого року", "понад 2 000 000 000 доларів."),
+            cutAt("Компанія втратила минулого року понад 2 000 000 000 доларів.", "2 000 000 000", UkLayer))
+        // голова из одного слова — только если другого разреза нет
+        assertEquals(listOf("а 1 000 1 000 1 000 1 000", "1 000 1 000 1 000 1 000 рублей"),
+            Splitter.sentences("а 1 000 1 000 1 000 1 000 1 000 1 000 1 000 1 000 рублей", Rules(maxLen = 30)))
+        // но ради длинной головы число от слова не отрываем («21 | книгу» — «двадцать один | книгу»)
+        assertEquals(listOf("Данные и и 8 800 555 35 35", "21 книгу выдали читателям"),
+            Splitter.sentences("Данные и и 8 800 555 35 35 21 книгу выдали читателям", Rules(maxLen = 30)))
     }
 
     @Test fun sequenceMatchesGolden() {

@@ -102,7 +102,11 @@ object Splitter {
      * ([Normalizer.urlRe]) не режем: запятая в «?ids=1,2» или адрес длиннее maxLen иначе рвали ссылку, и хвост
      * читался по частям; нет разреза левее — режем сразу после адреса. Запятая между цифрами — дробь («и 49,2 тысячи»
      * у чтеца было «сорок девять | две тысячи»), пробел между разрядами («1 026 | 000») — тоже число, по ним не режем.
-     * Пробел сразу за числом отрывает его от слова («27,2 | тысячи», «15 | рублей») — берём пробел левее, если он есть. */
+     * Пробел вплотную к числу тоже плох: перед числом отрывает от него предлог или сокращение («до | 11:45» читалось
+     * «до | одиннадцать сорок пять», «больше | 2 млрд» — именительным), за числом — слово («27,2 | тысячи»); пробел после
+     * точки сокращения оставляет его неразвёрнутым («ст. | 346»). Поэтому сначала пробел без всего этого, потом не за
+     * числом, потом не между числом и словом, потом любой вне числа; сперва с головой не короче [MIN_HEAD]
+     * («а | 1 000 1 000 …»). */
     fun cut(s: String, maxLen: Int): Int {
         val urls = if (Normalizer.hasUrl(s)) Normalizer.urlRe.findAll(s).map { it.range }.toList() else emptyList()
         fun last(c: Char, ok: (Int) -> Boolean = { true }): Int? {
@@ -110,8 +114,14 @@ object Splitter {
             while (i > 0 && (urls.any { i in it } || inNumber(s, i) || !ok(i))) i = s.lastIndexOf(c, i - 1)
             return i.takeIf { it > 0 }
         }
-        return last(',') ?: last(' ') { !s[it - 1].isDigit() } ?: last(' ') ?: urls.firstOrNull { maxLen in it }?.last ?: maxLen
+        fun digit(i: Int) = i in s.indices && s[i].isDigit()
+        val spaces = listOf<(Int) -> Boolean>({ !digit(it - 1) && !digit(it + 1) && s[it - 1] != '.' }, { !digit(it - 1) },
+            { !digit(it - 1) || !(it + 1 < s.length && s[it + 1].isLetter()) }, { true })
+        // голову не короче MIN_HEAD ищем без последнего прохода: «21 | книгу» хуже короткой головы
+        return last(',') ?: spaces.dropLast(1).firstNotNullOfOrNull { p -> last(' ') { it >= MIN_HEAD && p(it) } }
+            ?: spaces.firstNotNullOfOrNull { p -> last(' ', p) } ?: urls.firstOrNull { maxLen in it }?.last ?: maxLen
     }
+    private const val MIN_HEAD = 20
 
     /** Знак [i] внутри числа: запятая дроби («49,2») или пробел перед группой разряда из трёх цифр («1 026 000»). */
     private fun inNumber(s: String, i: Int): Boolean {
