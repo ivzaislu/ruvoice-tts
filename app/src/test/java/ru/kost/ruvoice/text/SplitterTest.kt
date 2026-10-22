@@ -145,16 +145,32 @@ class SplitterTest {
     }
 
     @Test fun abbreviationBeforeLowercaseOrDigitKeepsSentence() {
-        // «прил.», «пос.», «ок.» — русские сокращения: перед строчной или цифрой не конец предложения, перед заглавной — как было
+        // «прил.», «чел.» — русские сокращения: перед строчной или цифрой не конец предложения, перед заглавной — как было
         assertEquals(listOf("Согласно прил. 2 к приказу всё готово."), Splitter.sentences("Согласно прил. 2 к приказу всё готово."))
-        assertEquals(listOf("Мы жили в пос. городского типа."), Splitter.sentences("Мы жили в пос. городского типа."))
-        assertEquals(listOf("До города ок. 300 км."), Splitter.sentences("До города ок. 300 км."))
-        assertEquals(listOf("Хорошо, ок.", "Идём дальше."), Splitter.sentences("Хорошо, ок. Идём дальше."))
-        // «чел.» — так же; «пос.» и перед заглавной — название посёлка, как «г. Москва»
+        assertEquals(listOf("Согласно прил. 2 к договору."), Splitter.sentences("Согласно прил. 2 к договору."))
+        assertEquals(2, Splitter.sentences("См. прил. Там всё есть.").size)
         assertEquals(listOf("Пришли 20 тыс. чел. и остались до вечера."), Splitter.sentences("Пришли 20 тыс. чел. и остались до вечера."))
         assertEquals(listOf("Пришли 300 чел. 2 группы уехали."), Splitter.sentences("Пришли 300 чел. 2 группы уехали."))
+        assertEquals(listOf("Пришло 300 чел. потом ещё 50."), Splitter.sentences("Пришло 300 чел. потом ещё 50."))
+        assertEquals(listOf("В списке 12 чел. а мест всего 10."), Splitter.sentences("В списке 12 чел. а мест всего 10."))
         assertEquals(listOf("Пришли 300 чел.", "Потом ушли."), Splitter.sentences("Пришли 300 чел. Потом ушли."))
+        // «ок.» — только перед строчной: перед цифрой это чаще «ок» в реплике («Ок. 5 минут» читалось «около пяти минут»)
+        assertEquals(listOf("Ну ок. давай завтра."), Splitter.sentences("Ну ок. давай завтра."))
+        assertEquals(1, Splitter.sentences("— Ок. ладно, пойдём, — сказал он.").size)
+        assertEquals(listOf("Хорошо, ок. а что потом?"), Splitter.sentences("Хорошо, ок. а что потом?"))
+        assertEquals(listOf("Я сказал ок. он кивнул."), Splitter.sentences("Я сказал ок. он кивнул."))
+        assertEquals(2, Splitter.sentences("— Ок. 5 минут и выходим.").size)
+        assertEquals(listOf("Ну ок.", "2 часа ждать придётся."), Splitter.sentences("Ну ок. 2 часа ждать придётся."))
+        assertEquals(listOf("Хорошо, ок.", "10 раз повторю."), Splitter.sentences("Хорошо, ок. 10 раз повторю."))
+        assertEquals(listOf("Расстояние ок.", "300 км."), Splitter.sentences("Расстояние ок. 300 км."))
+        assertEquals(listOf("Хорошо, ок.", "Идём дальше."), Splitter.sentences("Хорошо, ок. Идём дальше."))
+        // «пос.» перед заглавной — название посёлка, как «г. Москва»; перед словом, которым начинают фразу, — конец фразы
+        assertEquals(listOf("Мы жили в пос. городского типа."), Splitter.sentences("Мы жили в пос. городского типа."))
         assertEquals(listOf("Мы жили в пос. Лесной до 2020 года."), Splitter.sentences("Мы жили в пос. Лесной до 2020 года."))
+        assertEquals(listOf("Мы приехали в пос. Лесной в пятницу."), Splitter.sentences("Мы приехали в пос. Лесной в пятницу."))
+        assertEquals(listOf("Мы приехали в пос.", "Он был пуст."), Splitter.sentences("Мы приехали в пос. Он был пуст."))
+        assertEquals(listOf("Дорога вела в пос.", "А там уже ждали."), Splitter.sentences("Дорога вела в пос. А там уже ждали."))
+        assertEquals(listOf("Машина довезла до пос.", "Дальше пешком."), Splitter.sentences("Машина довезла до пос. Дальше пешком."))
         // список русский: белорусский путь его не видит
         assertEquals(listOf("Жыў у пос.", "Лясны быў побач."), Splitter.sentences("Жыў у пос. Лясны быў побач.", layer = BeLayer))
         // белорусское «гадз.» и украинское «год.» — своими списками

@@ -86,12 +86,21 @@ object RuLayer : TextLayer {
         "от", "до", "обо", "о")
     private val hyphenParticles = setOf("то", "либо", "нибудь", "таки", "ка", "де")
     override fun keepHyphen(before: String, after: String) = before in hyphenPrefixes || after in hyphenParticles
-    // «согласно прил. 2», «в пос. городского типа», «ок. 300 км», «20 тыс. чел. и» — только перед строчной или цифрой:
-    // «Хорошо, ок. Идём» — конец реплики («ок» без условия Splitter не берёт, review t17 п.6), «Пришли 300 чел. Потом…» — тоже
-    private val abbrStopsBeforeLowerOrDigit = setOf("прил", "пос", "ок", "чел")
-    // «пос.» перед заглавной — название посёлка («в пос. Лесной»), как однобуквенное «г. Москва», которое не режет sentenceEnd
+    // «согласно прил. 2», «20 тыс. чел. и» — не конец фразы перед строчной или цифрой («Пришли 300 чел. Потом…» — конец)
+    private val abbrStopsBeforeLowerOrDigit = setOf("прил", "чел")
+    // «пос.» перед заглавной — название посёлка («в пос. Лесной»), как однобуквенное «г. Москва», которое не режет sentenceEnd;
+    // но перед словом, которым начинают фразу, — конец («Мы приехали в пос. Он был пуст.»)
+    private val sentenceStarts = setOf("Он", "Она", "Оно", "Они", "Я", "Мы", "Вы", "Ты", "А", "Но", "И", "Да", "Нет", "Там", "Тут",
+        "Здесь", "Дальше", "Потом", "Затем", "Теперь", "Это", "Так", "Вот")
     override fun keepsSentence(word: String, next: String) = word.replaceFirstChar(Char::lowercaseChar).let { w ->
-        w == "пос" || w in abbrStopsBeforeLowerOrDigit && next.firstOrNull()?.let { it.isLowerCase() || it.isDigit() } == true
+        val c = next.firstOrNull()
+        when {
+            w == "пос" -> next.takeWhile(Char::isLetter) !in sentenceStarts
+            // «ок» — только перед строчной: «Ну ок. давай»; перед цифрой это чаще реплика («Ок. 5 минут» — не «около пяти»),
+            // перед заглавной — конец реплики («ок» без условия Splitter не берёт, review t17 п.6)
+            w == "ок" -> c?.isLowerCase() == true
+            else -> w in abbrStopsBeforeLowerOrDigit && c?.let { it.isLowerCase() || it.isDigit() } == true
+        }
     }
 }
 
