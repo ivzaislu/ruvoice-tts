@@ -739,12 +739,13 @@ object UkNumbers {
      * «у квадраті», «10⁻³» — «у мінус третьому степені» (степінь — ч. р., Правопис). «Тиск 120/80» — «сто двадцять на
      * вісімдесят», «у пропорції 1:4» — «один до чотирьох». «у»/«в» — по милозвучності: после гласной «в» («два в кубі»). */
     fun arith(text: String): String {
-        // два края через «−» в пробелах: время и даты («22:00 − 06:00», «28.09 − 03.10») — всегда тире диапазона; числа — тире,
-        // только если второе больше («1941 − 1945»), иначе вычитание («Обчисліть 7 − 2», «5 − 3 = 2»)
+        // два края через «−» в пробелах: время и даты дд.мм(.рррр) («22:00 − 06:00», «28.09 − 03.10») — всегда тире диапазона;
+        // числа (и с точкой не по форме даты: «1.5», «12.5») — тире, только если второе больше («1941 − 1945», «1.5 − 2.5»),
+        // иначе вычитание («Обчисліть 7 − 2», «3.5 − 1.2», «5 − 3 = 2»)
         var s = NUM_EXPR_RE.replace(text) { m ->
             val ops = NUM_OP_RE.findAll(m.value).toList()
             val terms = NUM_OP_RE.split(m.value)
-            val range = ops.size == 1 && ops[0].value == " − " && (terms.any { ':' in it || '.' in it } ||
+            val range = ops.size == 1 && ops[0].value == " − " && (terms.any { ':' in it || DATE_EDGE_RE.matches(it) } ||
                 terms.map(::rangeValue).let { (a, b) -> a != null && b != null && b > a })
             if (range) m.value.replace(" − ", " — ") else m.value
         }
@@ -769,11 +770,11 @@ object UkNumbers {
         s = POWER_OP_RE.replace(s) { m -> m.groupValues[1].toLongOrNull()?.let { cardinal(it) }?.let { b -> "$b ${uv(b)} степені " } ?: m.value }
         s = ARITH_RE.replace(s) { m -> " ${ARITH_OPS.getValue(m.groupValues[1])} " }
         // «(10 − 4) / 2 = 3»: «/» в пробелах при «=» в той же части без запятой — деление (без «=» — «тиск 120 / 80», и
-        // «Тиск 120 / 80, пульс = 70» тоже)
+        // «Тиск 120 / 80, пульс = 70» тоже); десятичная запятая («1 / 2,5 = 0,4») часть не делит
         val d = s
         s = SPACED_DIV_RE.replace(d) { m ->
-            val from = d.lastIndexOfAny(charArrayOf(',', ';'), m.range.first) + 1
-            val to = d.indexOfAny(charArrayOf(',', ';'), m.range.last + 1).let { if (it < 0) d.length else it }
+            val from = SEGMENT_BREAK_RE.findAll(d.substring(0, m.range.first)).lastOrNull()?.range?.last?.plus(1) ?: 0
+            val to = SEGMENT_BREAK_RE.find(d, m.range.last + 1)?.range?.first ?: d.length
             if ('=' in d.substring(from, to)) " поділити на " else m.value
         }
         s = EQUALS_RE.replace(s, " дорівнює ")
@@ -795,6 +796,9 @@ object UkNumbers {
     private val NUM_EXPR_RE = Regex("""(?<![\d.,:/])\d+(?:[.,:/]\d+)*(?:\s*[-+−×÷*=^<>≤≥≠]\s*[-−]?\d+(?:[.,:/]\d+)*)+""")
     private val NUM_OP_RE = Regex("""(?<=\d)\s*[-+−×÷*=^<>≤≥≠]\s*(?=[-−]?\d)""")
     private val SPACED_DIV_RE = Regex("""(?<=[\d)])\s+/\s+(?=[\d(])""")
+    private val SEGMENT_BREAK_RE = Regex(""";|,(?!\d)""")
+    /** Край диапазона-даты — только дд.мм или дд.мм.рррр: «28.09», «03.10.2026»; «1.5», «12.5», «1.05» — числа. */
+    private val DATE_EDGE_RE = Regex("""\d{2}\.\d{2}(?:\.\d{4})?""")
     /** Число края диапазона: «1941», «1,5»; «1/2» — null (не диапазон). Время и даты [arith] берёт раньше. */
     private fun rangeValue(t: String): Double? = t.replace(',', '.').toDoubleOrNull()
     /** Размер «3x4», «5х10 м» — «на»; [UkNormalizer] зовёт до латиницы, иначе латинская «x» стала бы «екс». */
