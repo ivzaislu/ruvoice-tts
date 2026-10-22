@@ -645,8 +645,8 @@ object Normalizer {
             if (day !in 1..31 || month !in 1..12) m.value else "$day-го ${monthGenitive[month]} $y-го года"
         }
         // «по 03.03.2024» — винительный, «к 01.05.2024» — дательный, «перед» — творительный; иначе родительный
-        fun fullDaySfx(before: String) = when (dayPrepRe.find(before)?.groupValues?.get(1)?.lowercase()) {
-            "по", "на" -> "е"; "к", "ко" -> "му"; "перед" -> "ым"; else -> "го"
+        fun fullDaySfx(before: String) = when (datePrepRe.find(before)?.groupValues?.get(1)?.lowercase()) {
+            "по", "на", "за" -> "е"; "к", "ко" -> "му"; "перед" -> "ым"; else -> "го"
         }
         val withYear = dateWithYearRe.replace(iso) { m ->
             val (d, mo, y, gTail) = m.destructured
@@ -661,8 +661,10 @@ object Normalizer {
         val ranged = dateRangeRe.replace(withYear) { m ->
             val (d1, m1, y1, dash, d2, m2, y2) = m.destructured
             val valid = listOf(d1 to m1, d2 to m2).all { (d, mo) -> d.toInt() in 1..31 && mo.toInt() in 1..12 }
+            // без года: хоть один край строго «дд.мм» или у обоих месяц двумя цифрами («Отпуск 1.05 – 2.05.»: в середине
+            // фразы оба края и так даты, ноль не даёт концу фразы прочесть второй край дробью)
             val date = if (y1.isNotEmpty()) y2.isNotEmpty() && m1.length == 2 && m2.length == 2
-                else y2.isEmpty() && (d1.length == 2 && m1.length == 2 || d2.length == 2 && m2.length == 2)
+                else y2.isEmpty() && (d1.length == 2 && m1.length == 2 || d2.length == 2 && m2.length == 2 || m1.length == 2 && m2.length == 2)
             if (!valid || !date) m.value
             else "${d1.padStart(2, '0')}.${m1.padStart(2, '0')}$y1$dash${d2.padStart(2, '0')}.${m2.padStart(2, '0')}$y2"
         }
@@ -671,20 +673,29 @@ object Normalizer {
             val day = d.toInt(); val month = mo.toInt()
             if (day !in 1..31 || month !in 1..12) return@replace m.value
             if (dateTailUnitRe.containsMatchIn(ranged.substring(m.range.last + 1))) return@replace m.value
-            "$day-го ${monthGenitive[month]} ${y.toInt()}-го года"
+            "$day-${fullDaySfx(ranged.substring(0, m.range.first))} ${monthGenitive[month]} ${y.toInt()}-го года"
         }
         return dateNoYearRe.replace(shortYear) { m ->
             val (d, mo) = m.destructured
             if (d.length < 2 && mo.length < 2) return@replace m.value
-            // перед точкой — только месяц двумя цифрами: «составил 16.1.», «версии 10.2.» — дробь, как было
-            if (mo.length < 2 && shortYear.getOrNull(m.range.last + 1) == '.') return@replace m.value
+            val before = shortYear.substring(0, m.range.first)
+            if (shortYear.getOrNull(m.range.last + 1) == '.') {
+                // перед точкой — только месяц двумя цифрами: «составил 16.1.», «версии 10.2.» — дробь, как было
+                if (mo.length < 2) return@replace m.value
+                // и день двумя цифрами или предлог даты перед ним: «Курс 1.05.», «Средний балл 4.12.» — дробь, как было;
+                // «Срок до 1.09.», «Указ от 26.07.» — дата; край диапазона дописан нулём в dateRangeRe
+                if (d.length < 2 && !datePrepRe.containsMatchIn(before)) return@replace m.value
+            }
             val day = d.toInt(); val month = mo.toInt()
             if (day !in 1..31 || month !in 1..12) return@replace m.value
             // «N.N» перед единицей измерения — дробь («12.5 км/ч»), не дата без года (review
             // final-fix п.8): unitAltPattern определён ниже по файлу, но здесь это функция, не
             // property-инициализатор — к моменту вызова объект полностью сконструирован.
             if (dateTailUnitRe.containsMatchIn(shortYear.substring(m.range.last + 1))) return@replace m.value
-            "$day-го ${monthGenitive[month]}"
+            // «в 7.12», «в 15.10.» — время (его читает timeDots), не «в седьмого декабря»: даты без года после «в» не бывает
+            if (day <= 23 && mo.length == 2 && timeBehindRe.containsMatchIn(before)) return@replace m.value
+            // падеж дня по предлогу, как у даты с годом: «по двадцать шестое мая», «к пятнадцатому августа»
+            "$day-${fullDaySfx(before)} ${monthGenitive[month]}"
         }
     }
 
@@ -718,10 +729,16 @@ object Normalizer {
     private val timeDotPrepRe = Regex("""(?<=(?<![\p{L}])(?:в|во|около|к|после|до|с)\s)([01]?\d|2[0-3])\.([0-5]\d)(?!\d|[.,]\d)""", RegexOption.IGNORE_CASE)
     // «в 10.30 в офисе», «к 9.00 с документами» — строчная «в»/«с» перед словом предлог, не вольты и не секунды
     private val prepNotUnitAheadRe = Regex("""^ (?:в|во|с|со|к|о|у|и|а)\s+\p{L}""")
+    // Существительное следом держит число, только если оно в родительном, творительном или предложном — то, что меряют:
+    // «в 1.25 раза», «в 3.50 рубля», «с 2.50 рублями», «в 2.30 метрах». Подлежащее и дательный («в 14.06 спасателям
+    // поступило», «после 21.00 тишина») — время; раньше любое существительное оставляло число, а «в 14.06» после правки
+    // дат стало бы «четырнадцать.шести» (дробь с дательным).
+    private fun measuredNounAhead(rest: String): Boolean = tailNoun(rest)?.takeIf { it != 0 }?.let { t ->
+        listOf(false, true).any { pl -> Morph.nounCases(t, pl).let { Case.GEN in it || Case.INS in it || Case.PRE in it } } } == true
     private fun timeDots(text: String) = timeDotPrepRe.replace(timeDotRe.replace(text, "$1:$2")) { m ->
         val rest = text.substring(m.range.last + 1)
         if (moneyOrUnitAheadRe.containsMatchIn(rest) && !prepNotUnitAheadRe.containsMatchIn(rest) || countedNounAhead(rest) ||
-            tailNoun(rest).let { it != null && it != 0 }) m.value
+            measuredNounAhead(rest)) m.value
         else "${m.groupValues[1]}:${m.groupValues[2]}"
     }
     private fun times(text: String) = timeRe.replace(timeDots(text)) { m ->
@@ -960,6 +977,10 @@ object Normalizer {
     // предлогу перед числом: «к» — дательный, «с/до/после/от» — родительный, иначе именительный.
     // Запускается после cases(): там числа перед месяцем нарочно не трогаются (numTailExclude).
     private val dayPrepRe = Regex("""(?<![а-яё])(к|ко|с|со|до|после|от|начиная\s+с|перед|по|на)\s+$""", RegexOption.IGNORE_CASE)
+    // то же для цифровой даты (dates()), плюс «за»: «за 26.05» — «за двадцать шестое мая»
+    private val datePrepRe = Regex("""(?<![а-яё])(к|ко|с|со|до|после|от|начиная\s+с|перед|по|на|за)\s+$""", RegexOption.IGNORE_CASE)
+    // «в 7.12» перед временем: dates() его не берёт, читает timeDots()
+    private val timeBehindRe = Regex("""(?<![\p{L}])(?:в|во)\s$""", RegexOption.IGNORE_CASE)
     // Дата с годом без предлога («15 марта 2021 года») — родительный: так читается обстоятельство времени.
     // Без года — родительный тоже, когда это обстоятельство в предложении: глагол перед датой («согласовали 1 июля»)
     // или фраза продолжается после неё («15 июня царь выехал»). Одна дата («5 мая», «Встреча 3 дек.»), подлежащее
@@ -1608,9 +1629,11 @@ object Normalizer {
     // Номер пункта, статьи, параграфа, рисунка, стандарта через точку — «п. 4.2» → «четыре точка два», «ст. 20.1»,
     // «§ 4.2», «рис. 1.5А», «ГОСТ 2.105-95»: не дробь и не дата (было «двадцатого января», «четыре целых две
     // десятых»). Строка, которая начинается с «1.2.» и заглавной, — тоже номер пункта. До dates().
-    private val sectionLabel = """(?:п|пп|подп|ст|ч|рис|табл|гл|разд|прил|§|№|пункт[аеуы]?|пунктом|подпункт[аеуы]?|стать[яиюей]|""" +
-        """статьёй|част[ьиюей]|раздел[аеу]?|разделом|рисун(?:ок|ка|ке|ку|ком)|таблиц[аыеу]|таблицей|глав[аыеу]|главой|""" +
-        """параграф[аеу]?|параграфом|ГОСТ(?:а|у|е|ом)?(?:\s{1,2}Р)?|СНиП|СП|ОСТ|ТУ)"""
+    // слова-метки во всех падежах обоих чисел: «частью 2.1», «в пунктах 3.1 и 3.2», «разделы 1.2–1.4»
+    private val sectionLabel = """(?:п|пп|подп|ст|ч|рис|табл|гл|разд|прил|§|№|пункт(?:а|е|у|ы|ом|ов|ам|ами|ах)?|""" +
+        """подпункт(?:а|е|у|ы|ом|ов|ам|ами|ах)?|стать(?:я|и|ю|е|ёй|ей|ям|ями|ях)|статей|част(?:ь|и|ью|ей|ям|ями|ях)|""" +
+        """раздел(?:а|е|у|ом|ы|ов|ам|ами|ах)?|рисун(?:ок|ка|ке|ку|ком|ки|ков|кам|ками|ках)|таблиц(?:а|ы|е|у|ей|ой|ам|ами|ах)|""" +
+        """глав(?:а|ы|е|у|ой|ам|ами|ах)|параграф(?:а|е|у|ом|ы|ов|ам|ами|ах)?|ГОСТ(?:а|у|е|ом)?(?:\s{1,2}Р)?|СНиП|СП|ОСТ|ТУ)"""
     private val sectionLabelRe = Regex(
         """(?<=(?<![\p{L}\d])$sectionLabel\.?\s{0,2})(\d+)((?:\.\d+)+)(?!\.?\d|[.,]\d)([А-ЯЁA-Z](?![\p{L}\d]))?""", RegexOption.IGNORE_CASE)
     private val sectionLineRe = Regex("""(?<=^|\n|[.!?…]\s)(\d{1,2})\.(\d{1,2})\.(?=\s+[А-ЯЁ])""")
@@ -1632,7 +1655,7 @@ object Normalizer {
     }
     // Второй номер за меченым через тире или «и/или» — тот же номер раздела: «табл. 5.22 – 5.25», «главы 1.2–1.4»
     // (было «пять целых двадцать пять сотых»)
-    private val sectionNextRe = Regex("""(\d+)(\s?[-–—]\s?|\s(?:и|или)\s)(\d+(?:\.\d+)+)(?!\.?\d|[.,]\d)""")
+    private val sectionNextRe = Regex("""(\uE001\d+)(\s?[-–—]\s?|\s(?:и|или)\s)(\d+(?:\.\d+)+)(?!\.?\d|[.,]\d)""")
     private fun sectionLabels(text: String): String {
         var s = sectionLabelRe.replace(text) { m ->
             (m.groupValues[1] + m.groupValues[2]).replace('.', SEC_DOT) +
@@ -2346,7 +2369,7 @@ object Normalizer {
         RegexOption.IGNORE_CASE
     )
     private val chapterRe = Regex(
-        """(?<![\p{L}])(глав(?:а|ы|е|у|ой|ах|ам|ами)?|част(?:ь|и|ью|ей|ях|ям|ями)|книг(?:а|и|е|у|ой|ах|ам|ами)?|раздел(?:а|у|е|ом|ов|ах|ам|ами)?)\s+(\d{1,3})(?!\d|[.,]\d|[:/]|\s*[-–—]?\s*\d|-?(?:$ordSuffixAlt)(?![а-яё\d]))(?:(\s+(?:и|или)\s+)(\d{1,3})(?![\d.,:/-]))?""",
+        """(?<![\p{L}])(глав(?:а|ы|е|у|ой|ах|ам|ами)?|част(?:ь|и|ью|ей|ях|ям|ями)|книг(?:а|и|е|у|ой|ах|ам|ами)?|раздел(?:а|у|е|ом|ов|ах|ам|ами)?)\s+(\d{1,3})(?!\d|[.,]\d|[:/\uE001]|\s*[-–—]?\s*\d|-?(?:$ordSuffixAlt)(?![а-яё\d]))(?:(\s+(?:и|или)\s+)(\d{1,3})(?![\d.,:/-]))?""",
         RegexOption.IGNORE_CASE
     )
     // Номер перед существительным: «22 глава» → «22-я глава» (жалоба 10.10.2026). Только им. ед.: счёт был бы «22 главы»,
