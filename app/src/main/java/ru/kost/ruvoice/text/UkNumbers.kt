@@ -787,8 +787,10 @@ object UkNumbers {
         val ops = FORMULA_OP_RE.findAll(m.value).map { o -> o.groupValues.drop(1).first { it.isNotEmpty() } }.toList()
         // тире — минус только рядом с другим знаком: «a — b» в тексте — тире
         if (ops.all { it in DASHES }) return@replace m.value
-        // одни заглавные через «+» без чисел — сочетание клавиш («A + B», «Shift + A»): буквы английскими именами, как в тексте
-        if (ops.all { it == "+" } && m.value.none { it.isDigit() || it in 'a'..'z' }) return@replace m.value
+        // одни заглавные через «+» без чисел рядом с клавишей или «натисн…» — сочетание клавиш («Натисніть A + B», «Ctrl + A + B»):
+        // буквы английскими именами, как в тексте; без них («Вітаміни A + E») — формула, «а плюс е»
+        if (ops.all { it == "+" } && m.value.none { it.isDigit() || it in 'a'..'z' } && KEY_CONTEXT_RE.containsMatchIn(text))
+            return@replace m.value
         val s = FORMULA_LETTER_RE.replace(m.value) { l ->
             val name = SCHOOL_LATIN.getValue(l.groupValues[1].lowercase()[0])
             val pow = when (l.groupValues[2]) { "²" -> " ${uv(name)} квадраті"; "³" -> " ${uv(name)} кубі"; else -> "" }
@@ -803,6 +805,9 @@ object UkNumbers {
     // приходит как «x — 1 = 0»
     private const val FORMULA_OP = """\s*([=+−×÷≥≤≠])\s*|\s+([<>—–])\s+"""
     private val DASHES = setOf("—", "–")
+    /** Клавиша-модификатор или глагол «натиснути» в куске — «A + B» сочетание клавиш. Не проверено носителем. */
+    private val KEY_CONTEXT_RE = Regex("""(?<![\p{L}])(?:ctrl|shift|alt|win|cmd|fn|tab|esc|enter|контрол|шифт|шіфт|альт|ентер|натисн\p{L}*)(?![\p{L}])""",
+        RegexOption.IGNORE_CASE)
     private val FORMULA_RE = Regex("""(?<![\p{L}\d.,])$TERM(?:(?:$FORMULA_OP)[-−]?$TERM)+(?![\p{L}\d])""")
     private val FORMULA_LETTER_RE = Regex("""(?<![A-Za-z])([A-Za-z])([²³]?)""")
     private val FORMULA_OP_RE = Regex(FORMULA_OP)
