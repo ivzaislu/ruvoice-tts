@@ -103,7 +103,11 @@ object Normalizer {
     fun ordinal(n: Long, suffix: String, pluralDecade: Boolean = false): String {
         // «1960-е гг.», «в лихие 90-е» — десятилетие (круглое число), мн. ч.: «шестидесятые», не «шестидесятое».
         val e = (if (suffix == "е" && pluralDecade && n % 10 == 0L) endings["ые"] else endings[suffix]) ?: return cardinal(n)
-        roundThousandStems[n]?.let { stem ->
+        // пятизначные круглые тысячи («до 13000 г. до н. э.» — «тринадцатитысячного») — родительный + «тысячн»:
+        // «двадцатиоднотысячный», «девяностотысячный»
+        (roundThousandStems[n] ?: if (n % 1000 == 0L && n in 11000L..99000L) Declension.cardinal(n / 1000, Case.GEN)
+            .replace(" ", "").replace("девяноста", "девяносто").replace(Regex("одного$"), "одно") + "тысячн"
+            else null)?.let { stem ->
             return stem + if (stem in stressedEnding) e.second else e.first
         }
         val last = when {
@@ -798,8 +802,57 @@ object Normalizer {
     private val yearGLeftoverRe = Regex("""гг\.""", RegexOption.IGNORE_CASE)
     // «всем гг. батарейным командирам» — «господам»: «гг.» не после числа (годы уже разобраны выше)
     private val gospodaRe = Regex("""(?<![\d\p{L}-])(?<![\d][-–—]?[а-яё]{0,3}\s?)гг\.(?=\s+([а-яё]+))""")
-    // 1–2 цифры — год только перед «н. э.» («в 79 г. н. э.»).
-    private val yearDigits = """(\d{3,4}|\d{1,2}(?=\s*г\.?\s*(?:до\s+)?н\.\s*э))"""
+    // 1–2 цифры — год только перед «н. э.» («в 79 г. н. э.»), пять цифр — тоже («до 13000 г. до н. э.»).
+    private val yearDigits = """(\d{3,4}|(?:\d{1,2}|\d{5})(?=\s*г\.?\s*(?:до\s+)?н\.\s*э))"""
+    // 1–2 цифры с точкой после «в/во», «с/со», «ок.», месяца или «в начале/конце» — год: «в 62 г.», «(с 54 г.)», «(ум. ок.
+    // 62 г.)», «в августе 79 г.» (корпус Leipzig и books/lib: 190 из 190). После «около», «до» — граммы чаще («весом от 9
+    // до 12 г.», «мера веса, около 30 г.»).
+    private val yearGShortPrepRe by lazy { Regex(
+        """$weightWordBehind(?<![\p{L}])(в|во|с|со|ок\.|(?:в\s+)?(?:конце|начале|середине|конца|начала|середины|$monthsAlt))\s+(\d{1,2})\s*г\.$gramsWordAhead""",
+        RegexOption.IGNORE_CASE) }
+    // «(451 г.)», «(64 г.),» — год в скобках сам по себе (корпус: 27 из 28). Вес или продукт перед скобкой — граммы:
+    // «По весу (15 г.)», «Сахар (200 г.)»; круглые 50, 100, 250… — тоже граммы (вес упаковки; год так теряется один —
+    // «(400 г.)»).
+    // «2009—2010 г.г.» — то же «гг.» (было «…десятым годахг.»)
+    private val yearGgDottedRe = Regex("""(?<=\d)\s*г\.\s?г\.(?![\p{L}])""")
+    // ревью ru-fixes-2 I-1: только три цифры — веса в скобках чаще одно-двузначные («гвоздика (2 г.)», «шарика (15 г.)»)
+    private val yearGParenRe = Regex("""(?<=\()(\d{3})\s*г\.(?=\s*[);,])""")
+    // Вес по контексту сильнее короткого года (ревью ru-fixes-2 I-1): слово веса или массы раньше во фразе («Монета весила
+    // ок. 8 г.», «Вес монеты ок. 8 г.»), существительное в родительном следом по таблице морфологии, а не по списку
+    // («в 10 г. спирта», «в 30 г. миндаля», «(35 г.) сахара»; прилагательное перед ним — тоже: «в 10 г. чистого спирта»).
+    private val weightInPhraseRe = Regex("""(?<![\p{L}])(?:вес|веса|весу|весом|весе|весит|весят|весил[аио]?|весили|масс[аеуы]|массой|весящ\p{L}*)(?![\p{L}])""", RegexOption.IGNORE_CASE)
+    // вес и масса в переносном смысле — не о весе: «В массе своей крестьяне в 15 г.», «Его вес в обществе вырос в 12 г.»
+    // (повторное ревью ru-fixes-2 M-a); «в массе монеты», «общественный вес монеты» — прямой смысл (ревью N-1)
+    private val weightIdiomRe = Regex("""(?<![\p{L}])(?:(?:в\s+)?массе\s+сво\p{L}+|вес\p{L}*\s+(?:в|среди)\s+обществ\p{L}*|политическ\p{L}*\s+вес\p{L}*)(?![\p{L}])""", RegexOption.IGNORE_CASE)
+    // слова о времени после короткого года — год, а не продукт: «Во 2 г. войны», «В 12 г. правления Августа»
+    // ponytail: закрытый список; другое слово о времени в родительном прочтётся граммами, как в базе
+    private val yearTimeNouns = setOf("войны", "правления", "царствования", "княжения", "жизни", "эры", "века", "правительства",
+        "эпохи", "понтификата", "консульства", "существования", "службы", "ссылки", "осады", "похода", "революции", "династии",
+        "хиджры", "освобождения", "свободы", "независимости", "республики", "империи", "оккупации", "блокады", "восстания",
+        "изгнания", "эмиграции", "брака", "пребывания", "строительства", "обучения", "учёбы", "учебы", "кампании", "экспедиции")
+    private val wordsAheadRe = Regex("""^\s*([а-яё]+)(?:\s+([а-яё]+))?""")
+    private val wordsAfterParenRe = Regex("""^\s*\)\s*([а-яё]+)(?:\s+([а-яё]+))?""")
+    /** [paren] — слово смотрим за «)» («(35 г.) сахара»); иначе только вплотную за «г.»: «(ум. ок. 28 г.) жил» — не о весе. */
+    private fun massContext(s: String, start: Int, end: Int, paren: Boolean = false): Boolean {
+        val before = s.substring(maxOf(0, start - 80), start).let { b -> b.substring((Regex("""[.!?]\s+(?=[А-ЯЁ])""").findAll(b).lastOrNull()?.range?.last ?: -1) + 1) }
+        if (weightInPhraseRe.containsMatchIn(weightIdiomRe.replace(before, " "))) return true
+        val m = morph ?: return false
+        val w = (if (paren) wordsAfterParenRe else wordsAheadRe).find(s.substring(end, minOf(s.length, end + 60))) ?: return false
+        // родительный мн. ч. на «-л» — чаще глагол («жил», «сил»): не берём
+        fun genNoun(x: String) = x !in yearTimeNouns && m.tags(x).let { t -> Morph.isNoun(t) &&
+            (Case.GEN in Morph.nounCases(t, false) || Case.GEN in Morph.nounCases(t, true) && !x.endsWith("л")) }
+        val first = w.groupValues[1]
+        if (genNoun(first)) return true
+        val t = m.tags(first)
+        return t and Morph.ADJ != 0 && t and Morph.PRON == 0 && !Morph.isNoun(t) && w.groupValues[2].isNotEmpty() && genNoun(w.groupValues[2]) &&
+            (Case.GEN in Morph.adjCases(t, null, false) || Case.GEN in Morph.adjCases(t, Gender.F, false) || Case.GEN in Morph.adjCases(t, null, true))
+    }
+    // ponytail: список основ продуктов неполный; продукт не из списка перед «(N г.)» прочтётся годом
+    private val massWordBehindRe = Regex(
+        """(?<![\p{L}])(?:вес|масс|сахар|мук|масл|сол[ьи]|вод|молок|сливк|сметан|творог|сыр|мяс|фарш|тест|круп|рис|картоф|""" +
+            """продукт|крахмал|сод|дрожж|орех|ягод|овощ|фрукт|рыб|хлеб|м[её]д|шоколад|кофе|ча[йяю]|специ|пер[её]?ц|лук|морков|""" +
+            """капуст|зелен|изюм|желатин|какао|гриб|колбас|ветчин|кур|филе|говядин|свинин|порци|соус|кефир|йогурт|сал[оа]|""" +
+            """чеснок|фасол|горох)\p{L}*\s*\($""", RegexOption.IGNORE_CASE)
     // После «в»/«к» точка у «г» не обязательна («в 862 г был призван Рюрик»); после «до/около/с» —
     // обязательна: «до 500 г» без контекста — граммы (принятое ограничение).
     private val yearGOptDot = """\s*г(?:\.|(?![а-яё.]))"""
@@ -807,12 +860,12 @@ object Normalizer {
     private val yearGPrepKRe = Regex("""(?<![\p{L}])(к|ко)\s+$yearDigits$yearGOptDot$gramsWordAhead""", RegexOption.IGNORE_CASE)
     private val monthsAlt = """январ[ьяе]|феврал[ьяе]|март[ае]?|апрел[ьяе]|ма[йяе]|июн[ьяе]|июл[ьяе]|август[ае]?|сентябр[ьяе]|октябр[ьяе]|ноябр[ьяе]|декабр[ьяе]"""
     private val yearGPrepOtherRe = Regex(
-        """(?<![\p{L}])(с начала|с конца|с|до|после|от|около|(?:в\s+)?(?:конце|начале|середине|течение|конца|начала|середины|половине|половины|рубеже)|лет[оа]м?|осен[ьи]ю?|весн[аы]|весной|зим[аыо]й?|(?:в\s+)?(?:$monthsAlt))\s+$yearDigits\s*г\.$gramsWordAhead""",
+        """(?<![\p{L}])(с начала|с конца|с|до|после|от|около|ок\.|(?:в\s+)?(?:конце|начале|середине|течение|конца|начала|середины|половине|половины|рубеже)|лет[оа]м?|осен[ьи]ю?|весн[аы]|весной|зим[аыо]й?|(?:в\s+)?(?:$monthsAlt))\s+$yearDigits\s*г\.$gramsWordAhead""",
         RegexOption.IGNORE_CASE)
     // «г.» без предлога — год только при четырёх цифрах (task 28 п.4): «500 г. муки» — граммы,
     // доходит до units(); трёхзначный год — с предлогом («в 988 г.», yearGPrepVRe) или перед «до н. э.».
     private val yearGBareRe =
-        Regex("""$weightWordBehind(?<![а-яё\d])(\d{4}|\d{1,3}(?=\s*г\.?\s*(?:до\s+)?н\.\s*э\.))$yearGOptDot$gramsWordAhead""", RegexOption.IGNORE_CASE)
+        Regex("""$weightWordBehind(?<![а-яё\d])(\d{4}|(?:\d{1,3}|\d{5})(?=\s*г\.?\s*(?:до\s+)?н\.\s*э(?:\.|(?![а-яё]))))$yearGOptDot$gramsWordAhead""", RegexOption.IGNORE_CASE)
     // Точка после «г.» — ещё и точка предложения, если дальше заглавная или конец текста.
     private fun gDot(m: MatchResult, s: String) = if (m.value.endsWith(".") && sentenceEndAheadRe.containsMatchIn(s.substring(m.range.last + 1))) "." else ""
     // «55 г.р.» — год рождения; «около 50 н. э.», «500 до н. э.» — год и без «г.»: с предлогом
@@ -850,7 +903,8 @@ object Normalizer {
     private val yearDatRe = Regex("""(?<![\p{L}])(к|ко|по|благодаря|согласно)\s+(\d{3,4})(\s+)году(?![а-яё])""", RegexOption.IGNORE_CASE)
     // «в 1812 неожиданно», «В 1941 началась», «в 1941, когда» — год без слова «году»; следом не существительное,
     // не единица и не число (иначе «в 2000 рублей», «в 1500 м»). Без таблицы — только перед знаком или глаголом.
-    private val yearBareVRe = Regex("""(?<![\p{L}])(в|во)\s+(1\d{3}|20\d{2})(?![\d/%-]|[.,:]\d|\s*(?:-|год|г\.|г(?![а-яё])))""", RegexOption.IGNORE_CASE)
+    // Диапазон через тире с «г.»/«гг.» («В 1831—40 г.») — не одинокий год: его читает yearGRangeWithPrepRe.
+    private val yearBareVRe = Regex("""(?<![\p{L}])(в|во)\s+(1\d{3}|20\d{2})(?![\d/%-]|[.,:]\d|\s*(?:-|год|г\.|г(?![а-яё]))|\s*[–—]\s*\d{2,4}\s*гг?\.)""", RegexOption.IGNORE_CASE)
     // «в апреле 2020», «Апрель 1912», «лета 2021», «до мая 1500» — после месяца/сезона год в родительном.
     private val yearAfterMonthRe = Regex(
         """(?<![\p{L}])((?:$monthsAlt|лет[оа]|летом|зим[аыу]|зимой|весн[аыу]|весной|осен[ьи]|осенью))\s+(1\d{3}|20\d{2})(?![\d/%-]|[.,:]\d|\s*(?:год|г\.|г(?![а-яё])))""", RegexOption.IGNORE_CASE)
@@ -913,7 +967,7 @@ object Normalizer {
 
     private fun yearsWithG(text: String): String {
         // Одинокий год в скобках после слова — «Аустерлицем (1805)», «Джокер (2019)»: порядковое.
-        var s = yearInParensRe.replace(yearsBare(text)) { m -> "(${m.groupValues[1]}-й)" }
+        var s = yearInParensRe.replace(yearsBare(yearGgDottedRe.replace(text, " гг."))) { m -> "(${m.groupValues[1]}-й)" }
         s = bareOrdinalYearRe.replace(s) { m -> m.groupValues[1] + "-" + m.groupValues[2] }
         s = yearBirthRe.replace(s) { m -> m.groupValues[1] + "-го года рождения" }
         s = yearPairVRe.replace(s) { m -> "${m.groupValues[1]} ${m.groupValues[2]}-м и ${m.groupValues[3]}-м годах" }
@@ -971,11 +1025,26 @@ object Normalizer {
         }
         s = yearGPrepOtherRe.replace(s) { m ->
             val (prep, y) = m.destructured
+            // «ок. 8 г.», «ок. 300 г.» при весе в контексте — граммы; четыре цифры — год всегда (вес так не пишут)
+            if (prep.equals("ок.", true) && y.length <= 3 && massContext(s, m.range.first, m.range.last + 1)) return@replace m.value
             "$prep $y-го года" + gDot(m, s)
+        }
+        s = yearGShortPrepRe.replace(s) { m ->
+            val (prep, y) = m.destructured
+            // «ок.» с одной цифрой — вес («Монета (ок. 8 г.)»): годов «ок. 8 г.» в корпусе нет
+            // «во 2 г.» — только год: вес с «во» не пишут («во двух граммах» неграмотно; повторное ревью M-a)
+            if (!prep.equals("во", true) && massContext(s, m.range.first, m.range.last + 1) || prep.equals("ок.", true) && y.length == 1) return@replace m.value
+            "$prep $y-" +(if (prep.equals("в", true) || prep.equals("во", true)) "м году" else "го года") + gDot(m, s)
+        }
+        s = yearGParenRe.replace(s) { m ->
+            if (m.groupValues[1].toInt() % 50 == 0 || massWordBehindRe.containsMatchIn(s.substring(maxOf(0, m.range.first - 40), m.range.first)) ||
+                massContext(s, m.range.first, m.range.last + 1, paren = true)) m.value
+            else "${m.groupValues[1]}-й год"
         }
         s = yearGBareRe.replace(s) { m ->
             val y = m.groupValues[1]
-            if (y.length == 4 && y.toInt() > 2100) m.value else "$y-й год" + gDot(m, s)
+            // больше 2100 — граммы, кроме года до нашей эры («Саргон I (2750 г. до н. э.)»)
+            if (y.length == 4 && y.toInt() > 2100 && !eraAheadRe.containsMatchIn(s.substring(m.range.last + 1))) m.value else "$y-й год" + gDot(m, s)
         }
         return s
     }
