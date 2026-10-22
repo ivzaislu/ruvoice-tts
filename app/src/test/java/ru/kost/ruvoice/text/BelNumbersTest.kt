@@ -997,6 +997,9 @@ class BelNumbersTest {
             val out = Splitter.sentences(t).joinToString(" ") { BelNormalizer.prepare(it, withDigits, Rules()) }
             assertTrue("$t → $out", out.none { it.isDigit() })
         }
+        // «па» с переполнением во втором числе — как до защиты: первое родным, второе по цифрам (сверено с 3442b66)
+        assertEquals("з пяці па адзін два тры чатыры пяць шэсць сем восем дзевяць нуль адзін два тры чатыры пяць шэсць сем восем " +
+            "дзевяць нуль адзін два тры чатыры пяць", Splitter.sentences("з 5 па 1234567890123456789012345").joinToString(" ") { BelNormalizer.prepare(it, withDigits, Rules()) })
         // «24:00» — конец суток: время, двоеточие не остаётся
         assertEquals("з васьмі гадзін да дваццаці чатырох гадзін", prep("з 8:00 да 24:00"))
     }

@@ -1147,7 +1147,8 @@ object UkNumbers {
     private fun romanAgreed(n: Long, before: String, after: String): String {
         WORD_BEFORE_RE.find(before.takeLast(40))?.groupValues?.get(1)?.lowercase()?.let { CHAPTER_FORMS[it] }
             ?.let { (gg, c) -> return ordinal(n, c, gg) }
-        val w = NEXT_WORDS.find(after.take(80))?.groupValues?.get(1)?.lowercase() ?: return ordinal(n)
+        // слово с апострофом целиком («з'їзду»): римские идут до снятия апострофа
+        val w = ROMAN_NEXT_WORD.find(after.take(80))?.groupValues?.get(1)?.lowercase() ?: return ordinal(n)
         val forms = LinkedHashMap<String, Case>()
         val t = tags(w)
         if (Morph.isAdjective(t)) {
@@ -1155,8 +1156,13 @@ object UkNumbers {
             for (c in Morph.adjCases(t, null, true)) forms[ordinal(n, c, plural = true)] = c
         } else if (Morph.isNoun(t)) {
             val gg = nounGender(t) ?: Gender.M
-            for (c in Morph.nounCases(t, false)) forms[ordinal(n, c, gg)] = c
-            for (c in Morph.nounCases(t, true)) forms[ordinal(n, c, plural = true)] = c
+            val sg = Morph.nounCases(t, false)
+            val pl = Morph.nounCases(t, true)
+            // только непрямые формы однини с родовим («курсу» — род., дав., місц.) — родовий, как номер в [byNoun]:
+            // «студенти II курсу» → «другого курсу»
+            for (c in if (pl.isEmpty() && Case.GEN in sg && sg.none { it == Case.NOM || it == Case.ACC }) setOf(Case.GEN) else sg)
+                forms[ordinal(n, c, gg)] = c
+            for (c in pl) forms[ordinal(n, c, plural = true)] = c
         }
         if (forms.size > 1) {
             val p = WORD_BEFORE_RE.find(before.takeLast(40))?.groupValues?.get(1)?.lowercase()
@@ -1166,10 +1172,15 @@ object UkNumbers {
         forms.keys.singleOrNull()?.let { return it }
         if (forms.isNotEmpty()) return ordinal(n)
         // без таблицы — окончания прилагательного
-        return ROMAN_ADJ_ENDINGS.entries.firstOrNull { w.endsWith(it.key) }?.value?.let { (c, gg) -> ordinal(n, c, gg) } ?: ordinal(n)
+        return ROMAN_ADJ_ENDINGS.entries.firstOrNull { w.endsWith(it.key) }?.value
+            ?.let { (c, gg) -> if (gg == null) ordinal(n, c, plural = true) else ordinal(n, c, gg) } ?: ordinal(n)
     }
-    private val ROMAN_ADJ_ENDINGS = linkedMapOf("ої" to (Case.GEN to Gender.F), "ою" to (Case.INS to Gender.F),
-        "ого" to (Case.GEN to Gender.M), "ому" to (Case.PRE to Gender.M), "ий" to (Case.NOM to Gender.M))
+    /** Окончание прилагательного без таблицы → падеж и род (null — множина). «-ій» — давальний/місцевий ж. р. («світовій»:
+     * одна форма «другій»), «-их», «-ими» — множина. «-а», «-е» не берём: так кончаются и существительные («II тура»). */
+    private val ROMAN_ADJ_ENDINGS: Map<String, Pair<Case, Gender?>> = linkedMapOf("ої" to (Case.GEN to Gender.F),
+        "ою" to (Case.INS to Gender.F), "ій" to (Case.PRE to Gender.F), "ого" to (Case.GEN to Gender.M), "ому" to (Case.PRE to Gender.M),
+        "ими" to (Case.INS to null), "их" to (Case.GEN to null), "ий" to (Case.NOM to Gender.M))
+    private val ROMAN_NEXT_WORD = Regex("""^\s+(\p{L}+(?:[’'`´ʼ‘]\p{L}+)?)""")
     /** Римское от двух букв отдельным словом, регистр важен: «II», «XIV», «ХІХ». */
     private val ROMAN_ANY = Regex("""(?-i:(?<![\p{L}\d'’ʼ-])(?=[IVXІХ]{2})$ROMAN_NUM(?![\p{L}\d'’ʼ]))""", RegexOption.IGNORE_CASE)
     /** Падеж «століття», «вік» по форме; «століття» — називний (родовий — по слову перед ним, [roman]). */

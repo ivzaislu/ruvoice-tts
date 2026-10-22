@@ -122,6 +122,10 @@ class UkCasesTest {
     @Test fun romanAgreesWithNoun() {
         assertEquals("після другої світової війни.", prep("Після II світової війни."))
         assertEquals("у другій світовій війні", prep("У II світовій війні"))
+        // непрямий відмінок без прийменника — по таблице: «курсу» только непрямые однини → родовий
+        assertEquals("студенти другого курсу", prep("студенти II курсу"))
+        assertEquals("учасники другого зъїзду", prep("учасники II з'їзду"))
+        assertEquals("другий курс", prep("II курс"))
     }
 
     @Test fun notCounted() {

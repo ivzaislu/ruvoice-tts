@@ -397,8 +397,8 @@ object BelNumbers {
             val upTo = m.groupValues[3].equals("да", true)
             // цифры длиннее Long — как написано (раньше NumberFormatException ронял весь запрос)
             val a = cardinal(m.groupValues[2].toLongOrNull() ?: return@replace m.value, Case.GEN)
-            val b = m.groupValues[4].toLongOrNull() ?: return@replace m.value
-            if (upTo) m.value.replaceGroups(m, 2 to a, 4 to cardinal(b, Case.GEN)) else m.value.replaceGroups(m, 2 to a)
+            if (upTo) m.value.replaceGroups(m, 2 to a, 4 to cardinal(m.groupValues[4].toLongOrNull() ?: return@replace m.value, Case.GEN))
+            else m.value.replaceGroups(m, 2 to a)
         }
         for ((re, case) in TRIGGERS) s = re.replace(s) { m ->
             val noun = nextNoun(s, m.range.last + 1)
