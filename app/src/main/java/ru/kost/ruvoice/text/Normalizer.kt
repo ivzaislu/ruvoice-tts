@@ -2044,12 +2044,13 @@ object Normalizer {
         Regex("""(?<![\p{L}\d])трлн\.?(?![\p{L}])""", RegexOption.IGNORE_CASE) to "триллионов",
     )
     // Дробь словами перед сокращением (её склонил cases(): «достигла двух целых трёх десятых млрд») — род. ед.
-    private val scaleAfterFracRe = Regex("""(?<=(?<![\p{L}])(?:десят|сот|тысячн|десятитысячн|стотысячн|миллионн)(?:ых|ой|ая)\s)(тыс|млн|млрд|трлн)\.?(?![\p{L}])""", RegexOption.IGNORE_CASE)
+    // и в косвенном падеже: «к одной целой трём десятым млн» — «миллиона» (fracCase)
+    private val scaleAfterFracRe = Regex("""(?<=(?<![\p{L}])(?:десят|сот|тысячн|десятитысячн|стотысячн|миллионн)(?:ых|ой|ая|ым|ыми)\s)(тыс|млн|млрд|трлн)\.?(?![\p{L}])""", RegexOption.IGNORE_CASE)
     // Единица после разряда словами: «3—4 тыс. км» → «тысячи километров», «15 тысяч т» — род. мн.
     private val unitAfterScaleRe by lazy {
         Regex("""(?<=(?<![\p{L}])(?:тысяч[аи]?|миллион(?:а|ов)?|миллиард(?:а|ов)?|триллион(?:а|ов)?)\s)(?!(?-i:[вскоуиа])(?![\p{L}\d/.]))($unitAltPattern)(?![\p{L}\d/])(?:\.(?=\s*(?-i:[а-яё,;:])))?""") }
     private val unitAfterFracRe by lazy {
-        Regex("""(?<![\p{L}])((?:втор|трет|четвёрт|пят|шест|седьм|восьм|девят|десят|сот|тысячн)(?:ых|ой|ая|ьих|ьей|ья)|степени)\s(?!(?-i:[вскоуиа])(?![\p{L}\d/.]))($unitAltPattern)(?![\p{L}\d/])(?:\.(?=\s*(?-i:[а-яё,;:])))?""") }
+        Regex("""(?<![\p{L}])((?:втор|трет|четвёрт|пят|шест|седьм|восьм|девят|десят|сот|тысячн)(?:ых|ой|ая|ьих|ьей|ья|ым|ыми)|степени)\s(?!(?-i:[вскоуиа])(?![\p{L}\d/.]))($unitAltPattern)(?![\p{L}\d/])(?:\.(?=\s*(?-i:[а-яё,;:])))?""") }
     // Порядок: после cases() — «от 60 до 80 тыс.» сначала склоняет оба числа, потом «тысяч».
     private fun scales(text: String): String {
         var s = scaleAbbrev(text)
@@ -2729,13 +2730,75 @@ object Normalizer {
         return cardinal(n, feminine = true) + (if (n % 10 == 1L && n % 100 != 11L) " целая " else " целых ") +
             cardinal(fracN, feminine = true) + " " + plural(fracN, Triple(stem + "ая", stem + "ых", stem + "ых"))
     }
-    private fun genFraction(minus: String, intPart: String, frac: String): String? {
+    private fun genFraction(minus: String, intPart: String, frac: String) = fractionCase(minus, intPart, frac, Case.GEN)
+    // окончания «целая»/«десятая» в падеже: единственное (1, 21…) и множественное
+    private val fracEndSg = arrayOf("ая", "ой", "ой", "ую", "ой", "ой")
+    private val fracEndPl = arrayOf("ых", "ых", "ым", "ых", "ыми", "ых")
+    /** Дробь в падеже: «двумя целыми пятьюдесятью сотыми»; null — дробная часть длиннее fracStems. */
+    private fun fractionCase(minus: String, intPart: String, frac: String, case: Case): String? {
         val n = intPart.toLongOrNull() ?: return null
         val f = frac.toLongOrNull() ?: return null
         val stem = fracStems.getOrNull(frac.length - 1) ?: return null
-        val one = { x: Long -> x % 10 == 1L && x % 100 != 11L }
-        return (if (minus.isEmpty()) "" else "минус ") + Declension.cardinal(n, Case.GEN, feminine = true) +
-            (if (one(n)) " целой " else " целых ") + Declension.cardinal(f, Case.GEN, feminine = true) + " " + stem + (if (one(f)) "ой" else "ых")
+        // после «ноль», «тысяча», «миллион» — родительный мн. ч. в любом падеже: «с нулём целых», «с одной тысячей целых»
+        // (ревью ru-fixes-2 M-2)
+        val end = { x: Long -> if (x == 0L || x >= 1000 && x % 1000 == 0L) "ых"
+            else (if (x % 10 == 1L && x % 100 != 11L) fracEndSg else fracEndPl)[case.ordinal] }
+        return (if (minus.isEmpty()) "" else "минус ") + Declension.cardinal(n, case, feminine = true) + " цел" + end(n) + " " +
+            Declension.cardinal(f, case, feminine = true) + " " + stem + end(f)
+    }
+    // Дробь в косвенном падеже: «к 7,5 годам» — «к семи целым пяти десятым года», «с 2.50 рублями» — «с двумя целыми
+    // пятьюдесятью сотыми рубля» (было «с две целых пятьдесят сотых рублями»). Падеж — по предлогу или по окончанию
+    // существительного, как у целых чисел; существительное во мн. ч. после дроби — в родительный ед. ч. (genSgNoun).
+    // Родительный (genFracRe) и винительный («в 1,5 раза») — как были.
+    // целая часть с нулём впереди («по 06.50 силами») — время, не дробь; «1,5-й» — не дробь в падеже
+    private val fracNum = """(-?)((?!0\d)\d+)[.,](\d+)(?![\d,.:/-]| ?%)"""
+    private fun fracTriggerRe(alt: String) = Regex(
+        // «при минус 2,5 градусах» — «минус» словом между предлогом и числом (ревью ru-fixes-2 M-3)
+        """(?<![\p{L}-])$alt(?![\p{L}])(?:\s+$amplifierRe(?![\p{L}]))*\s+(?:минус\s+)?$fracNum(?:(\s+)(\p{L}+))?""", RegexOption.IGNORE_CASE)
+    private val fracInsEndingRe = Regex("""(?<![\p{L}\d.,-])$fracNum(\s+)(\p{L}+(?:ами|ями|ьми))(?![\p{L}])""", RegexOption.IGNORE_CASE)
+    // «равен 0,5» без существительного — именительный, как в корпусе ru-normalizr («равен ноль целых пять десятых»)
+    private val fracCaseRes by lazy { listOf(fracInsEndingRe to Case.INS, fracTriggerRe("""(?:к|ко|благодаря|вопреки)""") to Case.DAT,
+        fracTriggerRe(insTriggerAlt) to Case.INS,
+        fracTriggerRe(preTriggerAlt) to Case.PRE,
+        Regex("""(?<![\p{L}])(?:в|во|на)\s+$fracNum(\s+)(\p{L}+(?:ах|ях))(?![\p{L}])""", RegexOption.IGNORE_CASE) to Case.PRE,
+        Regex("""(?<![\p{L}\d.,-])$fracNum(\s+)(\p{L}{3,}(?:ам|ям))(?![\p{L}])""", RegexOption.IGNORE_CASE) to Case.DAT) }
+    private fun fracCase(s: String, re: Regex, case: Case) = re.replace(s) { m ->
+        val (minus, intPart, frac, sp, noun) = m.destructured
+        if (case == Case.DAT && noun.lowercase() in datEndingStop) return@replace m.value
+        // «17.00», «7.00 жителям» — время, не дробь
+        if (frac == "00") return@replace m.value
+        // по окончанию: номер, а не количество («Версия 2.0 пользователям доступна», «глава 1.5 студентам», «LSS 3.0 картами»),
+        // и предлог другого падежа перед числом («в 14.30 ударами волн», «по 7.25 рублям») — падеж по окончанию не берём
+        if (m.value[0].isDigit() || m.value[0] == '-') {
+            val before = s.substring(maxOf(0, m.range.first - 40), m.range.first)
+            if (numLabelBehindRe.containsMatchIn(before) || versionBehindRe.containsMatchIn(before) ||
+                (if (case == Case.INS) insForeignPrepRe else datForeignPrepRe).containsMatchIn(before)) return@replace m.value
+        }
+        val words = fractionCase(minus, intPart, frac, case) ?: return@replace m.value
+        m.value.substring(0, m.groups[1]!!.range.first - m.range.first) + words + sp + genSgNoun(noun)
+    }
+    private val versionBehindRe = Regex("""(?:(?<![\p{L}])(?:верси\p{L}{1,2}|обновлени\p{L}{1,2}|релиз\p{L}{0,2})|[A-Za-z]+\.?)\s*$""", RegexOption.IGNORE_CASE)
+    private const val FOREIGN_PREP = """в|во|на|о|об|обо|при|по|от|до|из|у|для|без|через|про|за|под|над"""
+    private val datForeignPrepRe = Regex("""(?<![\p{L}])(?:$FOREIGN_PREP|с|со|между|перед)\s+$""", RegexOption.IGNORE_CASE)
+    private val insForeignPrepRe = Regex("""(?<![\p{L}])(?:в|во|на|о|об|обо|при|по|от|до|из|у|для|без|через|про|к|ко)\s+$""", RegexOption.IGNORE_CASE)
+    private val irregularGenSg = mapOf("людьми" to "человека", "людям" to "человека", "людях" to "человека",
+        "детьми" to "ребёнка", "детям" to "ребёнка", "детях" to "ребёнка")
+    private val pluralObliqueRe = Regex("""^(\p{L}+?)(?:ами|ями|ам|ям|ах|ях)$""")
+    /** «рублями» → «рубля», «годам» → «года», «тоннах» → «тонны»: форма из таблицы морфологии; нет её — слово как было. */
+    private fun genSgNoun(w: String): String {
+        // «людьми», «детьми» — другая основа (ревью ru-fixes-2 M-3)
+        irregularGenSg[w.lowercase()]?.let { return it }
+        val m = morph ?: return w
+        val stem = pluralObliqueRe.find(w.lowercase())?.groupValues?.get(1) ?: return w
+        // окончание по роду слова в тексте: женский — «-ы/-и» («силами» — «силы», не «сила»), иначе «-а/-я» («подборами» —
+        // «подбора», не «подборы»)
+        val fem = Morph.genders(m.tags(w.lowercase())) == listOf(Gender.F)
+        for (e in if (fem) listOf("ы", "и") else listOf("а", "я")) {
+            val t = m.tags(stem + e)
+            if (Morph.isNoun(t) && Case.GEN in Morph.nounCases(t, plural = false))
+                return if (w[0].isUpperCase()) (stem + e).replaceFirstChar(Char::uppercaseChar) else stem + e
+        }
+        return w
     }
     // «около 1 млн человек» — «около одного миллиона» (было «одного миллионов»: число склонял предлог, а «млн» потом scales()
     // читал родительным множественного), «к 2 млн» — «к двум миллионам»: разряд склоняется вместе с числом.
@@ -2785,7 +2848,7 @@ object Normalizer {
     private val andPercentRe = Regex("""(?<![\p{L}])(при|о|об|до|от|около|к|ко)(\s[^,.;!?]{1,40}\s)и\s+(-|минус\s+)?(\d+)\s?%""", RegexOption.IGNORE_CASE)
     private val doAheadRe = Regex("""^[^.;!?]{0,40}?\sдо\s""")
     private val percentCaseRe by lazy { Regex(
-        """(?<![\p{L}-])($genTriggerAlt|с|со|к|ко|по|о|об)(?![\p{L}])(?:\s+$amplifierRe(?![\p{L}]))*\s+((?:плюс|минус)\s+|-)?(\d+)(?:[.,](\d+))?\s?%""",
+        """(?<![\p{L}-])($genTriggerAlt|с|со|к|ко|по|о|об|при)(?![\p{L}])(?:\s+$amplifierRe(?![\p{L}]))*\s+((?:плюс|минус)\s+|-)?(\d+)(?:[.,](\d+))?\s?%""",
         RegexOption.IGNORE_CASE) }
     // «при 5 %» → «при пяти процентах»: процент читается в конце numberRe, где падежа уже нет.
     private val prePercentRe = Regex("""(?<![\p{L}])(при)\s+(-?\d+) ?%(?!\s*процент)""", RegexOption.IGNORE_CASE)
@@ -3069,6 +3132,8 @@ object Normalizer {
         s = percentCaseRe.replace(s) { m ->
             val (trig, sign, intPart, frac) = m.destructured
             val t = trig.lowercase()
+            // целое после «при» читает prePercentRe ниже, как было; здесь — только дробь
+            if (t == "при" && frac.isEmpty()) return@replace m.value
             val case = when {
                 t == "с" || t == "со" -> if (doAheadRe.containsMatchIn(s.substring(m.range.last + 1))) Case.GEN else return@replace m.value
                 t in setOf("к", "ко", "по") -> Case.DAT
@@ -3078,7 +3143,8 @@ object Normalizer {
             val minus = sign.trim().let { it == "-" || it.equals("минус", true) }
             val plus = sign.trim().equals("плюс", true)
             val head = m.value.substring(0, (m.groups[2] ?: m.groups[3])!!.range.first - m.range.first)
-            val words = if (frac.isNotEmpty()) genFraction("", intPart, frac)?.let { w -> if (case == Case.GEN) w else null }
+            // дробь после «по» — «по две целых восемь сотых процента» (распределительное, не дательный)
+            val words = if (frac.isNotEmpty()) fractionCase("", intPart, frac, case)?.takeIf { t != "по" }
                 ?.let { "$it процента" } ?: return@replace m.value
                 else intPart.toLongOrNull()?.let { n -> Declension.cardinal(n, case) + " " + percentCases[case.ordinal][if (n % 10 == 1L && n % 100 != 11L) 0 else 1] }
                 ?: return@replace m.value
@@ -3097,6 +3163,9 @@ object Normalizer {
             val one = kotlin.math.abs(n) % 10 == 1L && kotlin.math.abs(n) % 100 != 11L
             "${m.groupValues[1]} ${if (n < 0) "минус " else ""}${Declension.cardinal(kotlin.math.abs(n), Case.PRE)} ${if (one) "проценте" else "процентах"}"
         }
+        // дробь в косвенном падеже — после родительного (genFracRe: «до 21.00 местами» — «до двадцати одной…») и процентов
+        // (andPercentRe смотрит на запятую дроби: «при 2,5 детей на семью – и 94%» — «и девяносто четыре процента»)
+        for ((re, case) in fracCaseRes) s = fracCase(s, re, case)
         s = accSuffixURe.replace(s) { m ->
             val n = m.groupValues[1].toLongOrNull() ?: return@replace m.value
             if (n % 10 != 1L || n % 100 == 11L) m.value else Declension.cardinal(n, Case.ACC, feminine = true)
