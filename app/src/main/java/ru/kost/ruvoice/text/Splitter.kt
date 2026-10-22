@@ -23,9 +23,10 @@ object Splitter {
     private val abbrevWordAtEndRe = Regex("""(?:^|[\s(\[«"])([а-яёіўєїґa-z]+)\.$""", RegexOption.IGNORE_CASE)
 
     /** Свои сокращения языка — [TextLayer.keepsSentence]: украинские «ім.», «тел.» не трогают русский и белорусский текст. */
-    private fun endsWithAbbrev(piece: String, next: String, layer: TextLayer) = abbrevWordAtEndRe.find(piece)?.groupValues?.get(1)
-        ?.let { it.lowercase() in abbrevStopWords || it in abbrevStopWordsLower || layer.keepsSentence(it, next) } == true ||
-        numberAbbrevAtEndRe.find(piece)?.groupValues?.get(1)?.let { layer.keepsSentence(it, next) } == true
+    private fun endsWithAbbrev(piece: String, next: String, layer: TextLayer) = abbrevWordAtEndRe.find(piece)?.groups?.get(1)
+        ?.let { g -> val w = g.value
+            w.lowercase() in abbrevStopWords || w in abbrevStopWordsLower || layer.keepsSentence(w, next, piece.substring(0, g.range.first)) } == true ||
+        numberAbbrevAtEndRe.find(piece)?.groups?.get(1)?.let { g -> layer.keepsSentence(g.value, next, piece.substring(0, g.range.first)) } == true
     /** Сокращение за числом через дефис («в 16-пов. будинку») — только сокращения слоя. */
     private val numberAbbrevAtEndRe = Regex("""\d-([а-яёіўєїґ]+)\.$""", RegexOption.IGNORE_CASE)
 

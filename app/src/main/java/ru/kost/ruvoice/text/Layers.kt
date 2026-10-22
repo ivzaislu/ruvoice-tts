@@ -65,8 +65,9 @@ interface TextLayer {
     fun keepHyphen(before: String, after: String): Boolean = false
 
     /** Слово [word] с точкой в конце куска — сокращение языка, и кусок [next] за ним — продолжение того же предложения
-     * ([Splitter.sentences]). Общие русские и белорусские сокращения Splitter знает сам; здесь — только свои слоя. */
-    fun keepsSentence(word: String, next: String): Boolean = false
+     * ([Splitter.sentences]). Общие русские и белорусские сокращения Splitter знает сам; здесь — только свои слоя.
+     * [before] — текст куска до сокращения (с открывающей скобкой или кавычкой, если она вплотную). */
+    fun keepsSentence(word: String, next: String, before: String): Boolean = false
 
     /** Минус «−» (U+2212) в пробелах — знак формулы, его читает слой ([Splitter.sentences] не делает из него тире). */
     val mathMinus: Boolean get() = false
@@ -92,13 +93,19 @@ object RuLayer : TextLayer {
     // но перед словом, которым начинают фразу, — конец («Мы приехали в пос. Он был пуст.»)
     private val sentenceStarts = setOf("Он", "Она", "Оно", "Они", "Я", "Мы", "Вы", "Ты", "А", "Но", "И", "Да", "Нет", "Там", "Тут",
         "Здесь", "Дальше", "Потом", "Затем", "Теперь", "Это", "Так", "Вот")
-    override fun keepsSentence(word: String, next: String) = word.replaceFirstChar(Char::lowercaseChar).let { w ->
+    // перед «ок.» в реплике: «Ну ок. 2 часа», «Хорошо, ок. 10 раз»
+    private val okReplyWords = setOf("ну", "да", "ладно", "хорошо", "окей", "ага", "угу", "так")
+    override fun keepsSentence(word: String, next: String, before: String) = word.replaceFirstChar(Char::lowercaseChar).let { w ->
         val c = next.firstOrNull()
         when {
             w == "пос" -> next.takeWhile(Char::isLetter) !in sentenceStarts
-            // «ок» — только перед строчной: «Ну ок. давай»; перед цифрой это чаще реплика («Ок. 5 минут» — не «около пяти»),
-            // перед заглавной — конец реплики («ок» без условия Splitter не берёт, review t17 п.6)
-            w == "ок" -> c?.isLowerCase() == true
+            // «ок» перед строчной — одна фраза («Ну ок. давай»), перед заглавной — конец реплики («ок» без условия Splitter
+            // не берёт, review t17 п.6). Перед цифрой — «около» («длина ок. 100 км», «(ок. 837 г.)», «М-4 ок. 300 км»), кроме
+            // реплики: «ок.» в начале фразы, после «ну/да/ладно…», «,», «—», «:» или открывающей кавычки («— Ок. 5 минут» — не
+            // «около пяти»)
+            w == "ок" -> c?.isLowerCase() == true || c?.isDigit() == true && before.trimEnd().let { b ->
+                b.isNotEmpty() && b.last() !in ",—–-:«\"„" && b.takeLastWhile(Char::isLetter).lowercase() !in okReplyWords
+            }
             else -> w in abbrStopsBeforeLowerOrDigit && c?.let { it.isLowerCase() || it.isDigit() } == true
         }
     }
@@ -209,7 +216,7 @@ object UkLayer : TextLayer {
     override fun symbolName(c: Char, punct: Boolean) = (if (punct) UK_SYMBOLS[c] else null) ?: SymbolNames.ofUk(c)
     override fun keepHyphen(before: String, after: String) = UK_HYPHEN.matches("$before-$after")
     /** Украинские сокращения ([UkNormalizer]): строчными и с заглавной в начале фразы («Див. також»), не капсом. */
-    override fun keepsSentence(word: String, next: String) = word.replaceFirstChar(Char::lowercaseChar).let { w ->
+    override fun keepsSentence(word: String, next: String, before: String) = word.replaceFirstChar(Char::lowercaseChar).let { w ->
         val c = next.firstOrNull()
         w in UK_ABBR_STOPS || c?.isLowerCase() == true && w in UK_ABBR_STOPS_BEFORE_LOWER ||
             // «до 18 год. 30 хв.» — перед цифрой тоже
