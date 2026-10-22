@@ -739,10 +739,13 @@ object UkNumbers {
      * «у квадраті», «10⁻³» — «у мінус третьому степені» (степінь — ч. р., Правопис). «Тиск 120/80» — «сто двадцять на
      * вісімдесят», «у пропорції 1:4» — «один до чотирьох». «у»/«в» — по милозвучності: после гласной «в» («два в кубі»). */
     fun arith(text: String): String {
-        // «1941 − 1945», «10:30 − 11:30»: между числами одни «−» в пробелах — тире диапазона; вычитание — только рядом с другим
-        // знаком («5 − 3 = 2»)
+        // «1941 − 1945», «10:30 − 11:30»: два числа через «−» в пробелах, второе больше, — тире диапазона; иначе вычитание
+        // («Обчисліть 7 − 2», «5 − 3 = 2»)
         var s = NUM_EXPR_RE.replace(text) { m ->
-            if (NUM_OP_RE.findAll(m.value).all { it.value == " − " }) m.value.replace(" − ", " — ") else m.value
+            val ops = NUM_OP_RE.findAll(m.value).toList()
+            val terms = NUM_OP_RE.split(m.value).map(::rangeValue)
+            val a = terms.first(); val b = terms.last()
+            if (ops.size == 1 && ops[0].value == " − " && a != null && b != null && b > a) m.value.replace(" − ", " — ") else m.value
         }
         s = dimensions(s)
         s = TIMES_SIZE_RE.replace(s, " на ")
@@ -764,6 +767,8 @@ object UkNumbers {
         s = MINUS_BEFORE_EQUALS_RE.replace(EQUALS_MINUS_RE.replace(s, " дорівнює мінус "), " мінус ")
         s = POWER_OP_RE.replace(s) { m -> m.groupValues[1].toLongOrNull()?.let { cardinal(it) }?.let { b -> "$b ${uv(b)} степені " } ?: m.value }
         s = ARITH_RE.replace(s) { m -> " ${ARITH_OPS.getValue(m.groupValues[1])} " }
+        // «(10 − 4) / 2 = 3»: «/» в пробелах в выражении с «=» — деление (без «=» — «тиск 120 / 80», дробь)
+        if ('=' in s) s = SPACED_DIV_RE.replace(s, " поділити на ")
         s = EQUALS_RE.replace(s, " дорівнює ")
         // степень — с основанием сразу словами: «у»/«в» по последней букве основы
         return POWER_RE.replace(s) { m ->
@@ -782,6 +787,12 @@ object UkNumbers {
     /** Цепочка чисел (время, дробь, дата внутри числа) со знаками между ними и знаки цепочки ([arith]). */
     private val NUM_EXPR_RE = Regex("""(?<![\d.,:/])\d+(?:[.,:/]\d+)*(?:\s*[-+−×÷*=^<>≤≥≠]\s*[-−]?\d+(?:[.,:/]\d+)*)+""")
     private val NUM_OP_RE = Regex("""(?<=\d)\s*[-+−×÷*=^<>≤≥≠]\s*(?=[-−]?\d)""")
+    private val SPACED_DIV_RE = Regex("""(?<=[\d)])\s+/\s+(?=[\d(])""")
+    /** Значение края диапазона: «10:30» — в минутах, «1,5» и «12.05» — дробью; «1/2» — null (не диапазон). */
+    private fun rangeValue(t: String): Double? = t.split(':').let { p ->
+        if (p.size == 2) p[0].toDoubleOrNull()?.let { h -> p[1].toDoubleOrNull()?.let { h * 60 + it } }
+        else if (p.size == 1) t.replace(',', '.').toDoubleOrNull() else null
+    }
     /** Размер «3x4», «5х10 м» — «на»; [UkNormalizer] зовёт до латиницы, иначе латинская «x» стала бы «екс». */
     internal fun dimensions(text: String) = DIMENSION_RE.replace(text, " на ")
     /** Формула с буквой-переменной («x² + y² = z²», «a ≥ b», «2x + 3 = 7»): буквы — шкільними назвами (ікс, ігрек, зет), «²» и «³»
@@ -1132,7 +1143,8 @@ object UkNumbers {
 
     /** Римское число I–XXX перед «століття», «вік» — порядковым в падеже существительного: «XX століття» → «двадцяте
      * століття» (одно: «століття» и називний, и родовий; после слова — родовий: «література двадцятого століття»), «у XX
-     * столітті» → «у двадцятому». Кириллические «Х», «І» тоже. «ст.» — тоже століття, падеж по предлогу: «у XX ст.» → «у
+     * столітті» → «у двадцятому». Так же «скликання»: «IX скликання Ради» → «дев'яте», «Академії IV скликання» → «четвертого».
+     * Кириллические «Х», «І» тоже. «ст.» — тоже століття, падеж по предлогу: «у XX ст.» → «у
      * двадцятому столітті», «XIX–XX ст.» → «дев'ятнадцяте — двадцяте століття». После имени с заглавной — порядковое имени:
      * «Петро I» → «петро перший», «Катерина II» → «… друга». Остальную латиницу не трогаем. Век — правило roman, после
      * имени — roman_name. Не проверено носителем. */
@@ -1146,7 +1158,7 @@ object UkNumbers {
             val c = CENTURY_CASE[noun.lowercase()] ?: Case.NOM
             val case = if (c == Case.NOM && WORD_BEFORE_RE.find(src.substring(maxOf(0, m.range.first - 40), m.range.first))
                     ?.groupValues?.get(1)?.lowercase()?.let { it !in NOM_BEFORE_CENTURY } == true) Case.GEN else c
-            val g = if (noun.lowercase().startsWith("ст")) Gender.N else Gender.M
+            val g = if (noun.lowercase().startsWith("ст") || noun.lowercase().startsWith("ск")) Gender.N else Gender.M
             "${ordinal(n, case, g)} $noun"
         }
         val st = s
@@ -1181,7 +1193,8 @@ object UkNumbers {
         // ponytail: род по имени: ж. р. — только [FEM_NAMES] («за Іоанни I» — «першої»), прочее на -а/-я/-и — родовий ч. р. («Указ Петра I» — «першого», «за Миколи I»), согласная и «-о» — називний ч. р. («Карл XII», «Петро I»), прочее не трогаем. Предлог в начале фразы
         // («Після II світової») — не имя. Одна буква — только I/І после кириллического имени: «День Х», «Model X» не трогаем.
         // Кириллическая «І» перед точкой — инициал, перед словом с заглавной — союз («Київ І Львів»), перед строчной — римское
-        s = ROMAN_NAME.replace(s) { m ->
+        val named = s
+        s = ROMAN_NAME.replace(named) { m ->
             val name = m.groupValues[1]
             val r = m.groupValues[2]
             val next = m.groupValues[3]
@@ -1189,7 +1202,8 @@ object UkNumbers {
             if (r.length == 1 && (r[0] !in "IІ" || name.last().code < 128 ||
                     r == "І" && (next == "." || next.lastOrNull()?.isUpperCase() == true)))
                 return@replace m.value
-            val (case, gender) = nameCase(name.replace(APOS_HARD_RE, "'")) ?: return@replace m.value
+            val (case, gender) = nameCase(name.replace(APOS_HARD_RE, "'"), named.substring(maxOf(0, m.range.first - 10), m.range.first))
+                ?: return@replace m.value
             "$name ${ordinal(CisNumbers.romanValue(r), case, gender)}"
         }
         if (!rules.on("roman")) return s
@@ -1244,7 +1258,8 @@ object UkNumbers {
     private val ROMAN_ANY = Regex("""(?-i:(?<![\p{L}\d'’ʼ-])(?=[IVXІХ]{2})$ROMAN_NUM(?![\p{L}\d'’ʼ]))""", RegexOption.IGNORE_CASE)
     /** Падеж «століття», «вік» по форме; «століття» — називний (родовий — по слову перед ним, [roman]). */
     private val CENTURY_CASE = mapOf("століття" to Case.NOM, "століттю" to Case.DAT, "століттям" to Case.INS, "столітті" to Case.PRE,
-        "вік" to Case.NOM, "віку" to Case.GEN, "віці" to Case.PRE, "віком" to Case.INS)
+        "вік" to Case.NOM, "віку" to Case.GEN, "віці" to Case.PRE, "віком" to Case.INS,
+        "скликання" to Case.NOM, "скликанню" to Case.DAT, "скликанням" to Case.INS, "скликанні" to Case.PRE)
     private val WORD_BEFORE_RE = Regex("""(\p{L}+)[\s,]*$""")
     /** Слова, после которых «століття» — називний: «Це XX століття», «Настало XXI століття». */
     private val NOM_BEFORE_CENTURY = setOf("це", "було", "є", "настало", "почалося", "прийшло", "минуло", "наше", "і", "й", "та", "а", "але")
@@ -1254,7 +1269,8 @@ object UkNumbers {
         "Елізабет", "Elizabeth", "Анастасія", "Олена", "Ірина", "Христина", "Іоанна", "Йоанна", "Джованна",
         "Частина", "Книга", "Глава", "Фаза", "Серія", "Група", "Категорія", "Зона", "Ліга")
     /** Мужские имена на -а/-я (називний): «Микола II» → «другий», не родовий «Петра». Не проверено носителем. */
-    private val MASC_A_NAMES = setOf("Микола", "Сава", "Ілля", "Лука", "Микита", "Кузьма", "Хома", "Фома", "Ярема", "Данила", "Гаврила")
+    private val LOC_PREP_BEFORE_RE = Regex("""(?<!\p{L})(?:при|по|на|у|в|о|об)\s+$""", RegexOption.IGNORE_CASE)
+    private val MASC_A_NAMES = setOf("Микола", "Сава", "Ілля", "Лука", "Микита", "Никита", "Кузьма", "Хома", "Фома", "Ярема", "Данила", "Гаврила")
     /** Имена на «-ем» в називному — не орудний («Артем I»). */
     private val NOM_EM = setOf("Артем")
 
@@ -1263,7 +1279,7 @@ object UkNumbers {
      * «з Петром I» → «першим», «Петру I», «при Петрові I», «при Петрі I» → «першому», «з Миколою II» → «другим», «Миколу II» →
      * «другого» (знахідний істоти), «Миколі II» → «другому». В VESUM имён нет (:prop не берём), морфология здесь не поможет.
      * null — не трогаем («-е», «-є», латинская гласная). Не проверено носителем. */
-    private fun nameCase(name: String): Pair<Case, Gender>? {
+    private fun nameCase(name: String, before: String = ""): Pair<Case, Gender>? {
         // слово главы с заглавной («Розділу II», «Главі III») — его род и падеж, не окончание имени
         CHAPTER_FORMS[name.lowercase()]?.let { (g, c) -> return c to g }
         val last = name.last().lowercaseChar()
@@ -1281,6 +1297,10 @@ object UkNumbers {
                 stemIn(1, MASC_A_NAMES) -> Case.GEN to Gender.M   // знахідний істоти = родовий
                 else -> Case.DAT to Gender.M
             }
+            // мужское на «-я» («Ілля»): «Іллі» — и родовий, и давальний/місцевий; місцевий — только после его предлога
+            // («при Іллі I» → «першому»), иначе родовий («За Іллі I», «Указ Іллі I» → «першого»)
+            last == 'і' && name.dropLast(1) + "я" in MASC_A_NAMES ->
+                (if (LOC_PREP_BEFORE_RE.containsMatchIn(before)) Case.PRE else Case.GEN) to Gender.M
             // давальний и місцевий у этих форм совпадают: «другій», «другому»
             last == 'і' -> Case.PRE to (if (stemIn(1, FEM_NAMES)) Gender.F else Gender.M)
             // родовий жіночого: «Катерини II» → «другої», «Марії I» → «першої»
@@ -1298,7 +1318,8 @@ object UkNumbers {
     /** I–XXX латиницей или кириллицей: непустое. */
     private const val ROMAN_NUM = """(?-i:(?=[IVXІХ])[XХ]{0,3}(?:[IІ][XХ]|[IІ]V|V?[IІ]{0,3}))"""
     /** Римское перед «століття», «вік» ([roman]), не часть слова. */
-    private val ROMAN = Regex("""(?<![\p{L}\d])($ROMAN_NUM)\s+(столітт(?:я|ю|ям|і)|в(?:ік|іку|іці|іком))(?!\p{L})""", RegexOption.IGNORE_CASE)
+    private val ROMAN = Regex("""(?<![\p{L}\d])($ROMAN_NUM)\s+(столітт(?:я|ю|ям|і)|в(?:ік|іку|іці|іком)|скликанн(?:я|ю|ям|і))(?!\p{L})""",
+        RegexOption.IGNORE_CASE)
     /** «у XX ст.», «XIX–XX ст.», «з XV до XVII ст.»: предлог, одно или два римских (третья группа — тире или «до»), «ст»;
      * шестая группа — за точкой конец или заглавная, седьмая — «н. е.» или «до н. е.». Точку «ст.» съедаем. */
     private val ROMAN_ST = Regex("""(?:(?<!\p{L})((?:у|в|з|із|зі|до|від|од)\s+))?(?<![\p{L}\d])($ROMAN_NUM)(?:(\s*[–—-]\s*|\s+до\s+)($ROMAN_NUM))?""" +
