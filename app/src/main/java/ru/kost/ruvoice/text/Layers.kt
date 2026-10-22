@@ -87,8 +87,10 @@ object RuLayer : TextLayer {
         "от", "до", "обо", "о")
     private val hyphenParticles = setOf("то", "либо", "нибудь", "таки", "ка", "де")
     override fun keepHyphen(before: String, after: String) = before in hyphenPrefixes || after in hyphenParticles
-    // «согласно прил. 2», «20 тыс. чел. и», «(ум. 1945)» — не конец фразы перед строчной или цифрой («Пришли 300 чел. Потом…» — конец)
-    private val abbrStopsBeforeLowerOrDigit = setOf("прил", "чел", "ум")
+    // «согласно прил. 2», «20 тыс. чел. и», «(ум. 1945)», «(род. 1890)», «в род. падеже» — не конец фразы перед строчной или
+    // цифрой («Пришли 300 чел. Потом…» — конец)
+    private val abbrStopsBeforeLowerOrDigit = setOf("прил", "чел", "ум", "род")
+    private val yearNomAheadRe = Regex("""^\d+\s+год(?![\p{L}])""")
     // «пос.» перед заглавной — название посёлка («в пос. Лесной»), как однобуквенное «г. Москва», которое не режет sentenceEnd;
     // но перед словом, которым начинают фразу, — конец («Мы приехали в пос. Он был пуст.»)
     private val sentenceStarts = setOf("Он", "Она", "Оно", "Они", "Я", "Мы", "Вы", "Ты", "А", "Но", "И", "Да", "Нет", "Там", "Тут",
@@ -106,7 +108,14 @@ object RuLayer : TextLayer {
             w == "ок" -> c?.isLowerCase() == true || c?.isDigit() == true && before.trimEnd().let { b ->
                 b.isNotEmpty() && b.last() !in ",—–-:«\"„" && b.takeLastWhile(Char::isLetter).lowercase() !in okReplyWords
             }
-            else -> w in abbrStopsBeforeLowerOrDigit && c?.let { it.isLowerCase() || it.isDigit() } == true
+            // «род.» перед цифрой — только в пометке: в скобках, после знака или имени не первым словом фразы; «Древний род. 1200
+            // лет истории», «Его род. 5 веков правил» — конец фразы, как было (ревью ru-fixes-2 M-1)
+            w == "род" && c?.isDigit() == true -> !yearNomAheadRe.containsMatchIn(next) && before.trimEnd().let { b ->
+                b.isEmpty() || b.last() in "(),;:—–-" || b.count { it == '(' } > b.count { it == ')' } ||
+                    b.takeLastWhile(Char::isLetter).let { x -> x.isNotEmpty() && x[0].isUpperCase() && b.dropLast(x.length).isNotBlank() }
+            }
+            // «…знатный род. 1890 год был трудным» — год именительным начинает фразу
+            else -> w in abbrStopsBeforeLowerOrDigit && c?.let { it.isLowerCase() || it.isDigit() } == true && !yearNomAheadRe.containsMatchIn(next)
         }
     }
 }

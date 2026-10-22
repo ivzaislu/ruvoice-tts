@@ -2439,6 +2439,92 @@ object Normalizer {
         return s
     }
 
+    // «ум.», «род.» перед годом, «в …», «ок.», «после», месяцем — «умер», «родился» («(ум. 1945)», «род. в 1890 г.», «(ум. ок. 62
+    // г.)»); «род. п.», «в род. падеже» — родительный падеж, не трогаем. Раньше дат и годов: «род.28.10.79» — дата после слова.
+    // Голый год после них — «в … году» («(ум. 945)» — «умер в девятьсот сорок пятом году», было «ум. девятьсот сорок пять»);
+    // с «г.» предлог «в» дальше читают правила года с предлогом.
+    // Род: существительное вплотную к имени («дочь Джулию Суассуна (род.», «Барстоу, внучка, род.»), потом отчество во фразе
+    // («-овна» — женский, «-овича» — мужской: «в семье Ивана Дмитриевича Захарова (род. в 1905)»), потом имя: женское из
+    // списков монархов или фамилия на «-ова/-ина/-ская…» («Анна Ахматова (род. 1889)» — «родилась»).
+    // ponytail: род по окончанию; «Валерия», «Аспасия» читаются «умер», «жена Пушкина (ум. 1837)» — «умерла»
+    private fun bio(text: String): String {
+        val s = bioYearRe.replace(text) { m ->
+            if (!bioPlace(text, m.range.first)) m.value else m.groupValues[1] + " в " + m.groupValues[2].ifEmpty { m.groupValues[3] + "-м году" } }
+        return bioAbbrevRe.replace(s) { m ->
+            if (!bioPlace(s, m.range.first)) return@replace m.value
+            val before = phraseTail(s.substring(maxOf(0, m.range.first - 60), m.range.first))
+            val word = if (m.groupValues[1].equals("ум", true)) (if (bioFemale(before)) "умерла" else "умер") else if (bioFemale(before)) "родилась" else "родился"
+            (if (m.value[0].isUpperCase()) word.replaceFirstChar(Char::uppercaseChar) else word) +
+                (if (s.getOrNull(m.range.last + 1)?.isLetterOrDigit() == true) " " else "")
+        }
+    }
+    // Место биографической пометки: в скобках, после знака («, ум.», «— ум.», «; род.», «(Ричард) род.»), в начале фразы или после слова с
+    // заглавной (имени: «Он род. в 1890 г.», «Поэт ум. в 1945 году»). После строчного слова вне скобок «ум.», «род.» — слово:
+    // «У него был острый ум. 5 лет он учился», «Это был великий ум. в наше время таких мало».
+    private fun bioPlace(s: String, at: Int): Boolean {
+        val b = s.substring(maxOf(0, at - 80), at)
+        val t = b.trimEnd()
+        // в начале куска — только «Ум.», «Род.» с заглавной: кусок чтеца мог начаться посреди фразы («…острый | ум. 5 лет»)
+        if (t.isEmpty()) return s.getOrNull(at)?.isUpperCase() == true
+        if (t.last() in "(;,:—–-.!?)" || b.count { it == '(' } > b.count { it == ')' }) return true
+        val w = t.takeLastWhile { it.isLetter() }
+        if (w.isEmpty() || !w[0].isUpperCase()) return false
+        // первое слово фразы — прилагательное или местоимение: «Великий ум. 5 лет…», «Его ум. в 1990 году…», «Древний род.
+        // 1200 лет…» — слово, не пометка (ревью ru-fixes-2 M-1); «Он род. в 1890 г.» — пометка
+        val first = t.dropLast(w.length).trimEnd().let { it.isEmpty() || it.last() in ".!?…" }
+        val tags = morph?.tags(w.lowercase()) ?: 0
+        val lw = w.lowercase()
+        return !(first && (Morph.isAdjective(tags) || lw in bioPronouns) && lw !in setOf("он", "она"))
+    }
+    // Хвост фразы перед пометкой: режем по концу предложения, но не по точке сокращения — во второй пометке «(род. 1889 — ум.
+    // 1966)» имя иначе терялось за точкой «род.» (ревью ru-fixes-2 I-2: «родилась … умер»)
+    private val bioPronouns = setOf("его", "её", "ее", "их", "мой", "твой", "наш", "ваш", "свой", "этот", "тот", "весь", "сам", "чей")
+    private val abbrDotAtEndRe =Regex("""(?<![\p{L}])(?:\p{L}|ум|род|ок|гг|вв|др|пр|им|ст|св|ср|см)\.$""", RegexOption.IGNORE_CASE)
+    private fun phraseTail(b: String): String {
+        var i = b.length
+        while (true) {
+            val j = if (i <= 0) -1 else b.lastIndexOfAny(charArrayOf('.', '!', '?'), i - 1)
+            if (j < 0) return b
+            if (b[j] == '.' && abbrDotAtEndRe.containsMatchIn(b.substring(0, j + 1))) { i = j; continue }
+            return b.substring(j + 1)
+        }
+    }
+    private val wordTokRe = Regex("""[\p{L}-]+""")
+    private fun bioFemale(raw: String): Boolean {
+        // знак ударения рвёт слово: «В+ера Никол+аевна К+онюхова» — «К» вышло бы инициалом, а «Никол» — именем
+        val before = raw.replace("+", "").replace("́", "")
+        val toks = wordTokRe.findAll(before).map { it.value }.toList()
+        // инициалы пропускаем: «Ахматова А. А. (род.» — имя «Ахматова» (повторное ревью ru-fixes-2 M-b)
+        val last = toks.indexOfLast { it[0].isUpperCase() && it.length > 1 }
+        if (last >= 0) {
+            var first = last
+            while (first > 0 && toks[first - 1][0].isUpperCase()) first--
+            // существительное рядом с именем или в начале фразы с заглавной: «дочь», «сын», «Работница Симона Эврар»; только
+            // единственное число («детей: Мария (род.» — не о детях)
+            val m = morph
+            if (m != null) for (w in listOfNotNull(toks.getOrNull(last + 1)) + toks.subList(first, last + 1).reversed() + listOfNotNull(toks.getOrNull(first - 1))) {
+                val t = m.tags(w.lowercase())
+                if (Morph.isNoun(t) && Morph.animate(t) && Morph.nounCases(t, plural = false).isNotEmpty() && Morph.nounCases(t, plural = true).isEmpty())
+                    Morph.gender(t)?.let { return it == Gender.F }
+            }
+            if (femalePatronymicRe.containsMatchIn(before)) return true
+            val names = toks.subList(first, last + 1)
+            return names.any { it.lowercase() in femaleIndecl || nameGenderCase(it).first } ||
+                !malePatronymicRe.containsMatchIn(before) && femaleNameEndRe.containsMatchIn(toks[last])
+        }
+        return femalePatronymicRe.containsMatchIn(before)
+    }
+    private val bioYearRe by lazy { Regex(
+        """(?<![\p{L}])((?:ум|род)\.)\s*(?:(\d{1,4}\s*г\.)|(\d{3,4})(?![\d/\-–—]|[.,:]\d|\s*(?:год|г\.|$monthGenAlt|до\s+н|н\.\s*э)))""",
+        RegexOption.IGNORE_CASE) }
+    private val bioAbbrevRe by lazy { Regex(
+        // предлог и месяц — только строчными: «острый ум. В 1990 году…» — конец фразы
+        """(?<![\p{L}\d])(ум|род)\.(?=\s*(?:\d(?!\d*(?:-\p{L}+)?\s+год(?![\p{L}]))|(?-i:в|во|ок\.|около|после|до)\s|(?-i:$monthsAlt|$monthGenAlt)(?![\p{L}])))""",
+        RegexOption.IGNORE_CASE) }
+    private val femaleNameEndRe = Regex("""(?:ова|ева|ёва|ина|ына|ская|цкая)$""")
+    private val femalePatronymicRe = Regex("""[а-яё](?:овн|евн|ичн)[аы](?![а-яё])""")
+    private val malePatronymicRe = Regex("""[а-яё](?:ович|евич|ич)а?(?![а-яё])""")
+
     /** Сокращение в конце предложения («и т. д. Потом», «100 руб. Дорого») — точка остаётся, иначе предложения
      * склеиваются. Кроме тех, за которыми обычно имя с заглавной: «ул. Ленина», «проф. Иванов», «см. Иванов», «лат. Rosa». */
     private val abbrevBeforeName = setOf("ул", "проф", "акад", "св", "ср", "см", "напр", "им", "mr", "mrs", "dr", "г", "н", "лат")
@@ -3413,6 +3499,7 @@ object Normalizer {
         s = step("roman", ::romanNumerals)(s)
         // до дат и единиц: «Р-7А» иначе «семь ампер», «УР-100Н» — «сто ньютонов»
         s = step("letter_digit", ::cyrCodes)(s)
+        s = step("abbrev", ::bio)(s)
         s = step("dates", ::dates)(s)
         s = step("times", ::times)(s)
         s = step("years", ::yearsWithG)(s)

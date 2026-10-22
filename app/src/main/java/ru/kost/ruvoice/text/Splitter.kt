@@ -23,10 +23,16 @@ object Splitter {
     private val abbrevWordAtEndRe = Regex("""(?:^|[\s(\[«"])([а-яёіўєїґa-z]+)\.$""", RegexOption.IGNORE_CASE)
 
     /** Свои сокращения языка — [TextLayer.keepsSentence]: украинские «ім.», «тел.» не трогают русский и белорусский текст. */
-    private fun endsWithAbbrev(piece: String, next: String, layer: TextLayer) = abbrevWordAtEndRe.find(piece)?.groups?.get(1)
+    // Поиск только в хвосте куска: сокращение у конца короче ABBR_TAIL, а `^` при startIndex всё равно значит начало всего
+    // куска. Иначе на длинной цепочке «род. род. …» без конца фразы каждый find шёл с начала — квадрат (повторное ревью M-c)
+    private const val ABBR_TAIL = 64
+    private fun endsWithAbbrev(piece: String, next: String, layer: TextLayer): Boolean {
+        val from = maxOf(0, piece.length - ABBR_TAIL)
+        return abbrevWordAtEndRe.find(piece, from)?.groups?.get(1)
         ?.let { g -> val w = g.value
             w.lowercase() in abbrevStopWords || w in abbrevStopWordsLower || layer.keepsSentence(w, next, piece.substring(0, g.range.first)) } == true ||
-        numberAbbrevAtEndRe.find(piece)?.groups?.get(1)?.let { g -> layer.keepsSentence(g.value, next, piece.substring(0, g.range.first)) } == true
+        numberAbbrevAtEndRe.find(piece, from)?.groups?.get(1)?.let { g -> layer.keepsSentence(g.value, next, piece.substring(0, g.range.first)) } == true
+    }
     /** Сокращение за числом через дефис («в 16-пов. будинку») — только сокращения слоя. */
     private val numberAbbrevAtEndRe = Regex("""\d-([а-яёіўєїґ]+)\.$""", RegexOption.IGNORE_CASE)
 

@@ -159,6 +159,10 @@ class SplitterTest {
         assertEquals(listOf("Иван Петров (1890, ум. 1945) — поэт."), Splitter.sentences("Иван Петров (1890, ум. 1945) — поэт."))
         assertEquals(listOf("Поэт ум. в 1945 году."), Splitter.sentences("Поэт ум. в 1945 году."))
         assertEquals(2, Splitter.sentences("Он был очень ум. Потом ушёл.").size)
+        // «род.» (родился; родительный падеж) — так же
+        assertEquals(listOf("Иван Петров (род. 1890) — поэт."), Splitter.sentences("Иван Петров (род. 1890) — поэт."))
+        assertEquals(listOf("Слово стоит в род. падеже."), Splitter.sentences("Слово стоит в род. падеже."))
+        assertEquals(listOf("Это был древний род.", "Потом он угас."), Splitter.sentences("Это был древний род. Потом он угас."))
         // «ок.» перед строчной — одна фраза; перед цифрой — «около», если перед «ок.» обычное слово или «(»; в начале куска,
         // после «ну/да/ладно/хорошо…» и после «,», «—», «:» — «ок» в реплике («Ок. 5 минут» читалось «около пяти минут»)
         assertEquals(listOf("Ну ок. давай завтра."), Splitter.sentences("Ну ок. давай завтра."))
@@ -181,6 +185,12 @@ class SplitterTest {
         assertEquals(2, Splitter.sentences("Да ок. 3 раза уже проверил.").size)
         assertEquals(2, Splitter.sentences("Угу, ок. 2 штуки возьму.").size)
         assertEquals(listOf("Хорошо, ок.", "Идём дальше."), Splitter.sentences("Хорошо, ок. Идём дальше."))
+        // повторное ревью ru-fixes-2 M-c: длинная цепочка сокращений без конца фразы — не квадрат (было 7 с на 8000 «род.»)
+        for (s in listOf("род. ".repeat(8000), "Петрова (род. 1900 — ум. 2000) ".repeat(1000), "ок. ".repeat(8000))) {
+            val t0 = System.nanoTime()
+            Splitter.sentences(s)
+            assertTrue("${s.take(20)}: ${(System.nanoTime() - t0) / 1_000_000} мс", System.nanoTime() - t0 < 2_000_000_000L)
+        }
         // «пос.» перед заглавной — название посёлка, как «г. Москва»; перед словом, которым начинают фразу, — конец фразы
         assertEquals(listOf("Мы жили в пос. городского типа."), Splitter.sentences("Мы жили в пос. городского типа."))
         assertEquals(listOf("Мы жили в пос. Лесной до 2020 года."), Splitter.sentences("Мы жили в пос. Лесной до 2020 года."))
