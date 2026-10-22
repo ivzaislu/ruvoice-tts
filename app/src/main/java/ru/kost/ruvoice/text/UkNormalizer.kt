@@ -138,7 +138,9 @@ object UkNormalizer {
     }
     private val DIGIT_NAMES = Array(10) { UkNumbers.digits(it.toString()) }
     private const val CODE_WORD = """(?:пін-?код|код|пароль|одноразовий\s+пароль|pin|cvc2?|cvv2?|otp|code|passcode)"""
-    private const val CODE_WORD_FORMS = """(?:пін-?код(?:у|а|ом|і|и|ів)?|код(?:у|а|ом|і|и|ів)?|парол(?:ь|я|ю|ем|і|ів)|pin|cvc2?|cvv2?|otp|code|passcode)"""
+    // «поштовий індекс 01001» — по цифрам: числом «нуль одна тисяча один»
+    private const val CODE_WORD_FORMS = """(?:пін-?код(?:у|а|ом|і|и|ів)?|код(?:у|а|ом|і|и|ів)?|парол(?:ь|я|ю|ем|і|ів)|pin|cvc2?|cvv2?|otp|code|passcode|""" +
+        """поштов(?:ий|ого|ому|им)\s+індекс(?:у|ом|і)?)"""
     private const val CODE_DIGITS = """\d{2,4}(?:[ -]\d{2,4}){1,2}|\d{3,8}"""
     private const val CODE_NOT_AFTER = """(?!\d|[.,:]\d|\s*(?:%|₴|\$|€|°|грн|руб|р\.|рік|рок|шт|хв|сек|раз|км|кг|м(?!\p{L})))"""
     private val CODE_AFTER_WORD_RE = Regex("""(?<![\p{L}\d])($CODE_WORD_FORMS)(?!\p{L})([^\d.!?\n]{0,40}?)(?<![\p{L}\d,.])($CODE_DIGITS)$CODE_NOT_AFTER""",
@@ -194,6 +196,8 @@ object UkNormalizer {
                 // («Київ») — знахідний только после глагола движения («Їду в м. Київ»), иначе місцевий («проживає у м. Київ»)
                 p in MOTION_PREPS && a.place && !LOC_NAME_RE.containsMatchIn(t.substring(m.range.last + 1).take(40)) &&
                     motionBefore(before) -> Case.ACC
+                // «п. 2 ст. 15» — пункт статті: целое за частью в родовому
+                p.isEmpty() && digit && key.lowercase() in WHOLE_ABBRS && PART_BEFORE_RE.containsMatchIn(before) -> Case.GEN
                 p.isEmpty() && SEE_BEFORE_RE.containsMatchIn(before) -> Case.ACC
                 else -> UkNumbers.SIGN_PREP[p] ?: Case.NOM
             }
@@ -282,7 +286,7 @@ object UkNormalizer {
      * предлога, точка — конец предложения. */
     private val END_ABBRS = setOf("тел")
     /** «м.» после числа, римского, «рт.», «кв.», «куб.», «пог.» — метр, а не місто: «50 кв. м. Далі», «5 млн куб. м. Газу». */
-    private val ROMAN_OR_DIGIT_BEHIND = Regex("""(?-i:(?:[IVXІХ]+|\d+|рт\.|(?<!\p{L})(?:кв|куб|пог)\.?)\s*$)""", RegexOption.IGNORE_CASE)
+    private val ROMAN_OR_DIGIT_BEHIND = Regex("""(?-i:(?:[IVXІХ]+|\d+|рт\.|(?<!\p{L})(?:кв|куб|пог|к)\.?)\s*$)""", RegexOption.IGNORE_CASE)
     /** Назва за сокращением в місцевому: «Києві», «Львові», «Одесі», «Житомирі» (-і, -ї, в т. ч. -ові, -еві, -єві). */
     private val LOC_NAME_RE = Regex("""^\s*\p{L}+[іїІЇ](?![\p{L}'’ʼ])""", RegexOption.IGNORE_CASE)
     /** Глагол движения перед предлогом (до двух слов между ними, без знака препинания): «Їду в м. Київ», «Приїхав сьогодні у
@@ -329,8 +333,13 @@ object UkNormalizer {
         add("пряму", "ю єш є ємо єте ють вав вала вали вати")
         add("переїзд поїздка поїздку повернення переселення подорож", "_")
     }
-    /** «див. с. 45», «Див. табл. 3» — знахідний: «дивись сторінку», «дивись таблицю». */
-    private val SEE_BEFORE_RE = Regex("""(?<!\p{L})(?:див\.?|дивись|дивіться)\s*$""", RegexOption.IGNORE_CASE)
+    /** «див. с. 45», «Див. табл. 3» — знахідний: «дивись сторінку», «дивись таблицю»; и дальше по перечню через «і», «та»,
+     * запятую: «див. мал. 4 і табл. 2» — «і таблицю». */
+    private val SEE_BEFORE_RE = Regex("""(?<!\p{L})(?:див\.?|дивись|дивіться)\s*(?:\p{L}{1,6}\.\s*\d+[\d.,]*\s*(?:,|і|й|та)\s+)*$""",
+        RegexOption.IGNORE_CASE)
+    /** Часть документа с номером перед целым: «п. 2 ст. 15» — «пункт два статті п'ятнадцять», «ч. 1 ст. 5». Не проверено носителем. */
+    private val PART_BEFORE_RE = Regex("""(?<!\p{L})(?:п|пп|підп|ч)\.\s*\d+[\d.,]*\s*$""", RegexOption.IGNORE_CASE)
+    private val WHOLE_ABBRS = setOf("ст", "розд", "гл", "дод")
     /** «смт Ворохта» пишут без точки: перед назвою — с точкой, как прочие сокращения [NOUN_ABBR_RE]. */
     private val SMT_RE = Regex("""(?<![\p{L}\d.])смт(?=\s+(?-i:\p{Lu}))""", RegexOption.IGNORE_CASE)
 
@@ -454,7 +463,8 @@ object UkNormalizer {
         mapOf('Ё' to "йо", 'Ы' to "и", 'Э' to "е", 'Ъ' to "твердий знак")
     private const val CYR_VOWELS = "АЕЄИІЇОУЮЯЁЫЭ"
     /** С гласными, но по буквам; не проверено носителем. */
-    private val SPELL = setOf("ЄС", "АЕС", "АТ", "ПАТ", "ЄІБ", "ОДА", "ОСББ", "ЄСПЛ", "ОБСЄ", "ЄБРР", "ОАЕ", "ЕС")
+    private val SPELL = setOf("ЄС", "АЕС", "АТ", "ПАТ", "ЄІБ", "ОДА", "ОСББ", "ЄСПЛ", "ОБСЄ", "ЄБРР", "ОАЕ", "ЕС", "ЄДРПОУ", "ЕДРПОУ",
+        "РНОКПП")
     /** Частые слова из трёх букв с гласной с краю — не сокращение и капсом. ponytail: стоп-лист, пополнять по жалобам. */
     private val EDGE_WORDS = setOf("хто", "два", "три", "сто", "для", "дні", "дно", "зло", "сни", "все", "всі", "вся", "зле", "вже",
         "пси", "пса", "шви", "акт", "арт", "ост", "спа", "бра", "зно", "тре", "мла", "мрі", "дня", "сну")
@@ -585,6 +595,7 @@ object UkNormalizer {
         step("numbers", ::classes)                    // «у 5-А класі» — «у п'ятому-а класі»
         step("numbers") { CLASS_LETTER_RE.replace(it, " $1") }   // «5-А» без «клас» — буква класу, не нарощення
         step("arith", UkNumbers::dimensions)          // «3x4» — до латиницы, иначе «x» стала бы «екс»
+        step("arith", UkNumbers::algebra)             // «x² + y² = z²» — тоже до латиницы
         step("homoglyphs", ::homoglyphs)              // «cік», «iнший» латиницей — до латиницы, иначе «кік», «нший»
         // латиницы в символах модели нет вовсе — «FilmBell», «USB», «Карл V» раньше выпадали
         step("latin") { FILE_EXT_RE.replace(it) { m -> " крапка " + m.groupValues[1].let { e -> if (e.none { c -> c in "aeiouy" }) e.uppercase() else e } } }

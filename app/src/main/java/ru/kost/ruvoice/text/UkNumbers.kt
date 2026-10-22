@@ -779,6 +779,28 @@ object UkNumbers {
     }
     /** Размер «3x4», «5х10 м» — «на»; [UkNormalizer] зовёт до латиницы, иначе латинская «x» стала бы «екс». */
     internal fun dimensions(text: String) = DIMENSION_RE.replace(text, " на ")
+    /** Формула с буквой-переменной («x² + y² = z²», «a ≥ b», «2x + 3 = 7»): буквы — шкільними назвами (ікс, ігрек, зет), «²» и «³»
+     * за буквой — «у квадраті», «у кубі», знаки — словами; числа остаются цифрами. До латиницы: иначе «x» стала бы «екс», а «=»
+     * и «≥» между буквами выпадали фильтром. Не проверено носителем. */
+    internal fun algebra(text: String) = FORMULA_RE.replace(text) { m ->
+        if (m.value.none { it in 'a'..'z' || it in 'A'..'Z' }) return@replace m.value
+        val s = FORMULA_LETTER_RE.replace(m.value) { l ->
+            val name = SCHOOL_LATIN.getValue(l.groupValues[1].lowercase()[0])
+            val pow = when (l.groupValues[2]) { "²" -> " ${uv(name)} квадраті"; "³" -> " ${uv(name)} кубі"; else -> "" }
+            (if (l.range.first > 0 && m.value[l.range.first - 1].isDigit()) " " else "") + name + pow
+        }
+        FORMULA_OP_RE.replace(s) { o -> o.groupValues.drop(1).first { it.isNotEmpty() }.let { " " + (COMPARE_WORDS[it] ?: ARITH_OPS.getValue(it)) + " " } }
+    }
+    private const val TERM = """(?:\d+(?:[.,]\d+)?[A-Za-z]?|[A-Za-z])[²³]?"""
+    // «<», «>» — только в пробелах, как [COMPARE_RE]
+    private const val FORMULA_OP = """\s*([=+−×÷≥≤≠])\s*|\s+([<>])\s+"""
+    private val FORMULA_RE = Regex("""(?<![\p{L}\d.,])$TERM(?:(?:$FORMULA_OP)[-−]?$TERM)+(?![\p{L}\d])""")
+    private val FORMULA_LETTER_RE = Regex("""(?<![A-Za-z])([A-Za-z])([²³]?)""")
+    private val FORMULA_OP_RE = Regex(FORMULA_OP)
+    /** Латинские буквы в математике — как в школе. Не проверено носителем. */
+    private val SCHOOL_LATIN = mapOf('a' to "а", 'b' to "бе", 'c' to "це", 'd' to "де", 'e' to "е", 'f' to "еф", 'g' to "же",
+        'h' to "аш", 'i' to "і", 'j' to "йот", 'k' to "ка", 'l' to "ель", 'm' to "ем", 'n' to "ен", 'o' to "о", 'p' to "пе", 'q' to "ку",
+        'r' to "ер", 's' to "ес", 't' to "те", 'u' to "у", 'v' to "ве", 'w' to "дубль-ве", 'x' to "ікс", 'y' to "ігрек", 'z' to "зет")
     /** «у» после согласной, «в» после гласной (милозвучність): «десять у квадраті», «два в кубі». */
     private fun uv(before: String) = if (before.trimEnd().lastOrNull()?.lowercaseChar()?.let { it in "аеєиіїоуюя" } == true) "в" else "у"
     private val ARITH_OPS = mapOf("+" to "плюс", "×" to "помножити на", "*" to "помножити на", "÷" to "поділити на", "=" to "дорівнює", "−" to "мінус")
