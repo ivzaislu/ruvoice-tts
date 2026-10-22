@@ -178,22 +178,26 @@ object UkNormalizer {
             val prep = m.groupValues[1]
             val key = m.groupValues[2]
             val roman = m.groupValues[3]
-            val digit = roman.isNotEmpty() || m.groupValues[4].isNotEmpty()
+            val end = roman.isEmpty() && t.substring(m.range.last + 1).isBlank()
+            if (end && key.lowercase() !in END_ABBRS) return@replace m.value
+            val digit = end || roman.isNotEmpty() || m.groupValues[4].isNotEmpty()
             val a = (if (digit) DIGIT_ABBRS else NAME_ABBRS)[key.lowercase()] ?: return@replace m.value
             // перед назвою — только строчная: «С. Петренко», «Р. П.» — инициалы; «XX ст. Україна» — століття, «5 м. Далі» — метр,
             // «мм рт. ст. Далі» — ртутний стовпчик
             if (!digit && (key[0].isUpperCase() || ROMAN_OR_DIGIT_BEHIND.containsMatchIn(t.substring(maxOf(0, m.range.first - 8), m.range.first))))
                 return@replace m.value
             val p = prep.lowercase()
-            val before = t.substring(maxOf(0, m.range.first - 30), m.range.first)
+            val before = t.substring(maxOf(0, m.range.first - 60), m.range.first)
             val case = when {
                 p in FROM_PREPS && a.place -> Case.GEN
-                // «Їду в м. Київ» — куди: знахідний; «живе в м. Києві» — місцевий
-                p in MOTION_PREPS && a.place && MOTION_BEFORE_RE.containsMatchIn(before) -> Case.ACC
+                // «в/у/на» перед місцем: назва в місцевому («Києві», «Одесі») — місцевий при любом глаголе; назва в прямій формі
+                // («Київ») — знахідний только после глагола движения («Їду в м. Київ»), иначе місцевий («проживає у м. Київ»)
+                p in MOTION_PREPS && a.place && !LOC_NAME_RE.containsMatchIn(t.substring(m.range.last + 1).take(40)) &&
+                    motionBefore(before) -> Case.ACC
                 p.isEmpty() && SEE_BEFORE_RE.containsMatchIn(before) -> Case.ACC
                 else -> UkNumbers.SIGN_PREP[p] ?: Case.NOM
             }
-            (if (prep.isEmpty()) "" else "$prep ") + a.forms[case.ordinal] + " " +
+            (if (prep.isEmpty()) "" else "$prep ") + a.forms[case.ordinal] + (if (end) "." else " ") +
                 if (roman.isEmpty()) "" else UkNumbers.ordinal(UkNumbers.romanValue(roman), case, a.gender) + " "
         }
     }
@@ -249,13 +253,47 @@ object UkNormalizer {
      * цифра, «+», «(», «:» номера (четвёртая) или слово с заглавной. */
     private val NOUN_ABBR_RE = Regex("""(?:(?<![\p{L}\d])(${UkNumbers.SIGN_PREP.keys.sortedByDescending { it.length }.joinToString("|")})\s+)?""" +
         """(?<![\p{L}\d.])(${(DIGIT_ABBRS.keys + NAME_ABBRS.keys).sortedByDescending { it.length }.joinToString("|")})\.\s*""" +
-        """(?-i:(?:((?:[IVX]|І(?=[IVXІХ]|\s*$))[IVXІХ]*)(?![\p{L}\d])|(?=([\d+(:]))|(?=\p{Lu})))""", RegexOption.IGNORE_CASE)
+        """(?-i:(?:((?:[IVX]|І(?=[IVXІХ]|\s*$))[IVXІХ]*)(?![\p{L}\d])|(?=([\d+(:]))|(?=\p{Lu})|(?=\s*$)))""", RegexOption.IGNORE_CASE)
+    /** Сокращение в конце куска («Дзвоніть за тел. Ми чекаємо.» — Splitter режет после «тел.» перед заглавной): словом в падеже
+     * предлога, точка — конец предложения. */
+    private val END_ABBRS = setOf("тел")
     /** «м.» после числа, римского, «рт.», «кв.», «куб.», «пог.» — метр, а не місто: «50 кв. м. Далі», «5 млн куб. м. Газу». */
     private val ROMAN_OR_DIGIT_BEHIND = Regex("""(?-i:(?:[IVXІХ]+|\d+|рт\.|(?<!\p{L})(?:кв|куб|пог)\.?)\s*$)""", RegexOption.IGNORE_CASE)
-    /** Глагол движения перед «в/у/на» — знахідний: «Їду в м. Київ» → «в місто», а не «в місті». Не проверено носителем. */
-    private val MOTION_BEFORE_RE = Regex("""(?<!\p{L})(?:(?:по|при|пере|ви|від|до|за|з|роз|в|у|об)?(?:їд|їзд|їжджа|їха)\p{L}*|""" +
-        """прибу\p{L}*|поверн\p{L}*|поверта\p{L}*|вируш\p{L}*|відправ\p{L}*|переселил\p{L}*|(?:при|ви|по|пере|за|від|до)(?:лет|літа)\p{L}*|""" +
-        """летів|летіла|летіли|лечу|(?:пі|при|зай|увій|прий|ві|ви)ш(?:ов|ла|ли|ло)|піду|підемо|йду|іду|прийду)\s+$""", RegexOption.IGNORE_CASE)
+    /** Назва за сокращением в місцевому: «Києві», «Львові», «Одесі», «Житомирі» (-і, -ї, в т. ч. -ові, -еві, -єві). */
+    private val LOC_NAME_RE = Regex("""^\s*\p{L}+[іїІЇ](?![\p{L}'’ʼ])""", RegexOption.IGNORE_CASE)
+    /** Глагол движения перед предлогом (до двух слов между ними, без знака препинания): «Їду в м. Київ», «Приїхав сьогодні у
+     * м. Київ». Только целые словоформы из [MOTION_WORDS]: «їдять», «їдальні», «прибуток» — не движение. */
+    private fun motionBefore(before: String): Boolean =
+        WORD_RE.findAll(before.substringAfterLast(',').split(CLAUSE_END_RE).last()).map { it.value.lowercase() }.toList()
+            .takeLast(3).any { it in MOTION_WORDS }
+    private val WORD_RE = Regex("""\p{L}+(?:['’ʼ]\p{L}+)*""")
+    private val CLAUSE_END_RE = Regex("""[.;:!?…—–()«»"]""")
+    /** Словоформы глаголов (и нескольких существительных) движения: основа × окончания; «_» — пустое окончание. Не проверено
+     * носителем. */
+    private val MOTION_WORDS: Set<String> = buildSet {
+        fun add(stems: String, ends: String) { for (s in stems.split(' ')) for (e in ends.split(' ')) add(s + e.replace("_", "")) }
+        val ride = "по при пере ви за до"
+        add("їд " + ride.split(' ').joinToString(" ") { it + "їд" }, "у еш е емо ете уть")
+        add("їха " + ride.split(' ').joinToString(" ") { it + "їха" }, "в ла ло ли ти")
+        add(listOf("при", "пере", "ви", "за", "до").joinToString(" ") { it + "їжджа" }, "ю єш є ємо єте ють в ла ли ти")
+        add("ід йд", "у еш е емо ете уть ти")
+        add("ішо йшо пішо прийшо зайшо увійшо вийшо дійшо", "в")
+        add("ішл йшл пішл прийшл зайшл увійшл вийшл дійшл", "а и о")
+        add("пі прий зай ді", "ду де демо дете дуть ти")
+        add("ходи", "в ла ли")
+        add("лет", "ів іла іли іти ить ять")
+        add("по при пере ви за до", "лечу")
+        add("полет прилет перелет вилет", "ів іла іли іти ить ять")
+        add("прибу", "в ла ли де ду демо дуть ти ває вають вав вала вали")
+        add("вируши", "в ла ли ти")
+        add("вируша", "ю є ють в ла ли")
+        add("поверну", "вся лася лися лись ся ться")
+        add("повернеться повернуться", "_")
+        add("поверта", "юся ється ються вся лася лися")
+        add("відправи", "вся лася лися лись ли")
+        add("переселився переселилася переселилися прямую прямує прямують прямував прямувала прямували", "_")
+        add("переїзд поїздка поїздку повернення переселення подорож", "_")
+    }
     /** «див. с. 45», «Див. табл. 3» — знахідний: «дивись сторінку», «дивись таблицю». */
     private val SEE_BEFORE_RE = Regex("""(?<!\p{L})(?:див\.?|дивись|дивіться)\s*$""", RegexOption.IGNORE_CASE)
     /** «смт Ворохта» пишут без точки: перед назвою — с точкой, как прочие сокращения [NOUN_ABBR_RE]. */

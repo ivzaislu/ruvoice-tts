@@ -126,6 +126,10 @@ class SplitterTest {
         assertEquals(listOf("Ціна 5 тис. грн.", "За кілограм."), Splitter.sentences("Ціна 5 тис. грн. За кілограм.", layer = UkLayer))
         assertEquals(listOf("Прокинувся о 5 год.", "Ранок."), Splitter.sentences("Прокинувся о 5 год. Ранок.", layer = UkLayer))
         assertEquals(listOf("Зібрали 5 тис.", "Потім пішли."), Splitter.sentences("Зібрали 5 тис. Потім пішли.", layer = UkLayer))
+        // «тел.» — только перед номером («+», «(», цифра) или строчной; «пов.» — только перед строчной
+        assertEquals(listOf("Дзвоніть за тел.", "Ми чекаємо."), Splitter.sentences("Дзвоніть за тел. Ми чекаємо.", layer = UkLayer))
+        assertEquals(1, Splitter.sentences("Тел. +380 44 123 45 67, тел. (044) 123-45-67.", layer = UkLayer).size)
+        assertEquals(listOf("Квартира на 5 пов.", "Ціна договірна."), Splitter.sentences("Квартира на 5 пов. Ціна договірна.", layer = UkLayer))
     }
 
     @Test fun ukrainianAbbreviationsOnlyForUkrainianLayer() {
