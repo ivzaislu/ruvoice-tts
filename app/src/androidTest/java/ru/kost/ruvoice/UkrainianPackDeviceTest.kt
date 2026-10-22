@@ -38,9 +38,10 @@ import java.util.concurrent.TimeUnit
  * Паки ставятся в filesDir приложения один раз на класс; в конце удаляются те, которых не было до теста, если не передан
  * `-e keepPack true`. Prefs «ruvoice» и «ruvoice_profiles» возвращаются как были.
  *
- * Сверка слоя с JVM ([layerSameAsJvm]) — по файлам `/data/local/tmp/uk_layer_in.txt` и `uk_layer_jvm.txt` (строка на
- * пример, «\n» и «\\» экранированы; вывод JVM снят с морфологией пака, русской морфологией и таблицами эмодзи и знаков
- * из ассетов, как их грузит SileroModels.data), без них пропуск.
+ * Сверка слоя с JVM ([layerSameAsJvm]) — по файлам `/data/local/tmp/uk_layer_in.txt` и `uk_layer_jvm.txt`, без них
+ * пропуск. Их пишет JVM-тест `UkLayerReferenceGen` в `app/build/`; после правки слоя пересобрать и отдать заново:
+ * `./gradlew :app:testFullDebugUnitTest --tests '*UkLayerReferenceGen*' --rerun`,
+ * `adb push app/build/uk_layer_in.txt app/build/uk_layer_jvm.txt /data/local/tmp/`.
  */
 @RunWith(AndroidJUnit4::class)
 class UkrainianPackDeviceTest {
@@ -83,11 +84,15 @@ class UkrainianPackDeviceTest {
     private val packs get() = Packs.installed(ctx.filesDir)
     private fun pack(id: String) = packs.single { it.id == id }
 
-    /** Текущий голос пользователя, если он русский; иначе — пропуск. */
+    /** Русский голос как выбранный: текущий, если он русский, иначе первый русский (штатный xenia, если есть) ставится в
+     * prefs — @AfterClass вернёт голос пользователя. Пропуск — только если русских голосов нет совсем (lite без пака ru). */
     private fun ruCurrent(): String {
-        val cur = Speaker.currentName(Prefs(ctx).voice, SileroModels.speakers(ctx), packs)
-        assumeTrue("текущий голос $cur не русский", cur != null && Speaker.lang(cur, packs) == "ru")
-        return cur!!
+        val builtin = SileroModels.speakers(ctx)
+        val cur = Speaker.currentName(Prefs(ctx).voice, builtin, packs)
+        if (cur != null && Speaker.lang(cur, packs) == "ru") return cur
+        val ru = Speaker.names(builtin, packs).filter { Speaker.lang(it, packs) == "ru" }
+        assumeTrue("русских голосов нет", ru.isNotEmpty())
+        return (ru.firstOrNull { it == "xenia" } ?: ru.first()).also { Prefs(ctx).voice = it }
     }
 
     @Test fun bothPacksInstalledWithOneList() {
@@ -117,9 +122,9 @@ class UkrainianPackDeviceTest {
             assertEquals(TextToSpeech.LANG_COUNTRY_AVAILABLE, t.isLanguageAvailable(UK))
             val voices = t.voices.associateBy { it.name }
             for (n in VOICES) assertEquals(n, UK, voices[n]?.locale)
-            val cur = ruCurrent()
             assertEquals(TextToSpeech.LANG_COUNTRY_AVAILABLE, t.setLanguage(UK))
             assertTrue("${t.voice?.name}", t.voice?.name in VOICES)
+            val cur = ruCurrent()
             assertEquals(TextToSpeech.LANG_COUNTRY_AVAILABLE, t.setLanguage(RU))
             assertEquals(Speaker.ttsName(cur, ps), t.voice?.name)
         }
@@ -136,7 +141,11 @@ class UkrainianPackDeviceTest {
                 val ms = System.currentTimeMillis()
                 wavOk(synth(t, PHRASE, n))
                 Log.i("RuVoiceTest", "$n: ${System.currentTimeMillis() - ms} мс")
-                val model = since(j).filter { it.contains("в модель") }.joinToString("\n").replace("+", "")
+                val log = since(j)
+                // запрос пришёл именно этим голосом, а не голосом по умолчанию пака
+                val name = Speaker.fromTtsName(n, Speaker.names(SileroModels.speakers(ctx), packs), packs)
+                assertTrue("$n: нет «голос $name,» в журнале:\n${log.joinToString("\n")}", log.any { "голос $name," in it })
+                val model = log.filter { it.contains("в модель") }.joinToString("\n").replace("+", "")
                 assertTrue("$n не украинский слой: $model", model.contains("мінус") && model.contains("цельсія") && model.contains("гривня"))
             }
         }
@@ -263,10 +272,9 @@ class UkrainianPackDeviceTest {
     private val VOICES = listOf("igor-uk-cis", "roman-uk-cis", "kateryna-uk-cis-ext", "lada-uk-cis-ext", "mykyta-uk-cis-ext",
         "oleksa-uk-cis-ext", "tetiana-uk-cis-ext")
 
-    /** Журнал сервиса держит 200 строк: после долгого прогона его размер не растёт, поэтому новое — после последней
-     * строки до запроса, а не по счёту. */
-    private fun mark() = SileroTtsService.journal().lastOrNull()
-    private fun since(mark: String?) = SileroTtsService.journal().let { all -> if (mark == null) all else all.drop(all.lastIndexOf(mark) + 1) }
+    /** Журнал сервиса держит 200 строк: новое — по счётчику строк, а не по размеру журнала. */
+    private fun mark() = SileroTtsService.journalSeq()
+    private fun since(mark: Long) = SileroTtsService.journalSince(mark)
 
     private fun unesc(s: String) = Regex("""\\([n\\])""").replace(s) { if (it.groupValues[1] == "n") "\n" else "\\" }
 

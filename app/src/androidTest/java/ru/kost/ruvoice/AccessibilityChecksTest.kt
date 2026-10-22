@@ -9,6 +9,7 @@ import androidx.test.espresso.action.ViewActions.clearText
 import androidx.test.espresso.action.ViewActions.click
 import androidx.test.espresso.action.ViewActions.closeSoftKeyboard
 import androidx.test.espresso.action.ViewActions.replaceText
+import androidx.test.espresso.action.ViewActions.scrollTo
 import androidx.test.espresso.matcher.ViewMatchers.isDescendantOfA
 import androidx.test.espresso.matcher.ViewMatchers.isRoot
 import androidx.test.espresso.matcher.ViewMatchers.withId
@@ -109,7 +110,7 @@ class AccessibilityChecksTest {
         ActivityScenario.launch(RulesActivity::class.java).use {
             for (code in langs.reversed() + langs.first()) {
                 val label = ctx.getString(ctx.resources.getIdentifier("rules_lang_$code", "string", ctx.packageName))
-                onView(allOf(withText(label), isDescendantOfA(withId(R.id.rulesTabs)))).perform(click()).check { v, _ ->
+                onView(allOf(withText(label), isDescendantOfA(withId(R.id.rulesTabs)))).perform(scrollTo(), click()).check { v, _ ->
                     assertTrue("вкладка «$label» не выбрана", v.isSelected)
                 }
                 onView(withId(R.id.rulesList)).check { v, _ ->
@@ -126,7 +127,7 @@ class AccessibilityChecksTest {
             // поворот экрана (пересоздание окна) оставляет выбранной ту же вкладку, а не язык голоса: с паками be и uk —
             // последнюю, украинскую
             val last = ctx.getString(ctx.resources.getIdentifier("rules_lang_${langs.last()}", "string", ctx.packageName))
-            onView(allOf(withText(last), isDescendantOfA(withId(R.id.rulesTabs)))).perform(click())
+            onView(allOf(withText(last), isDescendantOfA(withId(R.id.rulesTabs)))).perform(scrollTo(), click())
             it.recreate()
             onView(allOf(withText(last), isDescendantOfA(withId(R.id.rulesTabs)))).check { v, _ ->
                 assertTrue("после поворота вкладка «$last» не выбрана", v.isSelected)

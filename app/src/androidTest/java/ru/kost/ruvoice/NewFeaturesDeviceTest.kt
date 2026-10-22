@@ -122,9 +122,9 @@ class NewFeaturesDeviceTest {
             val req = SileroTtsService.journal().lastOrNull { it.contains("голос") && it.contains("\\u00AD") }
             assertNotNull("запрос с кодом мягкого переноса в журнале", req)
             prefs.setRule("verbose_log", false)
-            val n = SileroTtsService.journal().size
+            val n = SileroTtsService.journalSeq()
             synth(t, "Проверка без журнала.", "q")
-            assertTrue(SileroTtsService.journal().drop(n).none { it.contains("в модель") })
+            assertTrue(SileroTtsService.journalSince(n).none { it.contains("в модель") })
         }
     }
 

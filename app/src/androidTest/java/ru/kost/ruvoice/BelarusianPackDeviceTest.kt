@@ -117,9 +117,9 @@ class BelarusianPackDeviceTest {
         tts { t ->
             val voices = t.voices.associateBy { it.name }
             assertEquals(TextToSpeech.SUCCESS, t.setVoice(voices.getValue("larisa-be-cis")))
-            val n = SileroTtsService.journal().size
+            val n = SileroTtsService.journalSeq()
             wavOk(synth(t, "Добры дзень! Сёння 20.10.2026, тэмпература −5 °C. Колькі каштуюць 2 кг яблыкаў? Дзякуй.", "be"))
-            val model = SileroTtsService.journal().drop(n).filter { it.contains("в модель") }.joinToString("\n").replace("+", "")
+            val model = SileroTtsService.journalSince(n).filter { it.contains("в модель") }.joinToString("\n").replace("+", "")
             Log.i("RuVoiceTest", model)
             assertTrue("не белорусский слой: $model", model.contains("мінус") && model.contains("цэльсія"))
             assertEquals(TextToSpeech.SUCCESS, t.setVoice(voices.getValue(ruName)))

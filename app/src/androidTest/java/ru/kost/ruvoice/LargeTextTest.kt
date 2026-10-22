@@ -100,7 +100,7 @@ class LargeTextTest {
     }
 
     /** Вкладки языков на «Правилах» — только с паком второго языка (cis_be, cis_uk), иначе пропуск: подписи вкладок
-     * и пояснение под ними не обрезаны, каждая вкладка — тоже. С паками be и uk вкладок три, у каждой треть ширины. */
+     * и пояснение под ними не обрезаны, каждая вкладка — тоже. С паками be и uk вкладок три, полоса прокручивается (scrollable). */
     @Test fun rulesLanguageTabs() {
         val packs = Packs.installed(ctx.filesDir)
         val langs = Speaker.langs(SileroModels.speakers(ctx), packs)
@@ -109,7 +109,7 @@ class LargeTextTest {
             assertTabLabelsWhole(langs.size)
             for (code in langs) {
                 val label = ctx.getString(ctx.resources.getIdentifier("rules_lang_$code", "string", ctx.packageName))
-                onView(allOf(withText(label), isDescendantOfA(withId(R.id.rulesTabs)))).perform(click())
+                onView(allOf(withText(label), isDescendantOfA(withId(R.id.rulesTabs)))).perform(scrollTo(), click()) // при трёх языках полоса прокручивается
                 assertNoClippedText()
             }
         }
@@ -129,7 +129,10 @@ class LargeTextTest {
         for (v in labels) {
             val layout = v.layout ?: continue
             val cut = (0 until layout.lineCount).any { layout.getEllipsisCount(it) > 0 } || layout.getLineEnd(layout.lineCount - 1) < v.text.length
-            if (cut || !v.isShown) bad += "«${v.text}»: ${layout.lineCount} строк, ширина ${v.width} px"
+            // по высоте: TabLayout держит свою высоту (48 dp), вторая строка при 200 % уходит под нижний край вкладки
+            val bottom = v.top + v.compoundPaddingTop + layout.getLineTop(layout.lineCount)
+            val high = bottom > minOf(v.height + v.top, (v.parent as View).height) + 1
+            if (cut || high || !v.isShown) bad += "«${v.text}»: ${layout.lineCount} строк, ширина ${v.width} px, низ текста $bottom px, вкладка ${(v.parent as View).height} px"
         }
         if (bad.isNotEmpty()) fail("Подпись вкладки обрезана при шрифте 200 %:\n" + bad.joinToString("\n"))
     }

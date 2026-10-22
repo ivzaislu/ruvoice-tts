@@ -402,7 +402,7 @@ object UkNumbers {
         add("%", u = Measure("відсоток", rule = "numbers"))
         add("біл. руб", "біл.руб", u = Measure("рубль", adj = "білоруськ", rule = "currency"))
         add("руб", "₽", u = Measure("рубль", rule = "currency")); add("коп", u = Measure("копійка", rule = "currency"))
-        add("$", u = Measure("долар", rule = "currency")); add("€", u = Measure("євро", rule = "currency")); add("£", u = Measure("фунт", rule = "currency"))
+        add("$", u = Measure("долар", rule = "currency")); add("€", "євро", u = Measure("євро", rule = "currency")); add("£", u = Measure("фунт", rule = "currency"))
         add("₴", "грн", u = Measure("гривня", rule = "currency")); add("₸", u = Measure("тенге", rule = "currency")); add("¥", u = Measure("єна", rule = "currency"))
         add("₺", u = Measure("ліра", rule = "currency")); add("₩", u = Measure("вона", rule = "currency")); add("₪", u = Measure("шекель", rule = "currency"))
         add("₹", u = Measure("рупія", rule = "currency")); add("¢", u = Measure("цент", rule = "currency"))
@@ -410,7 +410,7 @@ object UkNumbers {
         add("трлн", u = Measure("трильйон", rule = "abbrev"))
     }
     /** Монета валюты: две цифры после запятой — копійки, центи, пенси ([units]). */
-    private val MINOR = mapOf("руб" to "коп", "₽" to "коп", "біл. руб" to "коп", "біл.руб" to "коп", "$" to "¢", "€" to "¢",
+    private val MINOR = mapOf("руб" to "коп", "₽" to "коп", "біл. руб" to "коп", "біл.руб" to "коп", "$" to "¢", "€" to "¢", "євро" to "¢",
         "£" to "пенс", "₴" to "коп", "грн" to "коп")
     private val PENCE = Measure("пенс", rule = "currency")
 

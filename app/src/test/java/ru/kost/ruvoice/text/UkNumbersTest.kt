@@ -326,6 +326,19 @@ class UkNumbersTest {
         assertEquals("дві цілих пъять десятих євро", prep("2,5 €"))
     }
 
+    /** «євро» словом — как знак «€»: средний род («одне євро», а не «один»), центи после двух цифр дроби. Не проверено носителем. */
+    @Test fun euroWord() {
+        assertEquals(prep("1 €"), prep("1 євро"))
+        assertEquals("одне євро", prep("1 євро"))
+        assertEquals("двадцять одне євро", prep("21 Євро"))
+        assertEquals("пъять євро", prep("5 євро"))
+        assertEquals(prep("у 1 €"), prep("у 1 євро"))
+        assertEquals(prep("за 2 €"), prep("за 2 євро"))
+        assertEquals("двадцять одне євро двадцять два центи", prep("21,22 євро"))
+        assertEquals("євро", prep("євро"))
+        assertEquals("зона євро", prep("зона євро"))
+    }
+
     @Test fun currencyBeforeMultiplierWord() {
         assertEquals("втрати сімдесят мільярдів доларів.", prep("Втрати $70 мільярдів."))
         assertEquals("три трильйони доларів", prep("$3 трлн"))

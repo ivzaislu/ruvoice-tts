@@ -981,11 +981,17 @@ class SileroTtsService : TextToSpeechService() {
          * в одном процессе, файл не нужен. */
         private val journal = ArrayDeque<String>()
         private val stamp = SimpleDateFormat("HH:mm:ss", Locale.US)
+        /** Сколько строк записано за жизнь процесса: журнал держит 200, по его размеру новое не отличить от старого. */
+        private var journalSeq = 0L
         fun note(line: String) = synchronized(journal) {
             Log.i(SileroModels.TAG, line)
             journal.addLast("${stamp.format(System.currentTimeMillis())} $line")
+            journalSeq++
             while (journal.size > 200) journal.removeFirst()
         }
         fun journal(): List<String> = synchronized(journal) { journal.toList() }
+        fun journalSeq(): Long = synchronized(journal) { journalSeq }
+        /** Строки, записанные после [journalSeq] == [seq] (не больше тех 200, что журнал держит). */
+        fun journalSince(seq: Long): List<String> = synchronized(journal) { journal.toList().takeLast(minOf(journal.size.toLong(), journalSeq - seq).toInt()) }
     }
 }
