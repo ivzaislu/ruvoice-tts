@@ -201,6 +201,30 @@ object UkNormalizer {
                 if (roman.isEmpty()) "" else UkNumbers.ordinal(UkNumbers.romanValue(roman), case, a.gender) + " "
         }
     }
+    /** «пов.» за числом (оголошення): после предлога — порядковое в падеже предлога («на 5 пов.» → «на п'ятому поверсі», «з 5
+     * пов.» → «з п'ятого поверху»); без предлога перед словом — прикметник («5 пов. будинок» → «п'ятиповерховий будинок», род —
+     * по окончанию слова); иначе «п'ятий поверх». Точка в конце куска — конец предложения. Не проверено носителем. */
+    private fun floors(text: String): String = FLOOR_RE.replace(text) { m ->
+        val prep = m.groupValues[1]
+        val n = m.groupValues[2].toLongOrNull() ?: return@replace m.value
+        val rest = text.substring(m.range.last + 1)
+        val end = if (rest.isBlank()) "." else " "
+        val p = prep.lowercase()
+        if (p.isEmpty()) FLOOR_NOUN_RE.find(rest)?.let { w -> FLOOR_ADJ[w.groupValues[1]] }?.let { ending ->
+            return@replace UkNumbers.compoundStem(n.toInt(), one = "одно", adj = true) + "поверх" + ending + end
+        }
+        val case = if (p in FROM_PREPS) Case.GEN else UkNumbers.SIGN_PREP[p] ?: Case.NOM
+        (if (prep.isEmpty()) "" else "$prep ") + UkNumbers.ordinal(n, case) + " " + FLOOR_FORMS[case.ordinal] + end
+    }
+    private val FLOOR_FORMS = "поверх поверху поверху поверх поверхом поверсі".split(' ')
+    private val FLOOR_RE = Regex("""(?:(?<![\p{L}\d])(${UkNumbers.SIGN_PREP.keys.sortedByDescending { it.length }.joinToString("|")})\s+)?""" +
+        """(?<![\d.,])(\d{1,3})\s*пов\.\s*""", RegexOption.IGNORE_CASE)
+    /** Слово за «5 пов.» — строчное; прикметник только перед зданием из [FLOOR_ADJ] (окончание прикметника по его форме). */
+    private val FLOOR_NOUN_RE = Regex("""^(?-i:(\p{Ll}{3,}))(?!\p{L})""", RegexOption.IGNORE_CASE)
+    private val FLOOR_ADJ = listOf("будинок", "дім", "корпус", "комплекс", "гуртожиток").associateWith { "овий" } +
+        listOf("будинку", "корпусу", "комплексу", "гуртожитку").associateWith { "ового" } +
+        listOf("будинки").associateWith { "ові" } + listOf("будинків").associateWith { "ових" } +
+        listOf("будівля", "новобудова").associateWith { "ова" } + listOf("будівлі", "новобудови").associateWith { "ової" }
     private class NounAbbr(forms: String, val place: Boolean = false, val gender: Gender = Gender.M) {
         val forms = forms.split(' ').map { it.replace('_', ' ') }
     }
@@ -264,8 +288,11 @@ object UkNormalizer {
     /** Глагол движения перед предлогом (до двух слов между ними, без знака препинания): «Їду в м. Київ», «Приїхав сьогодні у
      * м. Київ». Только целые словоформы из [MOTION_WORDS]: «їдять», «їдальні», «прибуток» — не движение. */
     private fun motionBefore(before: String): Boolean =
-        WORD_RE.findAll(before.substringAfterLast(',').split(CLAUSE_END_RE).last()).map { it.value.lowercase() }.toList()
-            .takeLast(3).any { it in MOTION_WORDS }
+        // точка известного сокращения («з м. Одеси в м. Київ») — не конец фразы, само сокращение — не слово
+        WORD_RE.findAll(ABBR_WITH_DOT_RE.replace(before, " ").substringAfterLast(',').split(CLAUSE_END_RE).last())
+            .map { it.value.lowercase() }.toList().takeLast(3).any { it in MOTION_WORDS }
+    private val ABBR_WITH_DOT_RE = Regex("""(?<![\p{L}\d])(?:${(DIGIT_ABBRS.keys + NAME_ABBRS.keys + listOf("обл", "див", "напр", "ім")).distinct()
+        .sortedByDescending { it.length }.joinToString("|")})\.""", RegexOption.IGNORE_CASE)
     private val WORD_RE = Regex("""\p{L}+(?:['’ʼ]\p{L}+)*""")
     private val CLAUSE_END_RE = Regex("""[.;:!?…—–()«»"]""")
     /** Словоформы глаголов (и нескольких существительных) движения: основа × окончания; «_» — пустое окончание. Не проверено
@@ -279,19 +306,27 @@ object UkNormalizer {
         add("ід йд", "у еш е емо ете уть ти")
         add("ішо йшо пішо прийшо зайшо увійшо вийшо дійшо", "в")
         add("ішл йшл пішл прийшл зайшл увійшл вийшл дійшл", "а и о")
-        add("пі прий зай ді", "ду де демо дете дуть ти")
-        add("ходи", "в ла ли")
-        add("лет", "ів іла іли іти ить ять")
-        add("по при пере ви за до", "лечу")
-        add("полет прилет перелет вилет", "ів іла іли іти ить ять")
-        add("прибу", "в ла ли де ду демо дуть ти ває вають вав вала вали")
+        add("пі прий зай ді", "ду деш де демо дете дуть ти")
+        // всі особи теперішнього (майбутнього), минулий, інфінітив; приставки — «по при пере ви за до від»
+        val pref = listOf("", "по", "при", "пере", "ви", "за", "до", "від")
+        fun verb(vararg forms: String) = pref.forEach { p -> forms.forEach { f -> add(p + f) } }
+        verb("лечу", "летиш", "летить", "летимо", "летите", "летять", "летів", "летіла", "летіло", "летіли", "летіти")
+        verb("літаю", "літаєш", "літає", "літаємо", "літаєте", "літають", "літав", "літала", "літали", "літати")
+        verb("пливу", "пливеш", "пливе", "пливемо", "пливете", "пливуть", "плив", "пливла", "пливли", "пливти", "плисти")
+        verb("біжу", "біжиш", "біжить", "біжимо", "біжите", "біжать", "біг", "бігла", "бігли", "бігти")
+        verb("мчу", "мчиш", "мчить", "мчимо", "мчите", "мчать", "мчав", "мчала", "мчали", "мчати")
+        verb("їжджу", "їздиш", "їздить", "їздимо", "їздите", "їздять", "їздив", "їздила", "їздили", "їздити")
+        verb("ходжу", "ходиш", "ходить", "ходимо", "ходите", "ходять", "ходив", "ходила", "ходили", "ходити")
+        add("прибу", "в ла ли де ду деш демо дете дуть ти ваю ваєш ває ваємо ваєте вають вав вала вали вати")
         add("вируши", "в ла ли ти")
-        add("вируша", "ю є ють в ла ли")
-        add("поверну", "вся лася лися лись ся ться")
-        add("повернеться повернуться", "_")
-        add("поверта", "юся ється ються вся лася лися")
+        add("вируш", "у иш ить имо ите ать")
+        add("вируша", "ю єш є ємо єте ють в ла ли ти")
+        add("поверну", "вся лася лися лись ся тися")
+        add("поверн", "ешся еться емося етеся уться")
+        add("поверта", "юся єшся ється ємося єтеся ються вся лася лися тися")
         add("відправи", "вся лася лися лись ли")
-        add("переселився переселилася переселилися прямую прямує прямують прямував прямувала прямували", "_")
+        add("переселився переселилася переселилися", "_")
+        add("пряму", "ю єш є ємо єте ють вав вала вали вати")
         add("переїзд поїздка поїздку повернення переселення подорож", "_")
     }
     /** «див. с. 45», «Див. табл. 3» — знахідний: «дивись сторінку», «дивись таблицю». */
@@ -536,6 +571,7 @@ object UkNormalizer {
         s = OTHER_DIGIT_RE.replace(s) { Character.digit(it.value.codePointAt(0), 10).toString() }
         step("footnotes", ::footnotes)                // «[1]», «словах¹» — до скобок-пауз и чисел
         step("codes", ::codes)                        // «код 4829», «PIN 1234», «ЄДРПОУ …» — до латиницы и spell_cyr
+        step("abbrev", ::floors)                      // «на 5 пов.» — «на п'ятому поверсі»: число ещё цифрами
         step("abbrev", ::nounAbbrs)                   // «буд. 5», «м. Київ», «кн. II» — по заглавной и до римских
         // «°C», «°F» латиницей — до латиницы и до регистра: шкалу через пробел узнаём по заглавной
         s = FAHRENHEIT_RE.replace(CELSIUS_RE.replace(s, "°с"), "°ф")
