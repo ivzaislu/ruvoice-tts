@@ -12,8 +12,12 @@ object Normalizer {
         "восемьдесят", "девяносто")
     private val hundreds = arrayOf("", "сто", "двести", "триста", "четыреста", "пятьсот", "шестьсот", "семьсот",
         "восемьсот", "девятьсот")
-    // (ед., 2-4, 5+), род
+    // (ед., 2-4, 5+), род; от квинтиллиона (10^18) — весь диапазон Long: без старших разрядов число
+    // от триллиона («1 026 000 000 000 килограммов») давало below1000 больше 999 и падало на hundreds[10]
     private val scales = listOf(
+        Triple("квинтиллион", "квинтиллиона", "квинтиллионов") to false,
+        Triple("квадриллион", "квадриллиона", "квадриллионов") to false,
+        Triple("триллион", "триллиона", "триллионов") to false,
         Triple("миллиард", "миллиарда", "миллиардов") to false,
         Triple("миллион", "миллиона", "миллионов") to false,
         Triple("тысяча", "тысячи", "тысяч") to true,
@@ -47,7 +51,7 @@ object Normalizer {
         if (n < 0) return "минус " + cardinal(-n, feminine)
         val parts = mutableListOf<String>()
         var rest = n
-        var scale = 1_000_000_000L
+        var scale = 1_000_000_000_000_000_000L
         for ((forms, fem) in scales) {
             val q = (rest / scale).toInt()
             if (q > 0) { parts += below1000(q, fem); parts += plural(q.toLong(), forms) }
@@ -1125,7 +1129,7 @@ object Normalizer {
     private val supDigits = "⁰¹²³⁴⁵⁶⁷⁸⁹"
     private val powerRe = Regex("""(?<=\d)([⁻⁺]?)([⁰¹²³⁴⁵⁶⁷⁸⁹]+)(?![⁰-⁹])""")
     private fun powers(text: String) = powerRe.replace(text) { m ->
-        val e = m.groupValues[2].map { supDigits.indexOf(it) }.joinToString("").toLong()
+        val e = m.groupValues[2].map { supDigits.indexOf(it) }.joinToString("").toLongOrNull() ?: return@replace m.value
         val minus = m.groupValues[1] == "⁻"
         when {
             !minus && e == 2L -> " в квадрате"
@@ -1577,8 +1581,9 @@ object Normalizer {
     private val sectionRe = Regex("""(?<![\d.])(\d+)(\.\d+){2,}(?!\.?\d)""")
     // «GPT-4.5», «Ту-154.2», «модель-3.5» — номер версии после слова с дефисом: «четыре точка пять».
     private val hyphenDecimalRe = Regex("""(?<=\p{L}{2}-)(\d+)\.(\d+)(?![.,]?\d)""")
-    // Часть номера с ведущим нулём («2.03.1») — по цифрам: «ноль три».
-    private fun sectionPart(p: String) = if (p.length > 1 && p.startsWith("0")) p.map { cardinal((it - '0').toLong()) }.joinToString(" ") else cardinal(p.toLong())
+    // Часть номера с ведущим нулём («2.03.1») — по цифрам: «ноль три»; длиннее Long — тоже (toLong падал).
+    private fun sectionPart(p: String) = p.toLongOrNull()?.takeIf { p.length == 1 || !p.startsWith("0") }?.let { cardinal(it) }
+        ?: p.map { cardinal((it - '0').toLong()) }.joinToString(" ")
     // Номер пункта, статьи, параграфа, рисунка, стандарта через точку — «п. 4.2» → «четыре точка два», «ст. 20.1»,
     // «§ 4.2», «рис. 1.5А», «ГОСТ 2.105-95»: не дробь и не дата (было «двадцатого января», «четыре целых две
     // десятых»). Строка, которая начинается с «1.2.» и заглавной, — тоже номер пункта. До dates().
@@ -1652,7 +1657,8 @@ object Normalizer {
             val denomSuffix = if (an == 1) "я" else "х"
             cardinal(an.toLong(), feminine = true) + " " + ordinal(bn.toLong(), denomSuffix)
         } else {
-            cardinal(a.toLong()) + " дробь " + cardinal(b.toLong())
+            // длиннее Long — как есть, без падения на toLong
+            cardinal(a.toLongOrNull() ?: return@replace m.value) + " дробь " + cardinal(b.toLongOrNull() ?: return@replace m.value)
         }
     }
 
@@ -1799,18 +1805,18 @@ object Normalizer {
             val (prep, minus, major, minor, sign) = m.destructured
             val money = moneyOf(sign) ?: return@replace m.value
             val case = moneyPrepCase[prep.lowercase()] ?: Case.NOM
-            (if (prep.isEmpty()) "" else "$prep ") + moneyWords(minus, major.toLong(), minor, money, case) + (if (sign.endsWith(".")) dotAfter(text, m) else "")
+            (if (prep.isEmpty()) "" else "$prep ") + moneyWords(minus, major.toLongOrNull() ?: return@replace m.value, minor, money, case) + (if (sign.endsWith(".")) dotAfter(text, m) else "")
         }
         s = moneyCentsPrefixRe.replace(s) { m ->
             val (prep, sign, major, minor) = m.destructured
             val case = moneyPrepCase[prep.lowercase()] ?: Case.NOM
-            (if (prep.isEmpty()) "" else "$prep ") + moneyWords("", major.toLong(), minor, moneyOf(sign)!!, case)
+            (if (prep.isEmpty()) "" else "$prep ") + moneyWords("", major.toLongOrNull() ?: return@replace m.value, minor, moneyOf(sign)!!, case)
         }
         s = rubKopRe.replace(s) { m ->
             val (prep, major, minor) = m.destructured
             val case = moneyPrepCase[prep.lowercase()] ?: Case.NOM
             // «по 1 р. 92 к.» — «по одному рублю девяносто две копейки»: копейки при «по» в именительном
-            (if (prep.isEmpty()) "" else "$prep ") + moneyWords("", major.toLong(), minor.padStart(2, '0'), rubleMoney, case,
+            (if (prep.isEmpty()) "" else "$prep ") + moneyWords("", major.toLongOrNull() ?: return@replace m.value, minor.padStart(2, '0'), rubleMoney, case,
                 if (case == Case.DAT) Case.NOM else case) + dotAfter(s, m)
         }
         return s

@@ -71,6 +71,14 @@ class NumbersTest {
         )
     }
 
+    @Test fun trillionsCardinal() {
+        assertEquals("один триллион двадцать шесть миллиардов", Normalizer.cardinal(1_026_000_000_000))
+        assertEquals("одного триллиона двадцати шести миллиардов", Declension.cardinal(1_026_000_000_000, Case.GEN))
+        assertEquals("девять квинтиллионов двести двадцать три квадриллиона триста семьдесят два триллиона тридцать шесть " +
+            "миллиардов восемьсот пятьдесят четыре миллиона семьсот семьдесят пять тысяч восемьсот семь", Normalizer.cardinal(Long.MAX_VALUE))
+        assertEquals("двумя квадриллионами пятьюстами триллионами", Declension.cardinal(2_500_000_000_000_000, Case.INS))
+    }
+
     @Test fun rangesAndCompounds() {
         assertEquals("одна тысяча девятьсот сорок один-одна тысяча девятьсот сорок пять", n("1941-1945"))
         assertEquals("десять-пятнадцать минут", n("10-15 минут"))

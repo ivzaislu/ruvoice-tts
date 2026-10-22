@@ -3,7 +3,7 @@ package ru.kost.ruvoice.text
 /** Падеж. Порядок совпадает с порядком форм в таблицах ниже (индекс = ordinal). */
 enum class Case { NOM, GEN, DAT, ACC, INS, PRE }
 
-/** Склонение количественных числительных по падежам (0..999_999_999_999). */
+/** Склонение количественных числительных по падежам (0..Long.MAX_VALUE). */
 object Declension {
     // Формы 0..19: [NOM, GEN, DAT, ACC, INS, PRE]
     private val digits = arrayOf(
@@ -65,16 +65,14 @@ object Declension {
         arrayOf("тысячи", "тысяч", "тысячам", "тысячи", "тысячами", "тысячах"),
         arrayOf("тысяч", "тысяч", "тысячам", "тысяч", "тысячами", "тысячах"),
     )
-    private val millionForms = arrayOf(
-        arrayOf("миллион", "миллиона", "миллиону", "миллион", "миллионом", "миллионе"),
-        arrayOf("миллиона", "миллионов", "миллионам", "миллиона", "миллионами", "миллионах"),
-        arrayOf("миллионов", "миллионов", "миллионам", "миллионов", "миллионами", "миллионах"),
-    )
-    private val billionForms = arrayOf(
-        arrayOf("миллиард", "миллиарда", "миллиарду", "миллиард", "миллиардом", "миллиарде"),
-        arrayOf("миллиарда", "миллиардов", "миллиардам", "миллиарда", "миллиардами", "миллиардах"),
-        arrayOf("миллиардов", "миллиардов", "миллиардам", "миллиардов", "миллиардами", "миллиардах"),
-    )
+    // Миллион и старше склоняются одинаково: основа + окончание.
+    private fun scaleForms(stem: String) = arrayOf(
+        arrayOf("", "а", "у", "", "ом", "е"), arrayOf("а", "ов", "ам", "а", "ами", "ах"), arrayOf("ов", "ов", "ам", "ов", "ами", "ах"),
+    ).map { row -> Array(6) { stem + row[it] } }.toTypedArray()
+    // Делитель и формы, от квинтиллиона до миллиона: весь диапазон Long. Раньше старшим был миллиард, и с триллиона
+    // («около 1 026 000 000 000 рублей») below1000 получал больше 999 и падал на hundreds[10].
+    private val bigScales = listOf(1_000_000_000_000_000_000L to "квинтиллион", 1_000_000_000_000_000L to "квадриллион",
+        1_000_000_000_000L to "триллион", 1_000_000_000L to "миллиард", 1_000_000L to "миллион").map { it.first to scaleForms(it.second) }
 
     /** 0 → форма «1», 1 → «2-4», 2 → «5+, 11-14» — как согласование числительного с существительным. */
     private fun bucket(n: Long): Int {
@@ -127,22 +125,15 @@ object Declension {
         return stem + if (stem.last() in "кгх") e.replace('ы', 'и') else e
     }
 
-    /** Количественное числительное в падеже. feminine — для 1 и 2 (одна/две, одной/двух…). n в 0..999_999_999_999. */
+    /** Количественное числительное в падеже. feminine — для 1 и 2 (одна/две, одной/двух…). n ≥ 0. */
     fun cardinal(n: Long, case: Case, feminine: Boolean = false): String {
         if (n == 0L) return digits[0][case.ordinal]
         val parts = mutableListOf<String>()
         var rest = n
-        val billions = rest / 1_000_000_000L
-        rest %= 1_000_000_000L
-        if (billions > 0) {
-            parts += below1000(billions.toInt(), case, false)
-            parts += scaleWord(billionForms, billions, case)
-        }
-        val millions = rest / 1_000_000L
-        rest %= 1_000_000L
-        if (millions > 0) {
-            parts += below1000(millions.toInt(), case, false)
-            parts += scaleWord(millionForms, millions, case)
+        for ((scale, forms) in bigScales) {
+            val q = rest / scale
+            rest %= scale
+            if (q > 0) { parts += below1000(q.toInt(), case, false); parts += scaleWord(forms, q, case) }
         }
         val thousands = rest / 1000L
         rest %= 1000L
