@@ -90,7 +90,8 @@ object Splitter {
             if (len <= maxLen) break
             val limit = minOf(c - 1, c * maxLen / len)
             val next = cut(t, limit)
-            if (limit <= 0 || next >= c || (t[next] != ',' && t[next] != ' ')) break
+            // разрез по пределу (cut не нашёл запятой и пробела) мог встать между разрядами числа — тогда не сужаем
+            if (limit <= 0 || next >= c || (t[next] != ',' && t[next] != ' ') || inNumber(t, next)) break
             c = next
         }
         return c
@@ -100,12 +101,22 @@ object Splitter {
     /** Индекс разреза строки длиннее maxLen: последняя запятая, иначе пробел, иначе ровно maxLen. Внутри адреса
      * ([Normalizer.urlRe]) не режем: запятая в «?ids=1,2» или адрес длиннее maxLen иначе рвали ссылку, и хвост
      * читался по частям; нет разреза левее — режем сразу после адреса. Запятая между цифрами — дробь («и 49,2 тысячи»
-     * у чтеца было «сорок девять | две тысячи»), по ней тоже не режем. */
+     * у чтеца было «сорок девять | две тысячи»), пробел между разрядами («1 026 | 000») — тоже число, по ним не режем.
+     * Пробел сразу за числом отрывает его от слова («27,2 | тысячи», «15 | рублей») — берём пробел левее, если он есть. */
     fun cut(s: String, maxLen: Int): Int {
         val urls = if (Normalizer.hasUrl(s)) Normalizer.urlRe.findAll(s).map { it.range }.toList() else emptyList()
-        fun inside(i: Int) = urls.any { i in it } || s[i] == ',' && i + 1 < s.length && s[i - 1].isDigit() && s[i + 1].isDigit()
-        fun last(c: Char): Int? { var i = s.lastIndexOf(c, maxLen); while (i > 0 && inside(i)) i = s.lastIndexOf(c, i - 1); return i.takeIf { it > 0 } }
-        return last(',') ?: last(' ') ?: urls.firstOrNull { maxLen in it }?.last ?: maxLen
+        fun last(c: Char, ok: (Int) -> Boolean = { true }): Int? {
+            var i = s.lastIndexOf(c, maxLen)
+            while (i > 0 && (urls.any { i in it } || inNumber(s, i) || !ok(i))) i = s.lastIndexOf(c, i - 1)
+            return i.takeIf { it > 0 }
+        }
+        return last(',') ?: last(' ') { !s[it - 1].isDigit() } ?: last(' ') ?: urls.firstOrNull { maxLen in it }?.last ?: maxLen
+    }
+
+    /** Знак [i] внутри числа: запятая дроби («49,2») или пробел перед группой разряда из трёх цифр («1 026 000»). */
+    private fun inNumber(s: String, i: Int): Boolean {
+        fun d(k: Int) = k in s.indices && s[k].isDigit()
+        return d(i - 1) && (s[i] == ',' && d(i + 1) || s[i] == ' ' && d(i + 1) && d(i + 2) && d(i + 3) && !d(i + 4))
     }
 
     private fun limit(s: String, maxLen: Int, measure: ((String) -> Int)?): List<String> {

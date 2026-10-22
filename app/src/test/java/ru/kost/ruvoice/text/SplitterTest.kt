@@ -161,7 +161,7 @@ class SplitterTest {
         assertEquals(listOf("Банк заявил о пропаже 15 миллионов рублей", "49,5 тысячи долларов (3,6 миллиона рублей) и 49,2 тысячи евро."),
             Splitter.sentences(ru, Rules(maxLen = 92)))
         // список дробей: режем по запятой с пробелом, не внутри числа
-        assertEquals(listOf("Составили 1,2", "3,4 и 5,6", "процента."), Splitter.sentences("Составили 1,2, 3,4 и 5,6 процента.", Rules(maxLen = 18)))
+        assertEquals(listOf("Составили 1,2", "3,4 и", "5,6 процента."), Splitter.sentences("Составили 1,2, 3,4 и 5,6 процента.", Rules(maxLen = 18)))
         // запятой вне числа левее нет — пробел
         assertEquals(listOf("Вырос на", "27,2."), Splitter.sentences("Вырос на 27,2.", Rules(maxLen = 11)))
         // белорусский и украинский путь режет тем же Splitter
@@ -176,6 +176,32 @@ class SplitterTest {
         val parts = Splitter.sentences("Подписчиков стало 41,1 тысячи, а через год 27,2 тысячи.", Rules(maxLen = 60), { s: String -> s.length * 3 })
         val joined = parts.joinToString(" ")
         assert("41,1" in joined && "27,2" in joined) { parts }
+    }
+
+    @Test fun spaceInsideOrAfterNumberIsNotACut() {
+        // пробел между разрядами — не разрез («1 026 | 000» читалось «одна тысяча двадцать шесть | ноль»)
+        assertEquals(listOf("Собрали 15 000 рублей и", "1 026 000 долларов."),
+            Splitter.sentences("Собрали 15 000 рублей и 1 026 000 долларов.", Rules(maxLen = 30)))
+        assertEquals(listOf("Всего", "1 026 000."), Splitter.sentences("Всего 1 026 000.", Rules(maxLen = 9)))
+        // NBSP и узкий пробел между разрядами не режутся и так; пробел за числом — тоже нет
+        assertEquals(listOf("Собрали", "15 000 рублей."), Splitter.sentences("Собрали 15 000 рублей.", Rules(maxLen = 16)))
+        assertEquals(listOf("Собрали", "15 000 рублей."), Splitter.sentences("Собрали 15 000 рублей.", Rules(maxLen = 16)))
+        // пробел сразу за числом отрывал его от слова — берём пробел левее
+        assertEquals(listOf("Рост составил", "27,2 тысячи", "человек."), Splitter.sentences("Рост составил 27,2 тысячи человек.", Rules(maxLen = 19)))
+        assertEquals(listOf("Он отдал", "15 рублей за", "хлеб."), Splitter.sentences("Он отдал 15 рублей за хлеб.", Rules(maxLen = 12)))
+        // левее пробела нет — режем за числом, а не по пределу посреди слова
+        assertEquals(listOf("Цена", "15", "рублей."), Splitter.sentences("Цена 15 рублей.", Rules(maxLen = 9)))
+        assertEquals(listOf("Сабралі 15 000 рублёў і", "1 026 000 долараў."),
+            Splitter.sentences("Сабралі 15 000 рублёў і 1 026 000 долараў.", Rules(maxLen = 30), layer = BeLayer))
+        assertEquals(listOf("Зібрали 15 000 гривень і", "1 026 000 доларів."),
+            Splitter.sentences("Зібрали 15 000 гривень і 1 026 000 доларів.", Rules(maxLen = 30), layer = UkLayer))
+        // разряд — только группа из трёх цифр: два отдельных числа через пробел режутся, как раньше
+        assertEquals(listOf("12345678", "87654321"), Splitter.sentences("12345678 87654321", Rules(maxLen = 12)))
+        // мерка чтеца: число длиннее предела — разрез по пределу не встаёт на пробел между разрядами
+        for (layer in listOf(Layers.RU, BeLayer, UkLayer)) {
+            val parts = Splitter.sentences("На 1 026 000 000 000 было", Rules(maxLen = 20), { s: String -> s.length * 4 }, layer)
+            assert(parts.zipWithNext().none { (a, b) -> a.last().isDigit() && b.first().isDigit() }) { parts }
+        }
     }
 
     @Test fun sequenceMatchesGolden() {
