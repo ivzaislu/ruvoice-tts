@@ -87,8 +87,8 @@ object RuLayer : TextLayer {
         "от", "до", "обо", "о")
     private val hyphenParticles = setOf("то", "либо", "нибудь", "таки", "ка", "де")
     override fun keepHyphen(before: String, after: String) = before in hyphenPrefixes || after in hyphenParticles
-    // «согласно прил. 2», «20 тыс. чел. и» — не конец фразы перед строчной или цифрой («Пришли 300 чел. Потом…» — конец)
-    private val abbrStopsBeforeLowerOrDigit = setOf("прил", "чел")
+    // «согласно прил. 2», «20 тыс. чел. и», «(ум. 1945)» — не конец фразы перед строчной или цифрой («Пришли 300 чел. Потом…» — конец)
+    private val abbrStopsBeforeLowerOrDigit = setOf("прил", "чел", "ум")
     // «пос.» перед заглавной — название посёлка («в пос. Лесной»), как однобуквенное «г. Москва», которое не режет sentenceEnd;
     // но перед словом, которым начинают фразу, — конец («Мы приехали в пос. Он был пуст.»)
     private val sentenceStarts = setOf("Он", "Она", "Оно", "Они", "Я", "Мы", "Вы", "Ты", "А", "Но", "И", "Да", "Нет", "Там", "Тут",
