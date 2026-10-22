@@ -1630,11 +1630,17 @@ object Normalizer {
         s = dashMinusRe.replace(s, "-")
         return oldThousandsRe.replace(s) { m -> m.groupValues[1] + "000" }
     }
+    // Второй номер за меченым через тире или «и/или» — тот же номер раздела: «табл. 5.22 – 5.25», «главы 1.2–1.4»
+    // (было «пять целых двадцать пять сотых»)
+    private val sectionNextRe = Regex("""(\d+)(\s?[-–—]\s?|\s(?:и|или)\s)(\d+(?:\.\d+)+)(?!\.?\d|[.,]\d)""")
     private fun sectionLabels(text: String): String {
-        val s = sectionLabelRe.replace(text) { m ->
+        var s = sectionLabelRe.replace(text) { m ->
             (m.groupValues[1] + m.groupValues[2]).replace('.', SEC_DOT) +
                 m.groupValues[3].let { if (it.isEmpty()) "" else " " + Abbrev.codePart(it) }
         }
+        // цепочка «1.2 – 1.4 и 1.6»: каждый проход метит следующий номер
+        while (true) s = sectionNextRe.replace(s) { m -> m.groupValues[1] + m.groupValues[2] + m.groupValues[3].replace('.', SEC_DOT) }
+            .takeIf { it != s } ?: break
         return sectionLineRe.replace(s) { m -> "${m.groupValues[1]}$SEC_DOT${m.groupValues[2]}." }
     }
     private const val SEC_DOT = '\uE001'
@@ -2340,7 +2346,7 @@ object Normalizer {
         RegexOption.IGNORE_CASE
     )
     private val chapterRe = Regex(
-        """(?<![\p{L}])(глав(?:а|ы|е|у|ой|ах|ам|ами)?|част(?:ь|и|ью|ей|ях|ям|ями)|книг(?:а|и|е|у|ой|ах|ам|ами)?|раздел(?:а|у|е|ом|ов|ах|ам|ами)?)\s+(\d{1,3})(?!\d|[.,]\d|[:/]|\s*[-–—]?\s*\d|-?(?:$ordSuffixAlt)(?![а-яё\d]))(?:(\s+(?:и|или)\s+)(\d{1,3})(?![\d.,:/-]))?""",
+        """(?<![\p{L}])(глав(?:а|ы|е|у|ой|ах|ам|ами)?|част(?:ь|и|ью|ей|ях|ям|ями)|книг(?:а|и|е|у|ой|ах|ам|ами)?|раздел(?:а|у|е|ом|ов|ах|ам|ами)?)\s+(\d{1,3})(?!\d|[.,]\d|[:/]|\s*[-–—]?\s*\d|-?(?:$ordSuffixAlt)(?![а-яё\d]))(?:(\s+(?:и|или)\s+)(\d{1,3})(?![\d.,:/-]))?""",
         RegexOption.IGNORE_CASE
     )
     // Номер перед существительным: «22 глава» → «22-я глава» (жалоба 10.10.2026). Только им. ед.: счёт был бы «22 главы»,
