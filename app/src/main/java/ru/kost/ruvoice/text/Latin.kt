@@ -105,18 +105,21 @@ object Latin {
     private const val VOWELS = "аеёіоуыэюя"
     private const val EN_VOWELS = "aeiou"
 
-    /** Одно латинское слово в белорусской записи; капс по буквам — правило spell_lat. */
-    fun word(raw: String, rules: Rules = Rules()): String {
+    /** Таблицы языка: белорусские; украинские — [UkLatin.TABLE]. */
+    val BE = LatinTable(WORDS, DIGRAPHS, LETTERS, NAMES, VOWELS, eStart = "э", yVowel = "ы")
+
+    /** Одно латинское слово в записи языка [t]; капс по буквам — правило spell_lat. */
+    fun word(raw: String, rules: Rules = Rules(), t: LatinTable = BE): String {
         val low = raw.lowercase()
-        WORDS[low]?.let { return it }
+        t.words[low]?.let { return it }
         if (rules.on("spell_lat") && raw.length in 2..5 && raw.all { it.isUpperCase() || !it.isLetter() } && raw.all { !it.isLetter() || it.isUpperCase() }) {
-            return low.mapNotNull { NAMES[it] ?: LETTERS[it] }.joinToString("-")
+            return low.mapNotNull { t.names[it] ?: t.letters[it] }.joinToString("-")
         }
         val out = StringBuilder()
         var i = 0
         while (i < low.length) {
             var matched = false
-            for ((d, r) in DIGRAPHS) {
+            for ((d, r) in t.digraphs) {
                 if (low.startsWith(d, i)) {
                     if ((d == "kn" || d == "wr") && i > 0) continue
                     out.append(r); i += d.length; matched = true; break
@@ -126,21 +129,21 @@ object Latin {
             val c = low[i]
             when (c) {
                 'c' -> out.append(if (i + 1 < low.length && low[i + 1] in "eiy") "с" else "к")
-                'y' -> out.append(if (i == 0 || low[i - 1] in EN_VOWELS) "й" else "ы")
-                'e' -> out.append(if (i == 0) "э" else "е")   // в начале слова — «э»: Elizabeth → элізабет
-                else -> LETTERS[c]?.let { out.append(it) }
+                'y' -> out.append(if (i == 0 || low[i - 1] in EN_VOWELS) "й" else t.yVowel)
+                'e' -> out.append(if (i == 0) t.eStart else "е")   // в начале слова — «э»: Elizabeth → элізабет
+                else -> t.letters[c]?.let { out.append(it) }
             }
             i++
         }
         var res = out.toString()
         // конечная «y» после согласной звучит [і]: galaxy → галаксі
-        if (low.length > 1 && low.endsWith("y") && low[low.length - 2] !in EN_VOWELS && res.endsWith("ы")) {
+        if (low.length > 1 && low.endsWith("y") && low[low.length - 2] !in EN_VOWELS && res.endsWith(t.yVowel)) {
             res = res.dropLast(1) + "і"
         }
         // двойные согласные схлопываем
         val clean = StringBuilder(res.length)
         for (ch in res) {
-            if (clean.isNotEmpty() && clean[clean.length - 1] == ch && ch !in VOWELS) continue
+            if (clean.isNotEmpty() && clean[clean.length - 1] == ch && ch !in t.vowels) continue
             clean.append(ch)
         }
         return clean.toString()
@@ -150,7 +153,7 @@ object Latin {
      * заглавная буква — именем, как у русского «пять джи»: «5G» — «5 гэ», «S24» — «эс 24», «MP3» — «эм-пэ 3» (капс — по буквам и так);
      * иначе число склеивалось с буквой, а «г», «м», «т» читались единицами («пяць грамаў»). Слово через дефис сначала
      * ищется в словаре целиком: «Wi-Fi» — «вайфай», а не «ўі-фі». Имя буквы при цифрах — правило letter_digit. */
-    fun translate(text: String, rules: Rules = Rules()): String {
+    fun translate(text: String, rules: Rules = Rules(), t: LatinTable = BE): String {
         fun latin(k: Int) = k < text.length && text[k].code < 128 && text[k].isLetter()
         val out = StringBuilder(text.length + 8)
         var i = 0
@@ -161,7 +164,7 @@ object Latin {
             if (j < text.length && text[j] == '-' && latin(j + 1)) {
                 var k = j + 1
                 while (latin(k)) k++
-                val whole = WORDS[(text.substring(i, j) + text.substring(j + 1, k)).lowercase()]
+                val whole = t.words[(text.substring(i, j) + text.substring(j + 1, k)).lowercase()]
                 if (whole != null) { out.append(whole); i = k; continue }
             }
             val digitBefore = i > 0 && text[i - 1].isDigit()
@@ -171,10 +174,15 @@ object Latin {
             // Буква отдельным словом — тоже именем, как у русского camelCase: «x > 5» — «экс», «план B» — «бэ» (транслит давал «кс», «б»)
             val alone = j - i == 1 && !digitBefore && !digitAfter && text.getOrNull(i - 1)?.isLetter() != true && text.getOrNull(j)?.isLetter() != true
             val name = alone || rules.on("letter_digit") && (digitBefore || digitAfter) && j - i == 1 && (text[i].isUpperCase() || text[i] !in "gmlt")
-            out.append(if (name) NAMES.getValue(text[i].lowercaseChar()) else word(text.substring(i, j), rules))
+            out.append(if (name) t.names.getValue(text[i].lowercaseChar()) else word(text.substring(i, j), rules, t))
             if (digitAfter) out.append(' ')
             i = j
         }
         return out.toString()
     }
 }
+
+/** Чтение латиницы на языке: известные слова, диграфы (длинные раньше), буквы, имена букв для капса; [vowels] — гласные
+ * записи (двойные согласные схлопываются), [eStart] — «e» в начале слова, [yVowel] — «y» после согласной. */
+class LatinTable(val words: Map<String, String>, val digraphs: List<Pair<String, String>>, val letters: Map<Char, String>,
+    val names: Map<Char, String>, val vowels: String, val eStart: String, val yVowel: String)

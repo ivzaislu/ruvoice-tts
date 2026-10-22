@@ -741,7 +741,7 @@ object UkNumbers {
      * «у квадраті», «10⁻³» — «у мінус третьому степені» (степінь — ч. р., Правопис). «Тиск 120/80» — «сто двадцять на
      * вісімдесят», «у пропорції 1:4» — «один до чотирьох». «у»/«в» — по милозвучності: после гласной «в» («два в кубі»). */
     fun arith(text: String): String {
-        var s = DIMENSION_RE.replace(text, " на ")
+        var s = dimensions(text)
         s = TIMES_SIZE_RE.replace(s, " на ")
         s = COMPARE_RE.replace(s) { m -> " " + COMPARE_WORDS.getValue(m.groupValues[1].ifEmpty { m.groupValues[2] }) + " " }
         s = SQRT_RE.replace(s) { m ->
@@ -776,6 +776,8 @@ object UkNumbers {
             }
         }
     }
+    /** Размер «3x4», «5х10 м» — «на»; [UkNormalizer] зовёт до латиницы, иначе латинская «x» стала бы «екс». */
+    internal fun dimensions(text: String) = DIMENSION_RE.replace(text, " на ")
     /** «у» после согласной, «в» после гласной (милозвучність): «десять у квадраті», «два в кубі». */
     private fun uv(before: String) = if (before.trimEnd().lastOrNull()?.lowercaseChar()?.let { it in "аеєиіїоуюя" } == true) "в" else "у"
     private val ARITH_OPS = mapOf("+" to "плюс", "×" to "помножити на", "*" to "помножити на", "÷" to "поділити на", "=" to "дорівнює", "−" to "мінус")
