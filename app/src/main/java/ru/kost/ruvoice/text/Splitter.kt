@@ -99,11 +99,12 @@ object Splitter {
 
     /** Индекс разреза строки длиннее maxLen: последняя запятая, иначе пробел, иначе ровно maxLen. Внутри адреса
      * ([Normalizer.urlRe]) не режем: запятая в «?ids=1,2» или адрес длиннее maxLen иначе рвали ссылку, и хвост
-     * читался по частям; нет разреза левее — режем сразу после адреса. */
+     * читался по частям; нет разреза левее — режем сразу после адреса. Запятая между цифрами — дробь («и 49,2 тысячи»
+     * у чтеца было «сорок девять | две тысячи»), по ней тоже не режем. */
     fun cut(s: String, maxLen: Int): Int {
-        if (!Normalizer.hasUrl(s)) return s.lastIndexOf(',', maxLen).takeIf { it > 0 } ?: s.lastIndexOf(' ', maxLen).takeIf { it > 0 } ?: maxLen
-        val urls = Normalizer.urlRe.findAll(s).map { it.range }.toList()
-        fun last(c: Char): Int? { var i = s.lastIndexOf(c, maxLen); while (i > 0 && urls.any { i in it }) i = s.lastIndexOf(c, i - 1); return i.takeIf { it > 0 } }
+        val urls = if (Normalizer.hasUrl(s)) Normalizer.urlRe.findAll(s).map { it.range }.toList() else emptyList()
+        fun inside(i: Int) = urls.any { i in it } || s[i] == ',' && i + 1 < s.length && s[i - 1].isDigit() && s[i + 1].isDigit()
+        fun last(c: Char): Int? { var i = s.lastIndexOf(c, maxLen); while (i > 0 && inside(i)) i = s.lastIndexOf(c, i - 1); return i.takeIf { it > 0 } }
         return last(',') ?: last(' ') ?: urls.firstOrNull { maxLen in it }?.last ?: maxLen
     }
 

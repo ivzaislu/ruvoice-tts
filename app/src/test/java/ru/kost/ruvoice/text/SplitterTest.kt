@@ -155,6 +155,29 @@ class SplitterTest {
         assertEquals(long.replace(",", ""), parts.joinToString(" ").replace(",", "").replace("  ", " "))
     }
 
+    @Test fun decimalCommaIsNotACut() {
+        // запятая между цифрами — дробь: длинную фразу резали по ней («и 49,2 тысячи» → «сорок девять | две тысячи»)
+        val ru = "Банк заявил о пропаже 15 миллионов рублей, 49,5 тысячи долларов (3,6 миллиона рублей) и 49,2 тысячи евро."
+        assertEquals(listOf("Банк заявил о пропаже 15 миллионов рублей", "49,5 тысячи долларов (3,6 миллиона рублей) и 49,2 тысячи евро."),
+            Splitter.sentences(ru, Rules(maxLen = 92)))
+        // список дробей: режем по запятой с пробелом, не внутри числа
+        assertEquals(listOf("Составили 1,2", "3,4 и 5,6", "процента."), Splitter.sentences("Составили 1,2, 3,4 и 5,6 процента.", Rules(maxLen = 18)))
+        // запятой вне числа левее нет — пробел
+        assertEquals(listOf("Вырос на", "27,2."), Splitter.sentences("Вырос на 27,2.", Rules(maxLen = 11)))
+        // белорусский и украинский путь режет тем же Splitter
+        assertEquals(listOf("Прададзена 15 кніг", "у суполцы (27,2 тысячы) і 41,1 тысячы."),
+            Splitter.sentences("Прададзена 15 кніг, у суполцы (27,2 тысячы) і 41,1 тысячы.", Rules(maxLen = 50), layer = BeLayer))
+        assertEquals(listOf("Продано 15 книжок", "у спільноті (27,2 тисячі) і 41,1 тисячі."),
+            Splitter.sentences("Продано 15 книжок, у спільноті (27,2 тисячі) і 41,1 тисячі.", Rules(maxLen = 50), layer = UkLayer))
+        // фраза с адресом — то же
+        assertEquals(listOf("См. https://a.ru/x, в нём 1,5", "2,5 тысячи."),
+            Splitter.sentences("См. https://a.ru/x, в нём 1,5, 2,5 тысячи.", Rules(maxLen = 32)))
+        // мерка чтеца (число раздувается) тоже не ставит разрез внутрь дроби
+        val parts = Splitter.sentences("Подписчиков стало 41,1 тысячи, а через год 27,2 тысячи.", Rules(maxLen = 60), { s: String -> s.length * 3 })
+        val joined = parts.joinToString(" ")
+        assert("41,1" in joined && "27,2" in joined) { parts }
+    }
+
     @Test fun sequenceMatchesGolden() {
         val d = TestData.data()
         val g = TestData.golden()
