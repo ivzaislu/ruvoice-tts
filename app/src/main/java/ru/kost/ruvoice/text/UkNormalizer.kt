@@ -136,11 +136,14 @@ object UkNormalizer {
         s = POSTAL_RE.replace(s) { m -> m.groupValues[1] + m.groupValues[2] +
             POSTAL_CHAIN_RE.replace(m.groupValues[3]) { c -> if (c.value[0].isDigit()) spell(c.value) else " — " } }
         // индекс без слова «індекс»: с нуля в начале (числом не пишут: «01001» — не «нуль одна тисяча один») или в адресе —
-        // за запятой после места («м. Львів, вул. Городоцька, 1, 79000.») либо перед ним («79000, м. Львів»)
+        // в куске улица, а код за запятой в конце части («м. Львів, вул. Городоцька, 1, 79000.»), либо код перед «, м.»,
+        // «, місто», «, смт» («79000, м. Львів»); «Населення м. Буча, 37000.» — число
+        val street = STREET_RE.containsMatchIn(s)
         s = FIVE_DIGITS_RE.replace(s) { m ->
-            val before = s.substring(maxOf(0, m.range.first - 60), m.range.first)
+            val before = s.substring(maxOf(0, m.range.first - 3), m.range.first)
             val after = s.substring(m.range.last + 1)
-            if (m.value[0] == '0' || PLACE_BEFORE_RE.containsMatchIn(before) && CODE_END_RE.containsMatchIn(after) || PLACE_AFTER_RE.containsMatchIn(after))
+            if (m.value[0] == '0' || street && COMMA_BEFORE_RE.containsMatchIn(before) && CODE_END_RE.containsMatchIn(after) ||
+                    TOWN_AFTER_RE.containsMatchIn(after))
                 spell(m.value) else m.value
         }
         s = CODE_AFTER_WORD_RE.replace(s) { m -> m.groupValues[1] + m.groupValues[2] + spell(m.groupValues[3]) }
@@ -156,9 +159,10 @@ object UkNormalizer {
     /** Индексы перечня по одному, диапазон — тире: «01001 та 01002», «79000-79099». */
     private val POSTAL_CHAIN_RE = Regex("""\d{5}|\s*[-–—]\s*""")
     private val FIVE_DIGITS_RE = Regex("""(?<![\d.,\p{L}+-])\d{5}(?![\d\p{L}]|[.,]\d)""")
-    private const val PLACE = """(?:(?:м|с|смт|вул|просп|пров|бул|пл|обл|буд|кв)\.|місто|село|вулиця|область|україна)(?!\p{L})"""
-    private val PLACE_BEFORE_RE = Regex("""(?<!\p{L})$PLACE.*,\s*$""", RegexOption.IGNORE_CASE)
-    private val PLACE_AFTER_RE = Regex("""^,\s*$PLACE""", RegexOption.IGNORE_CASE)
+    private val STREET_RE = Regex("""(?<!\p{L})(?:(?:вул|просп|пров|бул|бульв|буд)\.|вулиц\p{L}*|проспект\p{L}*|провул\p{L}*|бульвар\p{L}*)(?!\p{L})""",
+        RegexOption.IGNORE_CASE)
+    private val COMMA_BEFORE_RE = Regex(""",\s*$""")
+    private val TOWN_AFTER_RE = Regex("""^,\s*(?:м\.|смт(?!\p{L})|місто(?!\p{L}))""", RegexOption.IGNORE_CASE)
     private val CODE_END_RE = Regex("""^\s*(?:[,.;]|$)""")
     private const val CODE_DIGITS = """\d{2,4}(?:[ -]\d{2,4}){1,2}|\d{3,8}"""
     private const val CODE_NOT_AFTER = """(?!\d|[.,:]\d|\s*(?:%|₴|\$|€|°|грн|руб|р\.|рік|рок|році|шт|хв|сек|раз|км|кг|м(?!\p{L})))"""
@@ -583,7 +587,7 @@ object UkNormalizer {
     /** «+» между латинскими буквами — сочетание клавиш, не ударение. */
     private val LATIN_PLUS_RE = Regex("(?<=[A-Za-z])\\+(?=[A-Za-z])")
     /** «−» в пробелах, которого не взяла формула ([TextLayer.mathMinus]), — тире текста. */
-    private val SPACED_MINUS_RE = Regex("(?<=\\s)−(?=\\s)")
+    private val SPACED_MINUS_RE = Regex("(?<=^|\\s)−(?=\\s)")
     /** «+» не перед гласной — не ударение: «Сі++» — «плюс». */
     private val PLUS_NOT_STRESS_RE = Regex("\\+(?![аеєиіїоуюяёыэ])", RegexOption.IGNORE_CASE)
     /** Апостроф во всех написаниях — один класс на слой: им же [UkLayer.dictWord] снимает его в словах словаря. */

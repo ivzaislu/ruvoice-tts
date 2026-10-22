@@ -4,7 +4,7 @@
 ударение U+0301 после гласной → «+» перед ней, побочное U+0300 снимаем, апостроф снимаем (слой ищет слово без него),
 нижний регистр; формы с пробелом не берём. Омографы одним ударением не фиксируем: слово, у которого в kaikki два
 разных ударения в разных местах (статьях или формах), и слово из heteronyms.tsv (lang-uk/ukrainian-heteronyms-dictionary;
-только фильтр, в пак не идёт) отбрасываем. Равноправные варианты одной формы («ко́штують»/«кошту́ють») — первый по статье. Добавка — eugenysilin/russian-ukrainian-stress-data uk-stress-dict.gz (CC BY-SA 4.0; строка
+только фильтр, в пак не идёт) отбрасываем. Равноправные варианты одной формы («ко́штують»/«кошту́ють») — первый по статье, и только если акцентор пака не ставит ни один из них. Добавка — eugenysilin/russian-ukrainian-stress-data uk-stress-dict.gz (CC BY-SA 4.0; строка
 «слово<TAB>позиция сразу после ударной»): только слова, которых нет в kaikki, без омографов и только формы,
 которые есть в VESUM (иначе там обрезанные основы «сахарн», «витвицьк» и русские слова; VESUM тоже только фильтр).
 Нормализация — normalize() из export_pack: служебные слова без «+», ровно один «+» в размечаемой части.
@@ -67,13 +67,34 @@ def vesum_forms(path):
         return {bare(line.split()[0]) for line in f if line.strip()}
 
 
+def accentor_marks(words):
+    """Разметка слов акцентором пака, как lang_stress в export_pack и LangStress.kt: по частям через дефис, в размечаемой
+    части — первый максимум среди гласных."""
+    import torch
+    m = load_accentor(os.path.join(HERE, 'accentor-ukr.pt')).model
+    parts = sorted({p for w in words for p in w.split('-') if markable(p, 'uk')})
+    pred = {}
+    with torch.no_grad():
+        for i in range(0, len(parts), 4096):
+            chunk = parts[i:i + 4096]
+            for p, row in zip(chunk, m(chunk)[0].tolist()):
+                pred[p] = first_max(p, row, 'uk')
+    return {w: '-'.join(pred.get(p, p) for p in w.split('-')) for w in words}
+
+
 def build(a):
     var, free = kaikki(a.kaikki)
     het = heteronyms(a.heteronyms)
     cand = {w: next(iter(vs)) for w, vs in var.items() if len(vs) == 1 and None not in vs and w not in het}
-    n_free = sum(w not in het for w in free)
-    cand.update((w, v) for w, v in free.items() if w not in het)
-    two = sum(1 for vs in var.values() if len(vs - {None}) > 1) - n_free
+    free = {w: v for w, v in free.items() if w not in het}
+    # равноправные варианты: первый — только если акцентор не ставит ни один из них («кошт+ують» — тоже вариант, акцентор
+    # остаётся); иначе первый по статье перебивал бы верный выбор акцентора («фарф+орами» → «ф+арфорами»)
+    acc = accentor_marks(sorted(free))
+    n_free_acc = sum(acc[w] in var[w] for w in free)
+    free = {w: v for w, v in free.items() if acc[w] not in var[w]}
+    n_free = len(free)
+    cand.update(free)
+    two = sum(1 for vs in var.values() if len(vs - {None}) > 1) - n_free - n_free_acc
     n_k, n_kh = len(cand), sum(1 for w, vs in var.items() if len(vs) == 1 and None not in vs and w in het)
     # формы нет в VESUM — почти всегда мусор: обрезанные основы («сахарн», «витвицьк»), русские слова («ехать»), склейки
     forms = vesum_forms(a.vesum)
@@ -95,7 +116,7 @@ def build(a):
     # не у всех форм), «+» не на гласной
     lost = [w for w, vs in var.items() if None in vs and any(markable(p, 'uk') for p in w.split('-'))]
     print(f'{a.o}: {len(cand)} слов; kaikki {len(var)}: взято {n_k}, омографы {n_kh}, два ударения {two}, потеряны '
-          f'normalize {len(lost)} (с дефисом {sum("-" in w for w in lost)}), равноправные варианты {n_free}; eugenysilin {len(rows)}: взято {e["eug"]}, '
+          f'normalize {len(lost)} (с дефисом {sum("-" in w for w in lost)}), равноправные варианты {n_free} (ещё {n_free_acc} акцентор ставит одним из вариантов — не берём); eugenysilin {len(rows)}: взято {e["eug"]}, '
           f'есть в kaikki {e["kaikki"]}, омографы {e["het"]}, не те буквы {e["letters"]}, нет в VESUM {e["vesum"]}, '
           f'потеряны normalize {e["normalize"]}; в кандидатах с дефисом {sum("-" in w for w in cand)}')
 
