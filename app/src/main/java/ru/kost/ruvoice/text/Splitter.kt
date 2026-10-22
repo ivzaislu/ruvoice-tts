@@ -115,7 +115,16 @@ object Splitter {
             return i.takeIf { it > 0 }
         }
         fun digit(i: Int) = i in s.indices && s[i].isDigit()
-        val spaces = listOf<(Int) -> Boolean>({ !digit(it - 1) && !digit(it + 1) && s[it - 1] != '.' }, { !digit(it - 1) },
+        // «№», «§» — часть номера («под | № 7» читалось «под | номер семь»)
+        fun numLike(i: Int) = digit(i) || i in s.indices && s[i] in "№§"
+        // короткое слово (предлог) перед коротким сокращением с точкой: «на | вул. Леніна» — «вуліца» без «на»
+        fun prepAbbr(i: Int): Boolean {
+            var a = i - 1; while (a >= 0 && s[a].isLetter()) a--
+            var b = i + 1; while (b < s.length && s[b].isLetter()) b++
+            // точка последним знаком — конец фразы («за хлеб.»), не сокращение
+            return i - 1 - a in 1..3 && b - i - 1 in 1..5 && b + 1 < s.length && s[b] == '.'
+        }
+        val spaces = listOf<(Int) -> Boolean>({ !numLike(it - 1) && !numLike(it + 1) && s[it - 1] != '.' && !prepAbbr(it) }, { !digit(it - 1) },
             { !digit(it - 1) || !(it + 1 < s.length && s[it + 1].isLetter()) }, { true })
         // голову не короче MIN_HEAD ищем без последнего прохода: «21 | книгу» хуже короткой головы
         return last(',') ?: spaces.dropLast(1).firstNotNullOfOrNull { p -> last(' ') { it >= MIN_HEAD && p(it) } }

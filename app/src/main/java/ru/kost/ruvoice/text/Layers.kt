@@ -86,6 +86,11 @@ object RuLayer : TextLayer {
         "от", "до", "обо", "о")
     private val hyphenParticles = setOf("то", "либо", "нибудь", "таки", "ка", "де")
     override fun keepHyphen(before: String, after: String) = before in hyphenPrefixes || after in hyphenParticles
+    // «согласно прил. 2», «в пос. городского типа», «ок. 300 км» — только перед строчной или цифрой: «Хорошо, ок. Идём» —
+    // конец реплики («ок» без условия Splitter не берёт, review t17 п.6)
+    private val abbrStopsBeforeLowerOrDigit = setOf("прил", "пос", "ок")
+    override fun keepsSentence(word: String, next: String) = word.replaceFirstChar(Char::lowercaseChar) in abbrStopsBeforeLowerOrDigit &&
+        next.firstOrNull()?.let { it.isLowerCase() || it.isDigit() } == true
 }
 
 /** Белорусский слой: [BelNormalizer] (числа словами, «!» → «.», апостроф, фильтр по символам пака). */
@@ -196,6 +201,8 @@ object UkLayer : TextLayer {
     override fun keepsSentence(word: String, next: String) = word.replaceFirstChar(Char::lowercaseChar).let { w ->
         val c = next.firstOrNull()
         w in UK_ABBR_STOPS || c?.isLowerCase() == true && w in UK_ABBR_STOPS_BEFORE_LOWER ||
+            // «до 18 год. 30 хв.» — перед цифрой тоже
+            w == "год" && c?.isDigit() == true ||
             // «тел.» — перед номером («тел. 044…», «тел. +380…», «тел. (044)…») или строчной; перед заглавной — конец фразы
             w == "тел" && c != null && (c.isLowerCase() || c.isDigit() || c in "+(")
     }
