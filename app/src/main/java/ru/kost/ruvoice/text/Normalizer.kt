@@ -696,8 +696,9 @@ object Normalizer {
             if (dateTailUnitRe.containsMatchIn(after)) return@replace m.value
             // разряд или процент следом — количество: «Ст. 12.1 тыс. руб.», «12.5 тысячи строк», «Инфляция составила 1.05%.»
             // (было «двенадцатого января тысяч», «первого мая» без процента). Только у даты без года: «на 01.01.2024 тыс. руб.»
-            // — дата в шапке таблицы.
-            if (scaleOrPercentAheadRe.containsMatchIn(after)) return@replace m.value
+            // — дата в шапке таблицы. День с нулём («01.05», «на 01.01 тыс. руб.») дробью не пишут — разряд его не отменяет,
+            // процент («01.05 %») — отменяет.
+            if (percentAheadRe.containsMatchIn(after) || !d.startsWith('0') && scaleAheadRe.containsMatchIn(after)) return@replace m.value
             // «в 7.12», «в 15.10.» — время (его читает timeDots), не «в седьмого декабря»: даты без года после «в» не бывает
             if (day <= 23 && mo.length == 2 && timeBehindRe.containsMatchIn(before)) return@replace m.value
             // падеж дня по предлогу, как у даты с годом: «по двадцать шестое мая», «к пятнадцатому августа»
@@ -992,10 +993,12 @@ object Normalizer {
             """потерял|повысил|понизил|опустил|поднял)(?:а|о|и|ся|ась|ось|ись)?)\s+на\s$""",
         RegexOption.IGNORE_CASE)
     // разряд словом или сокращением, процент — за числом (dates(), sectionLabelRe)
-    // формы слова целиком: «тысячелетия» — не разряд
-    private const val SCALE_AHEAD = """(?:(?:тыс|млн|млрд|трлн|тысяч(?:а|и|у|ей|е|ам|ами|ах)?|""" +
-        """(?:миллион|миллиард|триллион)(?:а|у|ом|е|ы|ов|ам|ами|ах)?)(?![\p{L}]))"""
-    private val scaleOrPercentAheadRe = Regex("""^\s*(?:$SCALE_AHEAD|%)""", RegexOption.IGNORE_CASE)
+    // только формы, что встают после дроби («1.5 тысячи», «12.3 миллиона», «2.5 тысяч»): именительный («Тысяча и одна ночь»,
+    // «миллионы школьников») — не разряд при числе; «тысячелетия» — тоже
+    private const val SCALE_AHEAD = """(?:(?:тыс|млн|млрд|трлн|тысячи|тысяч|миллиона|миллионов|миллиарда|миллиардов|""" +
+        """триллиона|триллионов)(?![\p{L}]))"""
+    private val scaleAheadRe = Regex("""^\s*$SCALE_AHEAD""", RegexOption.IGNORE_CASE)
+    private val percentAheadRe = Regex("""^\s*%""")
     // «в 7.12» перед временем: dates() его не берёт, читает timeDots()
     private val timeBehindRe = Regex("""(?<![\p{L}])(?:в|во)\s$""", RegexOption.IGNORE_CASE)
     // Дата с годом без предлога («15 марта 2021 года») — родительный: так читается обстоятельство времени.
