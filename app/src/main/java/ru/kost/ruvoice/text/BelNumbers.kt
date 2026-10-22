@@ -395,8 +395,10 @@ object BelNumbers {
             if (listOf(2, 4).all { m.groupValues[it].length == 4 && m.groupValues[it].toInt() in 1000..2199 } &&
                 !COUNTED_AFTER.containsMatchIn(s.substring(m.range.last + 1))) return@replace m.value
             val upTo = m.groupValues[3].equals("да", true)
-            val a = cardinal(m.groupValues[2].toLong(), Case.GEN)
-            if (upTo) m.value.replaceGroups(m, 2 to a, 4 to cardinal(m.groupValues[4].toLong(), Case.GEN)) else m.value.replaceGroups(m, 2 to a)
+            // цифры длиннее Long — как написано (раньше NumberFormatException ронял весь запрос)
+            val a = cardinal(m.groupValues[2].toLongOrNull() ?: return@replace m.value, Case.GEN)
+            val b = m.groupValues[4].toLongOrNull() ?: return@replace m.value
+            if (upTo) m.value.replaceGroups(m, 2 to a, 4 to cardinal(b, Case.GEN)) else m.value.replaceGroups(m, 2 to a)
         }
         for ((re, case) in TRIGGERS) s = re.replace(s) { m ->
             val noun = nextNoun(s, m.range.last + 1)
@@ -566,7 +568,7 @@ object BelNumbers {
         // степень — с основанием сразу словами: «у» после гласной — «ў» («два ў квадраце»)
         return POWER_RE.replace(s) { m ->
             val base = BelNormalizer.cardinal(m.groupValues[1].toLongOrNull() ?: return@replace m.value)
-            val e = m.groupValues[3].map { SUP_DIGITS.indexOf(it) }.joinToString("").toLong()
+            val e = m.groupValues[3].map { SUP_DIGITS.indexOf(it) }.joinToString("").toLongOrNull() ?: return@replace m.value
             val minus = m.groupValues[2] == "⁻"
             base + " " + (if (base.last() in "аеёіоуыэюя") "ў" else "у") + " " + when {
                 !minus && e == 2L -> "квадраце"
@@ -634,7 +636,7 @@ object BelNumbers {
     fun sectionLabels(text: String): String = SECTION_LABEL_RE.replace(text) { m -> m.value.replace('.', SEC_DOT) }
     fun sections(text: String): String = SECTION_RE.replace(text) { m ->
         (if (m.range.first > 0 && text[m.range.first - 1].isLetter()) " " else "") +
-            m.value.split('.', SEC_DOT).joinToString(" кропка ") { p -> if (p.length > 1 && p[0] == '0') BelNormalizer.digits(p) else BelNormalizer.cardinal(p.toLong()) }
+            m.value.split('.', SEC_DOT).joinToString(" кропка ") { p -> if (p.length > 1 && p[0] == '0') BelNormalizer.digits(p) else p.toLongOrNull()?.let { BelNormalizer.cardinal(it) } ?: BelNormalizer.digits(p) }
     }
     /** Метка точки номера раздела ([sectionLabels]); [BelNormalizer] символов частной области в тексте не оставляет. */
     private const val SEC_DOT = ''
@@ -722,7 +724,7 @@ object BelNumbers {
     private fun time(hRaw: String, miRaw: String, prep: String? = null): String? {
         val h = hRaw.toIntOrNull() ?: return null
         val mi = miRaw.toIntOrNull() ?: return null
-        if (h !in 0..23 || mi !in 0..59) return null
+        if (h !in 0..24 || mi !in 0..59 || h == 24 && mi > 0) return null   // «24:00» — конец суток
         fun gen(n: Long, one: String, many: String) =
             cardinal(n, Case.GEN, fem = true) + " " + if (n % 10 == 1L && n % 100 != 11L) one else many
         when (prep) {

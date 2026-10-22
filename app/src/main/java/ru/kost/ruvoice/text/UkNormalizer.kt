@@ -36,6 +36,8 @@ object UkNormalizer {
             if (!rules.on("years")) return@words m.value
             val n = m.groupValues[1].toLongOrNull() ?: return@words m.value
             val word = m.groupValues[2].lowercase()
+            // три цифры и «рік» — количество: «виповнився 101 рік» → «сто один рік» (год 988 в називному — редкость)
+            if (word == "рік" && m.groupValues[1].length == 3) return@words m.value
             val case = when (word) { "року" -> Case.GEN; "році" -> Case.PRE; "роком" -> Case.INS; else -> Case.NOM }
             UkNumbers.ordinal(n, case) + " " + word
         }

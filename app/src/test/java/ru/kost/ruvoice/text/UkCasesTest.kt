@@ -92,6 +92,38 @@ class UkCasesTest {
             prep("близько 1 234 567 гривень"))
     }
 
+    @Test fun accusativeAfterPreposition() {
+        // «на/за/через/понад/про» — знахідний: тысяча без «одну», «одну» у ж. р.; «на» с місцевим — номер, как было
+        assertEquals("понад тисячу учасників", prep("понад 1000 учасників"))
+        assertEquals("за тисячу гривень", prep("за 1000 гривень"))
+        assertEquals("на двадцять одну тисячу гривень", prep("на 21 000 гривень"))
+        assertEquals("за одну годину", prep("за 1 годину"))
+        assertEquals("за одну ніч", prep("за 1 ніч"))
+        assertEquals("на два тижні", prep("на 2 тижні"))
+        assertEquals("через дві години", prep("через 2 години"))
+        assertEquals("на другому поверсі", prep("на 2 поверсі"))
+    }
+
+    @Test fun twoGenderNouns() {
+        // «сім'я» в VESUM — ж. р. и с. р. («насіння»): берём ж. р.
+        assertEquals("одна сімъя", prep("1 сім'я"))
+        assertEquals("допомогу отримали дві сімъї.", prep("Допомогу отримали 2 сім'ї."))
+        assertEquals("для однієї сімъї", prep("для 1 сім'ї"))
+        assertEquals("двадцять одна сімъя", prep("21 сім'я"))
+        // только множинні — «одні»
+        assertEquals("одні двері", prep("1 двері"))
+    }
+
+    @Test fun mixedFractionGenderByNoun() {
+        assertEquals("півтори години", prep("1 1/2 години"))
+        assertEquals("дві з половиною години", prep("2 1/2 години"))
+    }
+
+    @Test fun romanAgreesWithNoun() {
+        assertEquals("після другої світової війни.", prep("Після II світової війни."))
+        assertEquals("у другій світовій війні", prep("У II світовій війні"))
+    }
+
     @Test fun notCounted() {
         assertEquals("пункт два правил", prep("пункт 2 правил"))
         assertEquals("до тисяча девъятсот девъяностого року", prep("до 1990 року"))

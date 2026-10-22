@@ -95,7 +95,8 @@ object UkNumbers {
 
     /** Количественное в падеже [case] и роде [g] (у 1 и 2: «одна», «одне», «дві»): склоняется каждое слово, «1250» в
      * родовому — «однієї тисячі двохсот п'ятдесяти», «25» в орудному — «двадцятьма п'ятьма». Знахідний — неістота
-     * (як називний; «одну» у жіночого); істоту знахідного дає [byNoun]. От миллиарда — по цифрам. */
+     * (як називний; «одну» у жіночого); істоту знахідного дає [byNoun]. Знахідний одной тысячи в начале — «тисячу» без
+     * «одну» («за тисячу гривень», «понад тисячу учасників»), но «двадцять одну тисячу». От миллиарда — по цифрам. */
     fun cardinal(n: Long, case: Case = Case.NOM, g: Gender = Gender.M): String {
         if (n < 0) return "мінус " + cardinal(-n, case, g)
         if (n == 0L) return ZERO[case.ordinal]
@@ -105,7 +106,7 @@ object UkNumbers {
             if (k == 0) return
             val word = if (case == Case.NOM || case == Case.ACC) noun[if (isOne(k.toLong())) case.ordinal else if (isFew(k.toLong())) 6 else 7]
                 else noun[case.ordinal + if (isOne(k.toLong())) 0 else 6]
-            parts += under1000(k, case, gg) + " " + word
+            parts += if (case == Case.ACC && k == 1 && parts.isEmpty()) word else under1000(k, case, gg) + " " + word
         }
         group((n / 1_000_000).toInt(), MILLION, Gender.M)
         group((n / 1000 % 1000).toInt(), THOUSAND, Gender.F)
@@ -232,7 +233,7 @@ object UkNumbers {
     /** Дроби словами (правило fractions). Знак-дробь один — словом: «½» → «половина», «¾» → «три чверті»; при целом —
      * смешанное число. Смешанное: половина — «півтора» (ж. р. «півтори») и «два з половиною», прочее — «одна ціла одна
      * третя». Через слэш — когда знаменатель 2–20 и больше числителя или круглый (2, 10, 100…): «3/4», «7/2»; прочее —
-     * «двадцять чотири дріб сім». Единица следом — родовий однини: «1/2 кг» → «одна друга кілограма»; после половины — по
+     * «двадцять чотири на сім» (так говорят «24/7»). Единица следом — родовий однини: «1/2 кг» → «одна друга кілограма»; после половины — по
      * целой части: «2 1/2 кг» → «два з половиною кілограми». */
     fun fractions(text: String, rules: Rules = Rules()): String {
         if (!rules.on("fractions")) return text
@@ -250,7 +251,8 @@ object UkNumbers {
             val n = m.groupValues[1].toLong(); val a = m.groupValues[2].toLong(); val b = m.groupValues[3].toLong()
             if (a >= b || b < 2) return@replace m.value
             val u = unitOf(m.groupValues[5])
-            val fem = u?.let { unit(it).gender == Gender.F } == true
+            // род — у единицы, иначе у существительного за дробью из таблицы: «1 1/2 години» → «півтори години»
+            val fem = (u?.let { unit(it).gender } ?: nextNoun(s, m.range.last + 1)?.let { nounGender(it) }) == Gender.F
             val gen = u?.let { " " + unitGen(it) } ?: m.groupValues[4]
             if (a * 2 == b) {
                 if (n == 1L) (if (fem) "півтори" else "півтора") + gen
@@ -258,13 +260,14 @@ object UkNumbers {
             } else cardinal(n, Case.NOM, Gender.F) + " " + plural(n, "ціла", "цілих", "цілих") + " " + fraction(a, b) + gen
         }
         return SLASH_RE.replace(s) { m ->
-            val a = m.groupValues[1].toLongOrNull() ?: return@replace m.value
-            val b = m.groupValues[2].toLongOrNull() ?: return@replace m.value
+            // длиннее Long — по цифрам, слэш словом «на», а не пропадает
+            val a = m.groupValues[1].toLongOrNull() ?: return@replace digits(m.groupValues[1]) + " на " + digits(m.groupValues[2]) + m.groupValues[3]
+            val b = m.groupValues[2].toLongOrNull() ?: return@replace digits(m.groupValues[1]) + " на " + digits(m.groupValues[2]) + m.groupValues[3]
             val u = unitOf(m.groupValues[4])
-            // падеж по предлогу, как у десятичной: «близько 2/5» → «близько двох п'ятих»
+            // падеж по предлогу, как у десятичной: «близько 2/5» → «близько двох п'ятих»; не дробь — «на» («24/7», «1990/91»)
             if (a >= 1 && (b in 2..20 && a < b || b in ROUND_DENOMS))
                 fraction(a, b, decimalCase(s, m.range.first) ?: Case.NOM) + (u?.let { " " + unitGen(it) } ?: m.groupValues[3])
-            else cardinal(a) + " дріб " + cardinal(b) + m.groupValues[3]
+            else cardinal(a) + " на " + cardinal(b) + m.groupValues[3]
         }
     }
     private val ROUND_DENOMS = setOf(2L, 10L, 100L, 1000L, 10000L)
@@ -449,9 +452,11 @@ object UkNumbers {
         val src = (if (rules.on("currency")) currencyAfter(text) else text).let { if (rules.on("degrees")) angles(it) else it }
         return MULT_UNIT.replace(NUMBER_UNIT.replace(src) { m ->
             val raw = m.groupValues[1].replace(" ", "").replace(" ", "")
-            val n = raw.toLongOrNull() ?: return@replace m.value
             val key = m.groupValues[3].lowercase()
             if (UNITS_MAP[key]?.takeIf { rules.on(it.rule) } == null) return@replace m.value
+            // длиннее Long — по цифрам, единица словом (родовий множини), а не буквами
+            val n = raw.toLongOrNull() ?: return@replace m.value.substring(0, m.groups[3]!!.range.first - m.range.first) +
+                unitPhrase(unit(key), Case.GEN, true)
             val frac = m.groupValues[2]
             // «о 5 год.» — час доби: «о п'ятій годині»
             if (key == "год" && frac.isEmpty() && n in 0..24 && AT_TIME_BEHIND.containsMatchIn(src.substring(maxOf(0, m.range.first - 4), m.range.first)))
@@ -469,11 +474,13 @@ object UkNumbers {
         }
     }
     private val TIME_UNITS = setOf("год", "хв", "сек", "мс", "мкс", "нс")
-    /** Предлог перед числом с единицей → падеж ([units]). «з» — нет: «з 5 кг» и родовий, и орудний; «понад» — знахідний. */
+    /** Предлог перед числом с единицей → падеж ([units]). «з» — нет: «з 5 кг» и родовий, и орудний; «на», «за», «через»,
+     * «понад», «про» — знахідний («понад тисячу гривень», «за одну годину»). */
     private val UNIT_PREP_CASE: Map<String, Case> =
         listOf("до", "від", "од", "біля", "коло", "близько", "без", "для", "крім", "окрім", "після", "замість", "серед",
             "протягом", "впродовж", "упродовж", "навколо", "поблизу", "більше", "менше").associateWith { Case.GEN } +
         listOf("у", "в", "при").associateWith { Case.PRE } +
+        listOf("на", "за", "через", "понад", "про").associateWith { Case.ACC } +
         listOf("між", "поміж", "над", "під", "перед").associateWith { Case.INS } +
         listOf("завдяки", "всупереч").associateWith { Case.DAT }
     private const val AMPLIFIERS = """(?:приблизно|майже|всього|усього|лише|тільки|вже|уже|ще|плюс|мінус|якихось|цілих)"""
@@ -512,7 +519,7 @@ object UkNumbers {
     internal fun decimalCase(text: String, start: Int): Case? =
         DECIMAL_PREP.find(text.substring(maxOf(0, start - 40), start))?.groupValues?.get(1)?.lowercase()
             ?.let { UNIT_PREP_CASE[it]?.takeIf { _ -> it != "у" && it != "в" } ?: Case.ACC }
-    private val DECIMAL_PREP = Regex("""(?<![\p{L}-])(${(UNIT_PREP_CASE.keys + listOf("на", "через", "за")).joinToString("|")})\s+(?:$AMPLIFIERS\s+)*(?:мінус\s+|плюс\s+)?$""",
+    private val DECIMAL_PREP = Regex("""(?<![\p{L}-])(${UNIT_PREP_CASE.keys.joinToString("|")})\s+(?:$AMPLIFIERS\s+)*(?:мінус\s+|плюс\s+)?$""",
         RegexOption.IGNORE_CASE)
 
     /** «1,5 млн» → «півтора мільйона», «2,5 тис.» → «дві з половиною тисячі», «близько 2,5 тис.» → «близько двох з половиною
@@ -566,7 +573,10 @@ object UkNumbers {
             if (from && !FROM_RANGE_AHEAD.containsMatchIn(after) && (morph == null ||
                     noun?.let { Case.INS in Morph.nounCases(it, true) + Morph.nounCases(it, false) } == true ||
                     FROM_YEARS_AHEAD.containsMatchIn(after))) return@replace m.value
-            val g = noun?.let { Morph.gender(it) } ?: Gender.M
+            // «на», «за» — и знахідний («на 21 000 гривень»), и місцевий/орудний («на 2 поверсі», «за 2 будинками»): есть
+            // существительное в таблице — решает [byNoun] ниже
+            if (case == Case.ACC && prep in ACC_AMBIGUOUS && noun != null) return@replace m.value
+            val g = noun?.let { nounGender(it) } ?: Gender.M
             m.chain(1) { n -> cardinal(n, case, g) }?.let { m.value.replaceGroups(m, 1 to it) }
                 ?.let { if (from) ZI_RE.replace(it) { z -> if (z.value[0] == 'З') "Зі" else "зі" } else it } ?: m.value
         }
@@ -582,9 +592,21 @@ object UkNumbers {
             }
             if (!Morph.isNoun(t) || m.groupValues[2].lowercase() in NOUN_STOP) return@replace m.value
             // місцевий — только после предлога: «автобус 21 їде», а не «двадцяти одному»
-            if (!PREP_BEHIND.containsMatchIn(s.substring(maxOf(0, m.range.first - 40), m.range.first)))
+            val before = s.substring(maxOf(0, m.range.first - 40), m.range.first)
+            if (!PREP_BEHIND.containsMatchIn(before))
                 t = t and (1 shl (8 + Case.PRE.ordinal)).inv() and (1 shl (14 + Case.PRE.ordinal)).inv()
-            m.chain(1) { n -> byNoun(n, t) }?.let { m.value.replaceGroups(m, 1 to it) } ?: m.value
+            val acc = ACC_PREP_BEHIND.containsMatchIn(before)
+            m.chain(1) { n -> byNoun(n, t, acc) }?.let { m.value.replaceGroups(m, 1 to it) } ?: m.value
+        }
+    }
+
+    /** Род существительного; у формы двух лемм разного рода (в VESUM «сім'я» — ж. р., «сім'я» «насіння» — с. р.) — ж. р.,
+     * если он среди родов, иначе средний («євро» ч. і с.); ч. і ж. («суддя», «колега») — неизвестен. */
+    private fun nounGender(t: Int): Gender? = Morph.gender(t) ?: Morph.genders(t).let { gs ->
+        when {
+            Gender.F in gs && Gender.M !in gs -> Gender.F
+            Gender.N in gs && Gender.F !in gs -> Gender.N
+            else -> null
         }
     }
 
@@ -593,33 +615,42 @@ object UkNumbers {
      * називний/знахідний множини («дві книги»; знахідний істот — «двох братів»), родовий множини — родовий («двох друзів»);
      * после 5+ родовий множини — називний («п'ять книг»); непрямі множини — тот же падеж. Не 1, а существительное только в
      * непрямому однини — номер, порядковое: «на 2 поверсі» → «на другому», «о 7 годині» → «о сьомій», «учень 2 класу» →
-     * «другого». */
-    private fun byNoun(n: Long, t: Int): String? {
-        val g = Morph.gender(t)
+     * «другого». После прийменника знахідного ([acc]: «на», «за», «через», «понад», «про», «у/в») прямая форма — знахідний:
+     * «за тисячу гривень», «на двадцять одну тисячу», «за одну ніч». Только множинні («двері», «сани») после 1 — «одні»,
+     * «двадцять одні двері». */
+    private fun byNoun(n: Long, t: Int, acc: Boolean = false): String? {
+        val g = nounGender(t)
         val one = isOne(n)
         val few = isFew(n)
+        val direct = if (acc) Case.ACC else Case.NOM
         val out = HashSet<String>()
         val sg = Morph.nounCases(t, plural = false)
         val pl = Morph.nounCases(t, plural = true)
-        if (one) {
+        // только множинні: у леммы нет однини, а с ней и рода (tools/vesum_morph.py ставит род по формам однини)
+        if (one && sg.isEmpty() && pl.isNotEmpty() && Morph.genders(t).isEmpty()) {
+            for (c in pl) out += (if (n > 1) cardinal(n - 1, c) + " " else "") + ONE_PLURAL[c.ordinal]
+        } else if (one) {
             if (g == null) return null
+            if (acc && Case.ACC in sg) return if (g == Gender.M && Morph.animate(t)) cardinal(n, Case.GEN) else cardinal(n, Case.ACC, g)
             if (Case.NOM in sg) return cardinal(n, Case.NOM, g)
             for (c in sg) out += if (c == Case.ACC && g == Gender.M && Morph.animate(t)) cardinal(n, Case.GEN) else cardinal(n, c, g)
         } else if (pl.isEmpty() && g != null && sg.isNotEmpty() && sg.none { it == Case.NOM || it == Case.ACC }) {
             // «класу» — и родовий, и давальний: номер за словом — родовий («учень другого класу»)
             for (c in if (Case.GEN in sg) setOf(Case.GEN) else sg) out += ordinal(n, c, g)
         } else for (c in pl) when (c) {
-            Case.NOM -> if (few) out += cardinal(n, Case.NOM, g ?: Gender.M)
-            Case.ACC -> if (few) out += if (Morph.animate(t)) cardinal(n, Case.GEN) else cardinal(n, Case.NOM, g ?: Gender.M)
-            Case.GEN -> out += if (few) cardinal(n, Case.GEN) else cardinal(n, Case.NOM, g ?: Gender.M)
+            Case.NOM -> if (few) out += cardinal(n, direct, g ?: Gender.M)
+            Case.ACC -> if (few) out += if (Morph.animate(t)) cardinal(n, Case.GEN) else cardinal(n, direct, g ?: Gender.M)
+            Case.GEN -> out += if (few) cardinal(n, Case.GEN) else cardinal(n, direct, g ?: Gender.M)
             else -> out += cardinal(n, c, g ?: Gender.M)
         }
         return out.singleOrNull()
     }
+    /** «Одні» (VESUM numr p) по падежам — у только множинних. */
+    private val ONE_PLURAL = arrayOf("одні", "одних", "одним", "одні", "одними", "одних")
 
     /** Теги существительного [tn], где клетки — только общие с прилагательным [ta] перед ним (истоте знахідний = родовий). */
     private fun agree(ta: Int, tn: Int): Int {
-        var sg = ta shr when (Morph.gender(tn)) { Gender.F -> 20; Gender.N -> 26; else -> 8 } and 63
+        var sg = ta shr when (nounGender(tn)) { Gender.F -> 20; Gender.N -> 26; else -> 8 } and 63
         var pl = ta shr 14 and 63
         if (Morph.animate(tn)) {
             if (sg shr Case.GEN.ordinal and 1 != 0) sg = sg or (1 shl Case.ACC.ordinal)
@@ -671,7 +702,13 @@ object UkNumbers {
         trigger("""при""") to Case.PRE,
         trigger("""між|поміж|над|під|перед""") to Case.INS,
         trigger("""завдяки|всупереч|назустріч""") to Case.DAT,
+        // знахідний: «понад тисячу учасників», «через дві години», «за тисячу гривень»; «на/за» — только без существительного
+        // в таблице ([ACC_AMBIGUOUS], иначе решает [byNoun])
+        trigger("""понад|через|про|на|за""") to Case.ACC,
         trigger("""з|із|зі|зо""") to Case.GEN)
+    private val ACC_AMBIGUOUS = setOf("на", "за")
+    /** Прийменник знахідного перед числом ([byNoun]): прямая форма числа — знахідний. */
+    private val ACC_PREP_BEHIND = Regex("""(?<![\p{L}])(?:на|за|через|понад|про|у|в)\s+(?:$AMPLIFIERS\s+)*$""", RegexOption.IGNORE_CASE)
     /** За «з N» — «по/до» с числом: годы «з 2010 по 2015 рік» ([RANGE_FROM_TO] их оставил). */
     private val FROM_YEARS_AHEAD = Regex("""^\s+(?:по|до)\s+\d""", RegexOption.IGNORE_CASE)
     /** За «з N» — «до» и слово: второе число диапазона уже словами ([units] раньше). */
@@ -727,8 +764,10 @@ object UkNumbers {
         s = EQUALS_RE.replace(s, " дорівнює ")
         // степень — с основанием сразу словами: «у»/«в» по последней букве основы
         return POWER_RE.replace(s) { m ->
-            val base = cardinal(m.groupValues[1].toLongOrNull() ?: return@replace m.value)
-            val e = m.groupValues[3].map { SUP_DIGITS.indexOf(it) }.joinToString("").toLongOrNull() ?: return@replace m.value
+            val base = m.groupValues[1].let { r -> r.toLongOrNull()?.let { cardinal(it) } ?: digits(r) }
+            val eRaw = m.groupValues[3].map { SUP_DIGITS.indexOf(it) }.joinToString("")
+            // показатель длиннее Long — по цифрам, а не пропадает
+            val e = eRaw.toLongOrNull() ?: return@replace "$base ${uv(base)} степені ${if (m.groupValues[2] == "⁻") "мінус " else ""}${digits(eRaw)}"
             val minus = m.groupValues[2] == "⁻"
             base + " " + uv(base) + " " + when {
                 !minus && e == 2L -> "квадраті"
@@ -900,23 +939,28 @@ object UkNumbers {
                 if (sec == 0L) t else t.removeSuffix(" рівно") + " " + counted(sec, "сек")
             }?.takeIf { sec < 60 } ?: m.value
         }
-        return TIME.replace(sec) { m ->
+        val t = TIME.replace(sec) { m ->
             val p = TIME_PREP_BEHIND.find(sec.substring(maxOf(0, m.range.first - 12), m.range.first))?.groupValues?.get(1)?.lowercase()
             time(m.groupValues[1], m.groupValues[2], p) ?: m.value
         }
+        // что осталось «N:M» — не время (счёт «2:1», «25:00»): тире вместо двоеточия, числа прочтёт [UkNormalizer]
+        return SCORE_RE.replace(t, "$1 — $2")
     }
     private val AT_PREPS = setOf("о", "об", "у", "в")
-    private val TIME_PREP_BEHIND = Regex("""(?<![\p{L}])(о|об|з|із|зі|від|до|близько|біля|після|по|перед)\s+$""", RegexOption.IGNORE_CASE)
+    private val TIME_PREP_BEHIND = Regex("""(?<![\p{L}])(о|об|у|в|з|із|зі|від|до|близько|біля|після|по|перед)\s+$""", RegexOption.IGNORE_CASE)
+    private val SCORE_RE = Regex("""(?<![\d:.,])(\d{1,3}):(\d{1,3})(?![\d:]|[.,]\d)""")
 
     private fun time(hRaw: String, miRaw: String, prep: String? = null): String? {
         val h = hRaw.toIntOrNull() ?: return null
         val mi = miRaw.toIntOrNull() ?: return null
-        if (h !in 0..23 || mi !in 0..59) return null
+        // «24:00» — конец суток, только с нулём минут
+        if (h !in 0..24 || mi !in 0..59 || h == 24 && mi > 0) return null
         // порядковое часа, без минут — со словом «година» в том же падеже, с минутами — минуты количественным
         fun hour(c: Case, word: String, minCase: Case) = ordinal(h.toLong(), c, Gender.F) +
             if (mi == 0) " $word" else " " + (if (mi < 10) "нуль " else "") + cardinal(mi.toLong(), minCase, Gender.F)
         return when (prep) {
-            "о", "об" -> hour(Case.PRE, "годині", Case.NOM)
+            // «у/в 7.30» — как «о»: так же время доби
+            "о", "об", "у", "в" -> hour(Case.PRE, "годині", Case.NOM)
             "з", "із", "зі", "від", "до", "близько", "біля", "після" -> hour(Case.GEN, "години", Case.GEN)
             "по" -> hour(Case.ACC, "годину", Case.NOM)
             "перед" -> if (mi == 0) hour(Case.INS, "годиною", Case.INS) else null
@@ -951,7 +995,7 @@ object UkNumbers {
         if (!rules.on(if (case != null) "gen_suffix" else "numbers")) return@replace m.value
         if (case != null) return@replace cardinal(n, case)
         // «-й» перед существительным ж. р. или после «о» (время) — місцевий ж. р.: «на 5-й сторінці» → «п'ятій», «о 7-й»
-        val femNext = sfx == "й" && (nextNoun(text, m.range.last + 1)?.let { Morph.gender(it) == Gender.F } == true ||
+        val femNext = sfx == "й" && (nextNoun(text, m.range.last + 1)?.let { nounGender(it) == Gender.F } == true ||
             AT_TIME_BEHIND.containsMatchIn(text.substring(maxOf(0, m.range.first - 4), m.range.first)))
         when {
             femNext -> ordinal(n, Case.PRE, Gender.F)
@@ -1040,8 +1084,11 @@ object UkNumbers {
         s = ROMAN_ST.replace(st) { m ->
             val nums = listOf(m.groupValues[2], m.groupValues[4]).filter { it.isNotEmpty() }
             if (nums == listOf("І") || !rules.on("roman")) return@replace m.value
-            // без предлога I–IV — скорее ступінь («орден … II ст.», «Диплом I ст.»): не трогаем; с «н. е.» за ним — век
-            if (m.groupValues[1].isEmpty() && m.groupValues[7].isEmpty() && nums.all { romanValue(it) <= 4 }) return@replace m.value
+            // без предлога I–IV — ступінь, родовий: «орден Слави III ст.» → «третього ступеня», «I–II ст.» → «першого — другого
+            // ступенів»; с «н. е.» за ним — век
+            if (m.groupValues[1].isEmpty() && m.groupValues[7].isEmpty() && nums.all { romanValue(it) <= 4 })
+                return@replace nums.joinToString(" — ") { r -> ordinal(romanValue(r), Case.GEN) } +
+                    (if (nums.size > 1) " ступенів" else " ступеня") + (if (m.groups[6] != null) " ." else "")
             val upTo = m.groupValues[3].trim().lowercase() == "до"
             val case = if (upTo) Case.GEN else when (m.groupValues[1].trim().lowercase()) {
                 "у", "в" -> Case.PRE
@@ -1066,7 +1113,7 @@ object UkNumbers {
         // «за Миколи I»), согласная и «-о» — називний ч. р. («Карл XII», «Петро I»), прочее не трогаем. Предлог в начале фразы
         // («Після II світової») — не имя. Одна буква — только I/І после кириллического имени: «День Х», «Model X» не трогаем.
         // Кириллическая «І» перед точкой — инициал, перед словом с заглавной — союз («Київ І Львів»), перед строчной — римское
-        return ROMAN_NAME.replace(s) { m ->
+        s = ROMAN_NAME.replace(s) { m ->
             val name = m.groupValues[1]
             val r = m.groupValues[2]
             val next = m.groupValues[3]
@@ -1086,7 +1133,45 @@ object UkNumbers {
             }
             "$name $word"
         }
+        if (!rules.on("roman")) return s
+        // прочие римские от двух букв — порядковым в согласии со словом за ним ([romanAgreed]): «Після II світової війни» →
+        // «після другої світової війни». Одна буква («I», «Х», «V») — не трогаем: местоимение, союз, буква, инициал
+        val g = s
+        return ROMAN_ANY.replace(g) { m -> romanAgreed(romanValue(m.value), g.substring(0, m.range.first), g.substring(m.range.last + 1)) }
     }
+
+    /** Порядковое римского [n] по соседям: слово главы перед ним («розділ IV», «у главі II») — его род и падеж; иначе слово за
+     * ним — по таблице [morph] (прилагательное — его род, число, падеж; существительное — тоже), из нескольких разборов — тот,
+     * что у предлога перед числом; без таблицы — по окончанию прилагательного («-ої», «-ого»…). Нет согласования — називний
+     * ч. р. («том II» → «том другий»). Не проверено носителем. */
+    private fun romanAgreed(n: Long, before: String, after: String): String {
+        WORD_BEFORE_RE.find(before.takeLast(40))?.groupValues?.get(1)?.lowercase()?.let { CHAPTER_FORMS[it] }
+            ?.let { (gg, c) -> return ordinal(n, c, gg) }
+        val w = NEXT_WORDS.find(after.take(80))?.groupValues?.get(1)?.lowercase() ?: return ordinal(n)
+        val forms = LinkedHashMap<String, Case>()
+        val t = tags(w)
+        if (Morph.isAdjective(t)) {
+            for (gg in Gender.values()) for (c in Morph.adjCases(t, gg, false)) forms[ordinal(n, c, gg)] = c
+            for (c in Morph.adjCases(t, null, true)) forms[ordinal(n, c, plural = true)] = c
+        } else if (Morph.isNoun(t)) {
+            val gg = nounGender(t) ?: Gender.M
+            for (c in Morph.nounCases(t, false)) forms[ordinal(n, c, gg)] = c
+            for (c in Morph.nounCases(t, true)) forms[ordinal(n, c, plural = true)] = c
+        }
+        if (forms.size > 1) {
+            val p = WORD_BEFORE_RE.find(before.takeLast(40))?.groupValues?.get(1)?.lowercase()
+            val pc = p?.let { SIGN_PREP[it] ?: UNIT_PREP_CASE[it] }
+            forms.entries.filter { it.value == pc }.map { it.key }.distinct().singleOrNull()?.let { return it }
+        }
+        forms.keys.singleOrNull()?.let { return it }
+        if (forms.isNotEmpty()) return ordinal(n)
+        // без таблицы — окончания прилагательного
+        return ROMAN_ADJ_ENDINGS.entries.firstOrNull { w.endsWith(it.key) }?.value?.let { (c, gg) -> ordinal(n, c, gg) } ?: ordinal(n)
+    }
+    private val ROMAN_ADJ_ENDINGS = linkedMapOf("ої" to (Case.GEN to Gender.F), "ою" to (Case.INS to Gender.F),
+        "ого" to (Case.GEN to Gender.M), "ому" to (Case.PRE to Gender.M), "ий" to (Case.NOM to Gender.M))
+    /** Римское от двух букв отдельным словом, регистр важен: «II», «XIV», «ХІХ». */
+    private val ROMAN_ANY = Regex("""(?-i:(?<![\p{L}\d'’ʼ-])(?=[IVXІХ]{2})$ROMAN_NUM(?![\p{L}\d'’ʼ]))""", RegexOption.IGNORE_CASE)
     /** Падеж «століття», «вік» по форме; «століття» — називний (родовий — по слову перед ним, [roman]). */
     private val CENTURY_CASE = mapOf("століття" to Case.NOM, "століттю" to Case.DAT, "століттям" to Case.INS, "столітті" to Case.PRE,
         "вік" to Case.NOM, "віку" to Case.GEN, "віці" to Case.PRE, "віком" to Case.INS)
@@ -1213,12 +1298,12 @@ object UkNumbers {
         """(?:\s*(?:тис|млн|млрд|трлн)\.?(?!\p{L})|\s+(?:$MULT_WORD)(?!\p{L}))?)(?![\d.,]?\d)""", RegexOption.IGNORE_CASE)
     private const val CUR_NUM = """\d{1,9}(?:[  ]\d{3})*(?:[.,]\d+)?"""
     /** Число, дробная часть через точку или запятую ([decimal]), единица [UNIT]. */
-    private val NUMBER_UNIT = Regex("""(?<![\d.,])(\d{1,9}(?:[ \u00A0]\d{3})*)(?:[.,](\d+))?\s*$UNIT""", RegexOption.IGNORE_CASE)
+    private val NUMBER_UNIT = Regex("""(?<![\d.,])(\d+(?:[ \u00A0]\d{3})*)(?:[.,](\d+))?\s*$UNIT""", RegexOption.IGNORE_CASE)
     private val VULGAR_UNIT_RE = Regex("""(?<!\p{L})(половина|чверть|чверті|третина|третини)\s+$UNIT""", RegexOption.IGNORE_CASE)
     /** «2 1/2 кг»: целое, пробел, дробь с однозначным числителем; четвёртая группа — единица с пробелом, пятая — сама единица. */
     private val MIXED_RE = Regex("""(?<![\d/.,])(\d{1,4})\s+(\d)/(\d{1,2})(?![\d/])(\s*$UNIT)?""", RegexOption.IGNORE_CASE)
     /** «3/4», «1/2 кг»: не кусок даты «12/05/2026» и не «1/2/3»; третья группа — единица с пробелом, четвёртая — единица. */
-    private val SLASH_RE = Regex("""(?<![\d/.,])(\d{1,6})/(\d{1,6})(?![\d/]|[.,]\d)(\s*$UNIT)?""", RegexOption.IGNORE_CASE)
+    private val SLASH_RE = Regex("""(?<![\d/.,])(\d+)/(\d+)(?![\d/]|[.,]\d)(\s*$UNIT)?""", RegexOption.IGNORE_CASE)
     private val TIME = Regex("""(?<!\d)(\d{1,2}):(\d{2})(?!\d)""")
     private val TIME_SEC = Regex("""(?<![\d:])(\d{1,2}):(\d{2}):(\d{2})(?![\d:])""")
     /** «чч.мм» после предлога ([times]); не кусок даты «о 12.05.2026» и не число с единицей «1.50 грн», «у 1.25 раза», «близько

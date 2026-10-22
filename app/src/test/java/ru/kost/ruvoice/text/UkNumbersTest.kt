@@ -15,6 +15,9 @@ class UkNumbersTest {
     private val cis = TestData.cisAllowed
     private fun prep(t: String, r: Rules = Rules()) = UkLayer.prepare(t, cis, r)
     private fun path(t: String, r: Rules = Rules()) = Splitter.sentences(t, r).joinToString(" | ") { prep(it, r) }
+    /** Символы пака плюс цифры: недочитанная цифра доходит до вывода, проверка «цифр нет» может упасть. */
+    private val cisDigits = cis + "0123456789"
+    private fun pathD(t: String) = Splitter.sentences(t).joinToString(" | ") { UkLayer.prepare(it, cisDigits, Rules()) }
 
     @Test fun cardinalCases() {
         // склоняется каждое слово (VESUM numr); основная форма — первая в Правописе 2019 («п'ятьма», «сьома», «вісьма»)
@@ -68,20 +71,24 @@ class UkNumbersTest {
 
     @Test fun bigNumbersAndDigitGroups() {
         // с миллиарда — по цифрам, без падения и без цифр в выводе
-        val big = prep("10 000 000 000 000")
+        val big = pathD("10 000 000 000 000")
         assertTrue(big, big.none { it.isDigit() } && big.startsWith("один нуль нуль"))
         assertEquals("вісім нуль чотири чотири один два три чотири пъять шість сім", prep("80441234567", Rules().with("phones", false)))
         assertEquals("один мільйон двісті тридцять чотири тисячі пъятсот шістдесят сім гривень", prep("1 234 567 гривень"))
         // склейка только группами по три
         assertEquals("один два три", prep("1 2 3"))
         assertEquals("чотири тисячі двісті сімдесят шість одна тисяча двісті тридцять чотири", prep("4276 1234"))
-        val card = prep("4276 1234 5678 9012")
+        val card = pathD("4276 1234 5678 9012")
         assertTrue(card, "мільйон" !in card && card.none { it.isDigit() })
         assertEquals("три мільйони двісті тисяч", prep("3 200 000"))
         assertEquals("нуль нуль сім", prep("007"))
         // цифры длиннее Long в разделе, диапазоне и степени — не роняют запрос (нашёл фаззинг)
         for (t in listOf("12.05.20267344596879708368", "з 99999999999999999999 до 5 км", "10¹²³⁴⁵⁶⁷⁸⁹⁰¹²³⁴⁵⁶⁷⁸⁹⁰"))
-            assertTrue(t, path(t).none { it.isDigit() })
+            assertTrue(t, pathD(t).none { it.isDigit() })
+        // длинные — по цифрам, но знак и единица не пропадают
+        assertTrue(pathD("2³⁴⁵⁶⁷⁸⁹⁰¹²³⁴⁵⁶⁷⁸⁹⁰¹²³").startsWith("два в степені три чотири пъять"))
+        assertTrue(pathD("1234567890123456789012345/2").endsWith("пъять на два"))
+        assertTrue(pathD("12345678901234567890 кг").endsWith("нуль кілограмів"))
     }
 
     @Test fun phones() {
@@ -148,7 +155,7 @@ class UkNumbersTest {
         assertEquals("1.10.2", UkNumbers.dates("1.10.2"))
         assertEquals("5.05 %", UkNumbers.dates("5.05 %"))
         assertEquals("одна друга склянки", prep("1/2 склянки"))
-        assertEquals("двадцять чотири дріб сім", prep("24/7"))
+        assertEquals("двадцять чотири на сім", prep("24/7"))
         assertEquals("один крапка десять крапка два", prep("1.10.2"))
         assertEquals("пъять цілих пъять сотих відсотка", prep("5.05 %"))
         assertEquals("дванадцяте травня дві тисячі двадцять шостого року", prep("12/05/2026"))
@@ -167,6 +174,16 @@ class UkNumbersTest {
         assertEquals("з девъятої години по вісімнадцяту годину", prep("з 9:00 по 18:00"))
         assertEquals("перед девъятою годиною", prep("перед 9:00"))
         assertEquals("двадцять одна година тридцять хвилин пъятнадцять секунд", prep("21:30:15"))
+        // «24:00» — конец суток, только с нулём минут; двоеточие не доходит до модели
+        assertEquals("з восьмої години до двадцять четвертої години", prep("з 8:00 до 24:00"))
+        assertEquals("працює до двадцять четвертої години.", path("Працює до 24:00."))
+        assertEquals("двадцять чотири години рівно", prep("24:00"))
+        // «у/в» перед временем — как «о»
+        assertEquals("у сьомій тридцять", prep("у 7.30"))
+        assertEquals("в двадцять першій годині", prep("в 21:00"))
+        // не время — счёт: тире вместо двоеточия
+        assertEquals("матч завершився з рахунком два — один.", path("Матч завершився з рахунком 2:1."))
+        for (t in listOf("24:30", "25:00", "2:1")) assertFalse(t, pathD(t).contains(':'))
     }
 
     @Test fun timeWithDot() {
@@ -227,8 +244,10 @@ class UkNumbersTest {
         assertEquals("сто років", prep("100 років"))
         assertEquals("у трьохсотому році", prep("у 300 році"))
         // «т», «м», «с», «р» перед номером или названием — не единица и не год (их развернёт задача 4)
-        for (t in listOf("т. 2", "м. Київ", "р. Дніпро", "с. 45", "ст. 15", "с. Яблунівка"))
-            assertFalse(t, Regex("тонн|метр|рік|року|році|століт|секунд").containsMatchIn(prep(t)))
+        assertEquals(listOf("т. два", "м. київ", "р. дніпро", "с. сорок пъять", "ст. пъятнадцять", "с. яблунівка"),
+            listOf("т. 2", "м. Київ", "р. Дніпро", "с. 45", "ст. 15", "с. Яблунівка").map { prep(it) })
+        // три цифры и «рік» — количество, не год
+        assertEquals("їй виповнився сто один рік.", path("Їй виповнився 101 рік."))
     }
 
     @Test fun degreesAndAngles() {
@@ -256,6 +275,14 @@ class UkNumbersTest {
         assertEquals("близько однієї тонни", prep("близько 1 т"))
         assertEquals("між двома метрами", prep("між 2 м"))
         assertEquals("понад пъять кілометрів", prep("понад 5 км"))
+        // знахідний после «на/за/через/понад/про»: «тисячу», «двадцять одну тисячу», «одну годину»
+        assertEquals("понад тисячу учасників", prep("понад 1000 учасників"))
+        assertEquals("за тисячу гривень", prep("за 1000 гривень"))
+        assertEquals("на двадцять одну тисячу гривень", prep("на 21 000 гривень"))
+        assertEquals("через тисячу років", prep("через 1000 років"))
+        assertEquals("понад тисячу гривень", prep("понад 1000 грн"))
+        assertEquals("за одну годину", prep("за 1 год"))
+        assertEquals("ціна зросла на тисячу гривень", prep("Ціна зросла на 1000 грн"))
         // «з N до …» — диапазон: оба родовим, и «з» тоже (второе число уже прочли единицы)
         assertEquals("з десяти до пъятнадцяти кілограмів", prep("з 10 до 15 кг"))
         assertEquals("протягом двох-трьох тижнів", prep("протягом 2-3 тижнів"))
@@ -404,8 +431,9 @@ class UkNumbersTest {
         assertEquals("це у двадцятому столітті. україна змінилася.", path("Це у XX ст. Україна змінилася."))
         assertEquals("і ст.", prep("І ст."))
         // без предлога I–IV — ступінь, не век; с «н. е.» — век
-        assertFalse(prep("Орден Слави III ст.").contains("століт"))
-        assertFalse(prep("Диплом I ст. з математики").contains("століт"))
+        assertEquals("орден слави третього ступеня.", prep("Орден Слави III ст."))
+        assertEquals("диплом першого ступеня з математики", prep("Диплом I ст. з математики"))
+        assertEquals("диплом першого — другого ступенів.", prep("Диплом I–II ст."))
         assertTrue(prep("У II ст. до н. е.").startsWith("у другому столітті"))
         // после слова — родовий: «курган третього століття», «події двадцятого століття»
         assertTrue(prep("Курган III ст. до н. е.").startsWith("курган третього століття"))
@@ -429,12 +457,17 @@ class UkNumbersTest {
         assertEquals("петро перший заснував місто.", prep("Петро І заснував місто."))
         assertEquals("київ і львів.", prep("Київ І Львів."))
         // одна буква перед вторым инициалом — инициал; латинская «I.» в конце фразы — римское
-        assertFalse(path("Автор Петренко І. П. прийшов.").contains("перш"))
+        assertEquals("автор петренко і. п. прийшов.", path("Автор Петренко І. П. прийшов."))
         assertEquals("засновник міста — петро перший.", path("Засновник міста — Петро I."))
-        assertFalse(prep("День Х настав.").contains("десят"))
-        // предлог в начале фразы — не имя; длинное слово с апострофами — без StackOverflowError
-        assertFalse(prep("Після II світової війни.").contains("друг"))
-        prep("А" + "'а".repeat(8000) + " II")
+        assertEquals("день х настав.", prep("День Х настав."))
+        // предлог в начале фразы — не имя, число читается порядковым по слову за ним («-ої» — родовий ж. р.)
+        assertEquals("після другої світової війни.", prep("Після II світової війни."))
+        // римское вне имени и века: согласование со словом главы перед ним, иначе називний ч. р.
+        assertEquals("том другий вийшов.", prep("Том II вийшов."))
+        assertEquals("у розділі четвертому", prep("у розділі IV"))
+        assertEquals("у главі другій", prep("у главі II"))
+        // длинное слово с апострофами — без StackOverflowError, «II» после него — порядковое
+        assertEquals("а".repeat(8001) + " другий", prep("А" + "'а".repeat(8000) + " II"))
     }
 
     @Test fun signsAndSections() {
@@ -517,7 +550,7 @@ class UkNumbersTest {
         // путь сервиса: куски [Pipeline.plan], потом слой (как Pipeline.accent до ударений): числа доходят словами, цифр нет
         val text = "Ціна 1,20 UAH. Зустріч 21.10.2026 о 10:30, у 1812 р. було 3 км і 20 °C; −0,25 та 1,5 млн грн."
         val out = ru.kost.ruvoice.Pipeline.plan(text, TestData.data(), 0, 0, rules = Rules(), layer = UkLayer, allowed = cis)
-            .joinToString(" | ") { UkLayer.prepare(it.text, cis, Rules()) }
+            .joinToString(" | ") { UkLayer.prepare(it.text, cisDigits, Rules()) }
         assertTrue(out, out.none { it.isDigit() })
         for (w in listOf("гривня", "копійок", "жовтня", "десятій", "році", "кілометри", "цельсія", "сотих", "мільйона"))
             assertTrue("$w: $out", w in out.replace("+", ""))
