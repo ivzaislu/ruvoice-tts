@@ -3158,7 +3158,10 @@ object Normalizer {
                 else -> i++
             }
         }
+        // группы через одну точку вплотную — одно число (дата, раздел); номер его не режет: «28.09.26 – 03.10.26» — не «… ноль девять, …»
+        fun dotted(k: Int) = k in 1 until gs.size && v.substring(gs[k - 1].end, gs[k].start) == "."
         for (a in gs.indices) for (b in minOf(gs.size, a + 9) downTo a + 1) {
+            if (dotted(a) || dotted(b)) continue
             var st = gs[a].start
             if (gs[a].paren) st = v.lastIndexOf('(', st)
             var en = gs[b - 1].end

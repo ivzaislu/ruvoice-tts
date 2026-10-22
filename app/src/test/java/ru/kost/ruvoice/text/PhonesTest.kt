@@ -86,6 +86,10 @@ class PhonesTest {
         assertEquals(n("СНИЛС 123-456-789 01"), Normalizer.numbers("СНИЛС 123-456-789 01", off("phones")))
         assertEquals(n("ISBN 978-5-17-118366-0"), Normalizer.numbers("ISBN 978-5-17-118366-0", off("phones")))
         assertEquals(n("+5 000 000 000"), Normalizer.numbers("+5 000 000 000", off("phones")))
+        // диапазон дат: номер не начинается и не кончается внутри числа с точкой (было «двадцать восемь.ноль девять, …»)
+        for (s in listOf("28.09.26 – 03.10.26", "28.09.26 - 03.10.26", "28.09.2026 – 03.10.2026", "01.09.26-05.09.26"))
+            assertEquals(s, Normalizer.numbers(s, off("phones")), n(s))
+        assertEquals("ноль сорок четыре, сто двадцать три, сорок пять, шестьдесят семь", n("044.123.45.67"))
     }
 
     @Test fun ruleOff() {
