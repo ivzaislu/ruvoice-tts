@@ -17,6 +17,7 @@ import ru.kost.ruvoice.text.HardE
 import ru.kost.ruvoice.text.YoDict
 import ru.kost.ruvoice.text.StressModels
 import ru.kost.ruvoice.text.SymbolNames
+import ru.kost.ruvoice.text.UkNumbers
 import java.io.File
 import kotlin.math.exp
 
@@ -34,8 +35,8 @@ class SileroModels(private val context: Context) : StressModels {
     private var accLoadedDir: String? = null
     /** Папка тройки mel/backbone/head: null — штатная из assets, иначе каталог пака. */
     private var packDir: File? = null
-    /** Пак, чей morph.bin открыт в [BelNumbers.morph]. */
-    private var morphDir: String? = null
+    /** Язык → пак, чей morph.bin открыт у слоя этого языка ([BelNumbers.morph], [UkNumbers.morph]). */
+    private val morphDirs = HashMap<String, String>()
     /** id загруженного пака, null — штатная модель (или ничего не загружено). */
     @Volatile var loadedPack: String? = null; private set
     val isLoaded get() = mel != null && head != null && backbone != null && acc != null
@@ -66,11 +67,13 @@ class SileroModels(private val context: Context) : StressModels {
      * тройки, чтобы не трогать её; «Книга с ударениями» зовёт заранее, пока в окне «загрузка». */
     @Synchronized fun ensureStress(pack: Pack? = null) {
         ensureAccentor(pack?.takeIf { it.accentor }?.dir)
-        // морфология языка пака (белорусская из GrammarDB) — нормализатору слоя: род и падеж числа
-        pack?.takeIf { it.lang != "ru" && it.dir.path != morphDir }?.let { p ->
-            BelNumbers.morph = File(p.dir, Packs.MORPH).takeIf { it.isFile }
+        // морфология языка пака (белорусская из GrammarDB, украинская из VESUM) — нормализатору своего слоя: род и падеж числа.
+        // Поле у каждого языка своё: пак другого языка его не подменяет; два пака одного языка (cis_uk и cis_uk_ext) — по папке
+        pack?.takeIf { it.lang != "ru" && it.dir.path != morphDirs[it.lang] }?.let { p ->
+            val m = File(p.dir, Packs.MORPH).takeIf { it.isFile }
                 ?.let { f -> runCatching { Morph.open(f) }.onFailure { e -> Log.e(TAG, "morph.bin пака не открылся", e) }.getOrNull() }
-            morphDir = p.dir.path
+            if (p.lang == "uk") UkNumbers.morph = m else BelNumbers.morph = m
+            morphDirs[p.lang] = p.dir.path
         }
         // омографы BERT — русские: белорусскому голосу не нужны, русскому греем заранее, а не на первой фразе
         if ((pack?.lang ?: "ru") == "ru") ensureHomo()

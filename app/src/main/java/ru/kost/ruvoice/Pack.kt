@@ -61,7 +61,8 @@ object Packs {
     /** Файлы языка в паке: нужны не всем, поэтому необязательные. */
     const val ACCENTOR = "accentor.ptl"
     const val STRESS = "stress.txt"
-    /** Морфология языка (форма → род, падеж; формат text/Morph.kt): род и падеж числа у белорусского ([ru.kost.ruvoice.text.BelNumbers.morph]). */
+    /** Морфология языка (форма → род, падеж; формат text/Morph.kt): род и падеж числа у белорусского и украинского ([ru.kost.ruvoice.text.BelNumbers.morph],
+     * [ru.kost.ruvoice.text.UkNumbers.morph]). */
     const val MORPH = "morph.bin"
     /** Необязательные файлы пака: копируем, если пришли; обязательными не считаем. */
     private val EXTRA_FILES = listOf(ACCENTOR, STRESS, MORPH)

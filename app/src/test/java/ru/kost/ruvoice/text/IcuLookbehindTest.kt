@@ -21,8 +21,22 @@ class IcuLookbehindTest {
         }
     }
 
-    /** Украинский слой: поля [UkNormalizer] и регулярки вопросов [UkLayer]. */
-    private fun ukRegexes(): List<Pair<String, Regex>> = regexes(UkNormalizer) +
+    /** Регулярки в списках полей ([UkNumbers] держит часть шагов списком пар и троек: предлог → падеж, сокращение → слово). */
+    private fun listedRegexes(o: Any): List<Pair<String, Regex>> = o::class.java.declaredFields.flatMap { f ->
+        f.isAccessible = true
+        val v = try { f.get(o) } catch (_: Exception) { null }
+        (v as? List<*>).orEmpty().mapIndexedNotNull { i, e ->
+            when (e) {
+                is Regex -> e
+                is Pair<*, *> -> e.first as? Regex
+                is Triple<*, *, *> -> e.first as? Regex
+                else -> null
+            }?.let { "${f.name}[$i]" to it }
+        }
+    }
+
+    /** Украинский слой: поля [UkNormalizer], [UkNumbers] и регулярки вопросов [UkLayer]. */
+    private fun ukRegexes(): List<Pair<String, Regex>> = regexes(UkNormalizer) + regexes(UkNumbers) + listedRegexes(UkNumbers) +
         UkLayer.questions(ru.kost.ruvoice.TestData.data()).let { q -> listOfNotNull("altRe" to q.altRe, "tagRe" to q.tagRe, q.notWhRe?.let { "notWhRe" to it }) }
 
     private fun patterns(): List<Pair<String, String>> = (regexes(Normalizer) + ukRegexes()).map { (n, r) -> n to r.pattern }
