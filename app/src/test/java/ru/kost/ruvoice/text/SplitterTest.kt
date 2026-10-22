@@ -150,6 +150,13 @@ class SplitterTest {
         assertEquals(listOf("Мы жили в пос. городского типа."), Splitter.sentences("Мы жили в пос. городского типа."))
         assertEquals(listOf("До города ок. 300 км."), Splitter.sentences("До города ок. 300 км."))
         assertEquals(listOf("Хорошо, ок.", "Идём дальше."), Splitter.sentences("Хорошо, ок. Идём дальше."))
+        // «чел.» — так же; «пос.» и перед заглавной — название посёлка, как «г. Москва»
+        assertEquals(listOf("Пришли 20 тыс. чел. и остались до вечера."), Splitter.sentences("Пришли 20 тыс. чел. и остались до вечера."))
+        assertEquals(listOf("Пришли 300 чел. 2 группы уехали."), Splitter.sentences("Пришли 300 чел. 2 группы уехали."))
+        assertEquals(listOf("Пришли 300 чел.", "Потом ушли."), Splitter.sentences("Пришли 300 чел. Потом ушли."))
+        assertEquals(listOf("Мы жили в пос. Лесной до 2020 года."), Splitter.sentences("Мы жили в пос. Лесной до 2020 года."))
+        // список русский: белорусский путь его не видит
+        assertEquals(listOf("Жыў у пос.", "Лясны быў побач."), Splitter.sentences("Жыў у пос. Лясны быў побач.", layer = BeLayer))
         // белорусское «гадз.» и украинское «год.» — своими списками
         assertEquals(listOf("Працуем з 9 да 18 гадз. і ў суботу."),
             Splitter.sentences("Працуем з 9 да 18 гадз. і ў суботу.", layer = BeLayer))
