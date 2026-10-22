@@ -609,7 +609,14 @@ object Normalizer {
     // прямо с «10», не видя, что перед ним уже идёт «2.».
     // После латинского слова или знака операции («iOS 18.4», «9 × 11.01») — дробь, не дата.
     // После двоеточия («06:58:07.2») — секунды с долями, их читает times().
-    private val dateNoYearRe = Regex("""(?<![\d.:])(?<![A-Za-z×*+=÷^−] ?)(\d{1,2})\.(\d{1,2})(?![\d.])""")
+    // Точка следом — не помеха, если за ней не цифра, а месяц двумя цифрами: «Отпуск 12.05 – 26.05.», «Срок до 1.09.» —
+    // точка предложения (было «двадцать шесть целых пять сотых»); «1.10.2» — по-прежнему не дата.
+    private val dateNoYearRe = Regex("""(?<![\d.:])(?<![A-Za-z×*+=÷^−] ?)(\d{1,2})\.(\d{1,2})(?!\d|\.\d)""")
+    // Диапазон дат через тире: «1.09.26 – 3.10.26», «28.09 – 3.10» — край с днём одной цифрой тоже дата, если месяц
+    // (и год) у обоих краёв двумя цифрами, а без года — если хоть один край строго «дд.мм». Дописываем ноль дню, дальше
+    // края читают dateShortYearRe и dateNoYearRe. «1.5 – 2.5», «10.5 – 10.25» — не даты, как было.
+    private val dateRangeRe = Regex(
+        """(?<![\d.:])(?<![A-Za-z×*+=÷^−] ?)(\d{1,2})\.(\d{1,2})(\.\d{2})?(\s*[-–—]\s*)(\d{1,2})\.(\d{1,2})(\.\d{2})?(?!\d|[.,]\d)""")
 
     // «20.09.26» — год двумя цифрами (форумы, профили, подписи к файлам). День и месяц тоже строго двумя цифрами:
     // «1.10.26» и «0.14.10» — скорее номер версии. После латиницы («v10.12.13») — версия.
@@ -651,16 +658,26 @@ object Normalizer {
             val dot = if (gTail.trim() == "г." && sentenceEndAheadRe.containsMatchIn(rest)) "." else ""
             "$day-${fullDaySfx(iso.substring(0, m.range.first))} ${monthGenitive[month]} $y-го года$dot"
         }
-        val shortYear = dateShortYearRe.replace(withYear) { m ->
+        val ranged = dateRangeRe.replace(withYear) { m ->
+            val (d1, m1, y1, dash, d2, m2, y2) = m.destructured
+            val valid = listOf(d1 to m1, d2 to m2).all { (d, mo) -> d.toInt() in 1..31 && mo.toInt() in 1..12 }
+            val date = if (y1.isNotEmpty()) y2.isNotEmpty() && m1.length == 2 && m2.length == 2
+                else y2.isEmpty() && (d1.length == 2 && m1.length == 2 || d2.length == 2 && m2.length == 2)
+            if (!valid || !date) m.value
+            else "${d1.padStart(2, '0')}.${m1.padStart(2, '0')}$y1$dash${d2.padStart(2, '0')}.${m2.padStart(2, '0')}$y2"
+        }
+        val shortYear = dateShortYearRe.replace(ranged) { m ->
             val (d, mo, y) = m.destructured
             val day = d.toInt(); val month = mo.toInt()
             if (day !in 1..31 || month !in 1..12) return@replace m.value
-            if (dateTailUnitRe.containsMatchIn(withYear.substring(m.range.last + 1))) return@replace m.value
+            if (dateTailUnitRe.containsMatchIn(ranged.substring(m.range.last + 1))) return@replace m.value
             "$day-го ${monthGenitive[month]} ${y.toInt()}-го года"
         }
         return dateNoYearRe.replace(shortYear) { m ->
             val (d, mo) = m.destructured
             if (d.length < 2 && mo.length < 2) return@replace m.value
+            // перед точкой — только месяц двумя цифрами: «составил 16.1.», «версии 10.2.» — дробь, как было
+            if (mo.length < 2 && shortYear.getOrNull(m.range.last + 1) == '.') return@replace m.value
             val day = d.toInt(); val month = mo.toInt()
             if (day !in 1..31 || month !in 1..12) return@replace m.value
             // «N.N» перед единицей измерения — дробь («12.5 км/ч»), не дата без года (review
@@ -697,10 +714,14 @@ object Normalizer {
     private val timeDotRe = Regex("""(?<![\d.,])(\d{1,2})\.([0-5]\d)(?=\s+(?:утра|утром|дня|вечера|ночи)(?![а-яё]))""")
     // «в 3.50 началась», «около 3.50 он уже спал» — время через точку после предлога, если следом не деньги, не единица
     // и не существительное («в 1.25 раза», «в 3.50 рубля» — числа)
-    private val timeDotPrepRe = Regex("""(?<=(?<![\p{L}])(?:в|во|около|к|после|до|с)\s)([01]?\d|2[0-3])\.([0-5]\d)(?![\d.,])""", RegexOption.IGNORE_CASE)
+    // Точка или запятая следом без цифры — знак фразы: «С 9.00 до 18.00.», «в 10.30, потом» (было «восемнадцать целых ноль сотых»)
+    private val timeDotPrepRe = Regex("""(?<=(?<![\p{L}])(?:в|во|около|к|после|до|с)\s)([01]?\d|2[0-3])\.([0-5]\d)(?!\d|[.,]\d)""", RegexOption.IGNORE_CASE)
+    // «в 10.30 в офисе», «к 9.00 с документами» — строчная «в»/«с» перед словом предлог, не вольты и не секунды
+    private val prepNotUnitAheadRe = Regex("""^ (?:в|во|с|со|к|о|у|и|а)\s+\p{L}""")
     private fun timeDots(text: String) = timeDotPrepRe.replace(timeDotRe.replace(text, "$1:$2")) { m ->
         val rest = text.substring(m.range.last + 1)
-        if (moneyOrUnitAheadRe.containsMatchIn(rest) || countedNounAhead(rest) || tailNoun(rest).let { it != null && it != 0 }) m.value
+        if (moneyOrUnitAheadRe.containsMatchIn(rest) && !prepNotUnitAheadRe.containsMatchIn(rest) || countedNounAhead(rest) ||
+            tailNoun(rest).let { it != null && it != 0 }) m.value
         else "${m.groupValues[1]}:${m.groupValues[2]}"
     }
     private fun times(text: String) = timeRe.replace(timeDots(text)) { m ->
