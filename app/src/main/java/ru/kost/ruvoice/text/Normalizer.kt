@@ -132,6 +132,7 @@ object Normalizer {
     private val multiExclQuestRe = Regex("[!?]{2,}")
     private val ellipsisRe = Regex("""\.(?: ?\.){2,}""")
     private val spacedDashRe = Regex("""(?<=^|[ ])[-−](?=[ ])""")
+    private val spacedHyphenRe = Regex("""(?<=^|[ ])-(?=[ ])""")
     private val multiDashRe = Regex("[–—]{2,}")
     // Интерфейсные знаки, которые TalkBack шлёт из подписей: «замок · Системный» — пауза как
     // у запятой, ««21» → «двадцать один»» — как у тире; иначе фильтр их съедает и слова слипаются.
@@ -167,7 +168,8 @@ object Normalizer {
     private val hyphenPrefixes = setOf("кое", "кой", "из", "по", "во", "в")
     // Разрядка подчёркиваниями: «в_н_е в_с_я_к_о_г_о» → «вне всякого»
     private val spacedLettersRe = Regex("""(?<![\p{L}_])\p{L}(?:_\p{L}){2,}(?![\p{L}_])""")
-    fun punctuation(text: String, rules: Rules = Rules()): String {
+    /** [mathMinus] — минус «−» в пробелах оставить знаком ([TextLayer.mathMinus]), тире делать только из дефиса. */
+    fun punctuation(text: String, rules: Rules = Rules(), mathMinus: Boolean = false): String {
         if (!rules.on("punct")) return text
         var s = if ('\n' in text) lineHyphenRe.replace(text) { m ->
             val (a, b) = m.destructured
@@ -192,7 +194,7 @@ object Normalizer {
                 before.trimEnd().lastOrNull()?.let { it in ".!?…,;:" } == true
             if (edge) " " else " – "
         }
-        s = spacedDashRe.replace(s, "–")
+        s = (if (mathMinus) spacedHyphenRe else spacedDashRe).replace(s, "–")
         s = multiDashRe.replace(s, "–")
         // с symbol_names знаки называются по имени в symbols(), паузой их не подменяем
         if (!rules.on("symbol_names")) s = symbolPauses(s)

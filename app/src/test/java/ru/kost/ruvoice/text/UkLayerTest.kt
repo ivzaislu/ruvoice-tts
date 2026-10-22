@@ -248,6 +248,8 @@ class UkLayerTest {
         for ((t, last) in listOf("Це правда?" to "правда", "Ти вдома?" to "вдома", "Це ваш син?" to "син", "Хліб свіжий?" to "свіжий",
             "Сьогодні понеділок?" to "понеділок", "Це твоя мати?" to "мати"))
             assertEquals(t, t.replace("$last?", "*$last*?"), focus(t))
+        // слово с апострофом классификатор видит хвостом «ять»: числительное и «пам'ять» — не глагол на «-ть»
+        for (t in listOf("Їх п'ять?", "Їх дев'ять?", "Твоя пам'ять?")) assertEquals(t, t.replace("ять?", "*ять*?"), focus(t))
     }
 
     @Test fun notWhLongFillersNoStackOverflow() {

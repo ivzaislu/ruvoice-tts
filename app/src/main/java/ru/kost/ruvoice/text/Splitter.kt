@@ -24,7 +24,10 @@ object Splitter {
 
     /** Свои сокращения языка — [TextLayer.keepsSentence]: украинские «ім.», «тел.» не трогают русский и белорусский текст. */
     private fun endsWithAbbrev(piece: String, next: String, layer: TextLayer) = abbrevWordAtEndRe.find(piece)?.groupValues?.get(1)
-        ?.let { it.lowercase() in abbrevStopWords || it in abbrevStopWordsLower || layer.keepsSentence(it, next) } == true
+        ?.let { it.lowercase() in abbrevStopWords || it in abbrevStopWordsLower || layer.keepsSentence(it, next) } == true ||
+        numberAbbrevAtEndRe.find(piece)?.groupValues?.get(1)?.let { layer.keepsSentence(it, next) } == true
+    /** Сокращение за числом через дефис («в 16-пов. будинку») — только сокращения слоя. */
+    private val numberAbbrevAtEndRe = Regex("""\d-([а-яёіўєїґ]+)\.$""", RegexOption.IGNORE_CASE)
 
     // Де-гифенация переносов (task 18 п.1): строчная буква после переноса — слово разбито
     // переносом, дефис и \n убираем («со-\nбака» → «собака»). Заглавная — вероятно составное
@@ -64,7 +67,7 @@ object Splitter {
         // Реальный пайплайн режет на предложения ДО Normalizer.prepare() (review round 1 п.1):
         // без этого «Всё. . . Дальше.» резалось бы по каждой точке многоточия. punctuation()
         // идемпотентна, повторный вызов внутри prepare() ничего не портит.
-        val cleaned = Normalizer.punctuation(text, rules)
+        val cleaned = Normalizer.punctuation(text, rules, layer.mathMinus)
         val maxLen = rules.maxLen
         val merged = mutableListOf<String>()
         for (piece in sentenceEnd.split(cleaned.trim())) {

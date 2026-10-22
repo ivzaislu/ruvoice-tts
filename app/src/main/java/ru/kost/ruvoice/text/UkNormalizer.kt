@@ -133,7 +133,16 @@ object UkNormalizer {
         var s = CARD_RE.replace(text) { m -> spell(listOf(1, 3, 4, 5, 6).mapNotNull { m.groups[it]?.value }.joinToString(" ")) }
         s = CARD_MASK_RE.replace(s) { m -> spell(m.groupValues[1], whole = true) }
         s = REQUISITE_RE.replace(s) { m -> m.groupValues[1] + m.groupValues[2] + spell(m.groupValues[3]) }
-        s = POSTAL_RE.replace(s) { m -> m.groupValues[1] + m.groupValues[2] + spell(m.groupValues[3]) }
+        s = POSTAL_RE.replace(s) { m -> m.groupValues[1] + m.groupValues[2] +
+            POSTAL_CHAIN_RE.replace(m.groupValues[3]) { c -> if (c.value[0].isDigit()) spell(c.value) else " — " } }
+        // индекс без слова «індекс»: с нуля в начале (числом не пишут: «01001» — не «нуль одна тисяча один») или в адресе —
+        // за запятой после места («м. Львів, вул. Городоцька, 1, 79000.») либо перед ним («79000, м. Львів»)
+        s = FIVE_DIGITS_RE.replace(s) { m ->
+            val before = s.substring(maxOf(0, m.range.first - 60), m.range.first)
+            val after = s.substring(m.range.last + 1)
+            if (m.value[0] == '0' || PLACE_BEFORE_RE.containsMatchIn(before) && CODE_END_RE.containsMatchIn(after) || PLACE_AFTER_RE.containsMatchIn(after))
+                spell(m.value) else m.value
+        }
         s = CODE_AFTER_WORD_RE.replace(s) { m -> m.groupValues[1] + m.groupValues[2] + spell(m.groupValues[3]) }
         return CODE_BEFORE_WORD_RE.replace(s) { m -> spell(m.groupValues[1]) }
     }
@@ -142,7 +151,15 @@ object UkNormalizer {
     private const val CODE_WORD_FORMS = """(?:пін-?код(?:у|а|ом|і|и|ів)?|код(?:у|а|ом|і|и|ів)?|парол(?:ь|я|ю|ем|і|ів)|pin|cvc2?|cvv2?|otp|code|passcode)"""
     /** «поштовий індекс 01001» — пять цифр сразу за словами, по цифрам (числом было бы «нуль одна тисяча один»); «поштовий
      * індекс змінився у 2020 році» — не индекс. */
-    private val POSTAL_RE = Regex("""(?<!\p{L})(поштов\p{L}*\s+індекс\p{L}*)(\s*:?\s*)(\d{5})(?![\d\p{L}]|[.,]\d)""", RegexOption.IGNORE_CASE)
+    private val POSTAL_RE = Regex("""(?<!\p{L})(поштов\p{L}*\s+індекс\p{L}*)(\s*:?\s*)(\d{5}(?:(?:\s*[-–—]\s*|,\s*|\s+(?:і|й|та|або|чи)\s+)\d{5})*)""" +
+        """(?![\d\p{L}]|[.,]\d)""", RegexOption.IGNORE_CASE)
+    /** Индексы перечня по одному, диапазон — тире: «01001 та 01002», «79000-79099». */
+    private val POSTAL_CHAIN_RE = Regex("""\d{5}|\s*[-–—]\s*""")
+    private val FIVE_DIGITS_RE = Regex("""(?<![\d.,\p{L}+-])\d{5}(?![\d\p{L}]|[.,]\d)""")
+    private const val PLACE = """(?:(?:м|с|смт|вул|просп|пров|бул|пл|обл|буд|кв)\.|місто|село|вулиця|область|україна)(?!\p{L})"""
+    private val PLACE_BEFORE_RE = Regex("""(?<!\p{L})$PLACE.*,\s*$""", RegexOption.IGNORE_CASE)
+    private val PLACE_AFTER_RE = Regex("""^,\s*$PLACE""", RegexOption.IGNORE_CASE)
+    private val CODE_END_RE = Regex("""^\s*(?:[,.;]|$)""")
     private const val CODE_DIGITS = """\d{2,4}(?:[ -]\d{2,4}){1,2}|\d{3,8}"""
     private const val CODE_NOT_AFTER = """(?!\d|[.,:]\d|\s*(?:%|₴|\$|€|°|грн|руб|р\.|рік|рок|році|шт|хв|сек|раз|км|кг|м(?!\p{L})))"""
     private val CODE_AFTER_WORD_RE = Regex("""(?<![\p{L}\d])($CODE_WORD_FORMS)(?!\p{L})([^\d.!?\n]{0,40}?)(?<![\p{L}\d,.])($CODE_DIGITS)$CODE_NOT_AFTER""",
@@ -178,6 +195,9 @@ object UkNormalizer {
      * до римских: «кн. II» — «книга друга». Формы VESUM; не проверено носителем. */
     private fun nounAbbrs(text: String): String {
         val t = SMT_RE.replace(text, "смт.")
+        // падеж предлога по перечню частей документа: «згідно з п. 2, ст. 15 і ч. 3» — «пунктом…, статтею…, частиною»
+        var chainCase: Case? = null
+        var chainEnd = 0
         return NOUN_ABBR_RE.replace(t) { m ->
             val prep = m.groupValues[1]
             val key = m.groupValues[2]
@@ -192,45 +212,63 @@ object UkNormalizer {
                 return@replace m.value
             val p = prep.lowercase()
             val before = t.substring(maxOf(0, m.range.first - 60), m.range.first)
+            // «п. 2 ст. 15» — пункт статті: целое за частью в родовому
+            val whole = p.isEmpty() && digit && key.lowercase() in WHOLE_ABBRS && PART_BEFORE_RE.containsMatchIn(before)
+            val chained = p.isEmpty() && digit && chainCase != null && CHAIN_GAP_RE.matches(t.substring(chainEnd, m.range.first))
             val case = when {
                 p in FROM_PREPS && a.place -> Case.GEN
                 // «в/у/на» перед місцем: назва в місцевому («Києві», «Одесі») — місцевий при любом глаголе; назва в прямій формі
                 // («Київ») — знахідний только после глагола движения («Їду в м. Київ»), иначе місцевий («проживає у м. Київ»)
                 p in MOTION_PREPS && a.place && !LOC_NAME_RE.containsMatchIn(t.substring(m.range.last + 1).take(40)) &&
                     motionBefore(before) -> Case.ACC
-                // «п. 2 ст. 15» — пункт статті: целое за частью в родовому
-                p.isEmpty() && digit && key.lowercase() in WHOLE_ABBRS && PART_BEFORE_RE.containsMatchIn(before) -> Case.GEN
+                whole -> Case.GEN
                 p.isEmpty() && SEE_BEFORE_RE.containsMatchIn(before) -> Case.ACC
+                chained -> chainCase!!
                 else -> UkNumbers.SIGN_PREP[p] ?: Case.NOM
             }
+            if (!whole) chainCase = case.takeIf { digit && (p.isNotEmpty() || chained) }
+            chainEnd = m.range.last + 1
             (if (prep.isEmpty()) "" else "$prep ") + a.forms[case.ordinal] + (if (end) "." else " ") +
                 if (roman.isEmpty()) "" else UkNumbers.ordinal(UkNumbers.romanValue(roman), case, a.gender) + " "
         }
     }
-    /** «пов.» за числом (оголошення): после предлога — порядковое в падеже предлога («на 5 пов.» → «на п'ятому поверсі», «з 5
-     * пов.» → «з п'ятого поверху»); без предлога перед словом — прикметник («5 пов. будинок» → «п'ятиповерховий будинок», род —
-     * по окончанию слова); иначе «п'ятий поверх». Точка в конце куска — конец предложения. Не проверено носителем. */
+    /** «пов.» за числом (оголошення): перед зданием (можно через прикметник: «9-пов. цегляний будинок») — прикметник без
+     * предлога, после «у/в» и всегда в дефисной записи: «5 пов. будинок» → «п'ятиповерховий будинок», «у 9 пов. будинку» → «у
+     * дев'ятиповерховому будинку», «з 16-пов. будинку» → «з шістнадцятиповерхового»; окончание — по форме здания, «будинку»,
+     * «будівлі» — по предлогу (родовий или місцевий). Иначе после предлога — порядковое в падеже предлога («на 5 пов.» → «на
+     * п'ятому поверсі», «з 5 пов.» → «з п'ятого поверху», «на 5 пов. будинку» — поверх будинку), без него — «п'ятий поверх».
+     * Точка в конце куска — конец предложения. Не проверено носителем. */
     private fun floors(text: String): String = FLOOR_RE.replace(text) { m ->
         val prep = m.groupValues[1]
         val n = m.groupValues[2].toLongOrNull() ?: return@replace m.value
         val rest = text.substring(m.range.last + 1)
         val end = if (rest.isBlank()) "." else " "
         val p = prep.lowercase()
-        if (p.isEmpty()) FLOOR_NOUN_RE.find(rest)?.let { w -> FLOOR_ADJ[w.groupValues[1]] }?.let { ending ->
-            return@replace UkNumbers.compoundStem(n.toInt(), one = "одно", adj = true) + "поверх" + ending + end
-        }
         val case = if (p in FROM_PREPS) Case.GEN else UkNumbers.SIGN_PREP[p] ?: Case.NOM
+        val hyphen = m.groupValues[3].isNotEmpty()
+        if (p.isEmpty() || p == "у" || p == "в" || hyphen) (FLOOR_NOUN_RE.find(rest)?.let { w ->
+            FLOOR_ADJ[w.groupValues[1]] ?: w.groupValues[2].takeIf { ADJ_END_RE.containsMatchIn(w.groupValues[1]) }?.let { FLOOR_ADJ[it] }
+        } ?: if (hyphen && p.isEmpty()) FLOOR_NOUN_BEFORE_RE.find(text.substring(0, m.range.first))?.let { FLOOR_ADJ[it.groupValues[1].lowercase()] } else null
+        )?.let { ending ->
+            val e = if (case == Case.PRE || case == Case.DAT) ending.replace("ого", "ому").replace("ої", "ій") else ending
+            return@replace (if (prep.isEmpty()) "" else "$prep ") + UkNumbers.compoundStem(n.toInt(), one = "одно", adj = true) + "поверх" + e + end
+        }
         (if (prep.isEmpty()) "" else "$prep ") + UkNumbers.ordinal(n, case) + " " + FLOOR_FORMS[case.ordinal] + end
     }
     private val FLOOR_FORMS = "поверх поверху поверху поверх поверхом поверсі".split(' ')
     private val FLOOR_RE = Regex("""(?:(?<![\p{L}\d])(${UkNumbers.SIGN_PREP.keys.sortedByDescending { it.length }.joinToString("|")})\s+)?""" +
-        """(?<![\d.,])(\d{1,3})\s*пов\.\s*""", RegexOption.IGNORE_CASE)
-    /** Слово за «5 пов.» — строчное; прикметник только перед зданием из [FLOOR_ADJ] (окончание прикметника по его форме). */
-    private val FLOOR_NOUN_RE = Regex("""^(?-i:(\p{Ll}{3,}))(?!\p{L})""", RegexOption.IGNORE_CASE)
+        """(?<![\d.,])(\d{1,3})(?:\s*|(-))пов\.\s*""", RegexOption.IGNORE_CASE)
+    /** Слова за «5 пов.» — строчные: здание из [FLOOR_ADJ] первым или вторым после прикметника ([ADJ_END_RE]). */
+    private val FLOOR_NOUN_RE = Regex("""^(?-i:(\p{Ll}{3,}))(?!\p{L})(?:\s+(?-i:(\p{Ll}{3,}))(?!\p{L}))?""", RegexOption.IGNORE_CASE)
+    private val ADJ_END_RE = Regex("""(?:ий|ій|ого|ому|им|ім|а|я|ої|ою|е|і|их|ими)$""", RegexOption.IGNORE_CASE)
+    /** Здание перед дефисной записью: «Будинок 5-пов.» — «п'ятиповерховий». */
+    private val FLOOR_NOUN_BEFORE_RE = Regex("""(\p{L}+)\s+$""")
     private val FLOOR_ADJ = listOf("будинок", "дім", "корпус", "комплекс", "гуртожиток").associateWith { "овий" } +
         listOf("будинку", "корпусу", "комплексу", "гуртожитку").associateWith { "ового" } +
-        listOf("будинки").associateWith { "ові" } + listOf("будинків").associateWith { "ових" } +
-        listOf("будівля", "новобудова").associateWith { "ова" } + listOf("будівлі", "новобудови").associateWith { "ової" }
+        listOf("будинки").associateWith { "ові" } + listOf("будинків", "будинках").associateWith { "ових" } +
+        listOf("будинком", "корпусом", "будинкам").associateWith { "овим" } + listOf("будинками").associateWith { "овими" } +
+        listOf("будівля", "новобудова").associateWith { "ова" } + listOf("будівлі", "новобудови").associateWith { "ової" } +
+        listOf("будівлю", "новобудову").associateWith { "ову" } + listOf("будівлею", "новобудовою").associateWith { "овою" }
     private class NounAbbr(forms: String, val place: Boolean = false, val gender: Gender = Gender.M) {
         val forms = forms.split(' ').map { it.replace('_', ' ') }
     }
@@ -336,12 +374,15 @@ object UkNormalizer {
         add("переїзд поїздка поїздку повернення переселення подорож", "_")
     }
     /** «див. с. 45», «Див. табл. 3» — знахідний: «дивись сторінку», «дивись таблицю»; и дальше по перечню через «і», «та»,
-     * запятую: «див. мал. 4 і табл. 2» — «і таблицю»; так же после «читай(те)»: «Читайте розд. 3, т. 2, с. 45» — «сторінку». */
-    private val SEE_BEFORE_RE = Regex("""(?<!\p{L})(?:див\.?|дивись|дивіться|читай|читайте)\s*(?:\p{L}{1,6}\.\s*\d+[\d.,]*\s*(?:,|і|й|та)\s+)*$""",
+     * запятую: «див. мал. 4 і табл. 2» — «і таблицю»; так же после «(про/пере)читай(те)»: «Прочитайте розд. 3, т. 2, с. 45» —
+     * «сторінку». */
+    private val SEE_BEFORE_RE = Regex("""(?<!\p{L})(?:див\.?|дивись|дивіться|(?:про|пере)?читай(?:те)?)\s*(?:\p{L}{1,6}\.\s*\d+[\d.,]*\s*(?:,|і|й|та)\s+)*$""",
         RegexOption.IGNORE_CASE)
     /** Часть документа с номером перед целым: «п. 2 ст. 15» — «пункт два статті п'ятнадцять», «ч. 1 ст. 5». Не проверено носителем. */
     private val PART_BEFORE_RE = Regex("""(?<!\p{L})(?:п|пп|підп|ч)\.\s*\d+(?:[.,]\d+)*\s*$""", RegexOption.IGNORE_CASE)
     private val WHOLE_ABBRS = setOf("ст", "розд", "гл", "дод")
+    /** Между частями перечня — номер и запятая или «і», «та», «або»: «п. 2, ст. 15 і ч. 3». */
+    private val CHAIN_GAP_RE = Regex("""\d+(?:[.,]\d+)*(?:\s*,|\s+(?:і|й|та|або))\s*""", RegexOption.IGNORE_CASE)
     /** «смт Ворохта» пишут без точки: перед назвою — с точкой, как прочие сокращения [NOUN_ABBR_RE]. */
     private val SMT_RE = Regex("""(?<![\p{L}\d.])смт(?=\s+(?-i:\p{Lu}))""", RegexOption.IGNORE_CASE)
 
@@ -536,6 +577,10 @@ object UkNormalizer {
      * «10-15», «Ан-225» не трогаем. */
     private val PLUS_NUMBER_RE = Regex("\\+(?=\\s*\\d)")
     private val MINUS_NUMBER_RE = Regex("(?<![\\p{L}\\d])[-−](?=\\d)")
+    /** «+» между латинскими буквами — сочетание клавиш, не ударение. */
+    private val LATIN_PLUS_RE = Regex("(?<=[A-Za-z])\\+(?=[A-Za-z])")
+    /** «−» в пробелах, которого не взяла формула ([TextLayer.mathMinus]), — тире текста. */
+    private val SPACED_MINUS_RE = Regex("(?<=\\s)−(?=\\s)")
     /** «+» не перед гласной — не ударение: «Сі++» — «плюс». */
     private val PLUS_NOT_STRESS_RE = Regex("\\+(?![аеєиіїоуюяёыэ])", RegexOption.IGNORE_CASE)
     /** Апостроф во всех написаниях — один класс на слой: им же [UkLayer.dictWord] снимает его в словах словаря. */
@@ -597,9 +642,12 @@ object UkNormalizer {
         step("numbers", ::classes)                    // «у 5-А класі» — «у п'ятому-а класі»
         step("numbers") { CLASS_LETTER_RE.replace(it, " $1") }   // «5-А» без «клас» — буква класу, не нарощення
         step("arith", UkNumbers::dimensions)          // «3x4» — до латиницы, иначе «x» стала бы «екс»
+        step("arith", UkNumbers::mathParens)          // «2 × (a + b)» — без запятой на скобке
         step("arith", UkNumbers::algebra)             // «x² + y² = z²» — тоже до латиницы
         step("homoglyphs", ::homoglyphs)              // «cік», «iнший» латиницей — до латиницы, иначе «кік», «нший»
         // латиницы в символах модели нет вовсе — «FilmBell», «USB», «Карл V» раньше выпадали
+        // «Shift+Enter», «Ctrl+Alt+Del» — «плюс»: «+» перед гласной иначе стал бы ударением
+        step("latin") { LATIN_PLUS_RE.replace(it, " + ") }
         step("latin") { FILE_EXT_RE.replace(it) { m -> " крапка " + m.groupValues[1].let { e -> if (e.none { c -> c in "aeiouy" }) e.uppercase() else e } } }
         step("latin") { UkLatin.translate(it, rules) }
         step("latin") { GREEK_RE.replace(it) { m -> GREEK.getValue(m.value[0]) } }
@@ -649,7 +697,7 @@ object UkNormalizer {
         s = QUEST_EXCL_RE.replace(s, "?").replace('!', '.')   // «!» модель не получает (служебный символ)
         if (rules.on("pause_parens")) s = PARENS_RE.replace(s, ", ")
         // тире — то, что знает модель: у cis-пака только «—», а Splitter делает из « - » «–»; на «—» и пауза тире
-        s = s.replace('–', '—')
+        s = SPACED_MINUS_RE.replace(s.replace('–', '—'), "—")
         s = PLUS_NOT_STRESS_RE.replace(s, " плюс ").replace("±", " плюс-мінус ").replace("≈", " приблизно ").replace("&", " і ")
         val sb = StringBuilder(s.length)
         val names = rules.on("symbol_names")

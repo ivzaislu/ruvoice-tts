@@ -415,9 +415,10 @@ object UkNumbers {
     private val PENCE = Measure("пенс", rule = "currency")
 
     /** Единица за числом ([UNITS_MAP]) для регулярок: длинные ключи раньше коротких. Точку съедаем у сокращения на букву («км.»),
-     * у знака («5 %.», «$65 000.») и у «°с», «°ф» она — конец предложения. */
+     * у знака («5 %.», «$65 000.») и у «°с», «°ф» она — конец предложения. Слово через дефис — не единица: «1 євро-цент» —
+     * «один євро-цент». */
     private val UNIT = "(" + UNITS_MAP.keys.sortedByDescending { it.length }.joinToString("|") { Regex.escape(it) } + ")" +
-        """(?:(?<=\p{L})(?<!°с|°ф)\.)?(?!\p{L})"""
+        """(?:(?<=\p{L})(?<!°с|°ф)\.)?(?!\p{L}|(?<=\p{L})-\p{L})"""
 
     /** Правило «Правил» для единицы ([UNITS_MAP]); те же ключи, что у русского нормализатора. */
     fun unitKey(u: String) = UNITS_MAP[u]?.rule ?: "units"
@@ -782,32 +783,57 @@ object UkNumbers {
     /** Формула с буквой-переменной («x² + y² = z²», «a ≥ b», «2x + 3 = 7»): буквы — шкільними назвами (ікс, ігрек, зет), «²» и «³»
      * за буквой — «у квадраті», «у кубі», знаки — словами; числа остаются цифрами. До латиницы: иначе «x» стала бы «екс», а «=»
      * и «≥» между буквами выпадали фильтром. Не проверено носителем. */
-    internal fun algebra(text: String) = FORMULA_RE.replace(text) { m ->
+    internal fun algebra(text: String) = COMPARE_LETTER_RE.replace(formulas(text)) { m -> " " + COMPARE_WORDS.getValue(m.groupValues[1]) + " " }
+    /** «Клас A > клас B»: «<», «>» в пробелах после одной латинской буквы перед словом — сравнение; «Налаштування > Мова» (путь
+     * меню) не трогаем. */
+    private val COMPARE_LETTER_RE = Regex("""(?<=(?<![\p{L}\d])[A-Za-z])\s+([<>])\s+(?=\p{L})""")
+    /** Скобки при знаке формулы («2 × (a + b)», «(a + b) × h», «f(x) = 2x») — без скобок: запятая паузы (pause_parens) рвала
+     * формулу. Перед «(» знак после буквы или числа (не «+(380)»), за «)» — знак и терм; внутри — знак или один терм, не текст:
+     * «Ціна (без ПДВ) = 100 грн» — с паузой. */
+    internal fun mathParens(text: String) = MATH_PARENS_RE.replace(text) { " " + it.groupValues[1].ifEmpty { it.groupValues[2] } + " " }
+    private const val PAREN_INNER = """([^()\n]{0,30}[+×*÷=−^][^()\n]{0,30}|[A-Za-z\d]+)"""
+    private val MATH_PARENS_RE = Regex("""(?<=[\p{L}\d)²³]\s{0,3}[+×*÷=−]\s{0,3})\($PAREN_INNER\)|\($PAREN_INNER\)(?=\s{0,3}[+×÷=−]\s{0,3}[\p{L}\d(])""")
+    private fun formulas(text: String) = FORMULA_RE.replace(text) { m ->
         if (m.value.none { it in 'a'..'z' || it in 'A'..'Z' }) return@replace m.value
         val ops = FORMULA_OP_RE.findAll(m.value).map { o -> o.groupValues.drop(1).first { it.isNotEmpty() } }.toList()
-        // тире — минус только рядом с другим знаком: «a — b» в тексте — тире
-        if (ops.all { it in DASHES }) return@replace m.value
-        // одни заглавные через «+» без чисел рядом с клавишей или «натисн…» — сочетание клавиш («Натисніть A + B», «Ctrl + A + B»):
-        // буквы английскими именами, как в тексте; без них («Вітаміни A + E») — формула, «а плюс е»
-        if (ops.all { it == "+" } && m.value.none { it.isDigit() || it in 'a'..'z' } && KEY_CONTEXT_RE.containsMatchIn(text))
+        // тире — минус только рядом с другим знаком: «a — b» в тексте — тире; дефис без пробелов («x-1») — только при «=» или
+        // сравнении: «T-34 + T-55» — не формула
+        if (ops.all { it in DASHES } || "-" in ops && ops.none { it in RELATIONS }) return@replace m.value
+        // одни заглавные через «+» без чисел, а в том же предложении клавиша или «натисн…» — сочетание клавиш («Натисніть A + B»,
+        // «Ctrl + A + B»): буквы английскими именами, как в тексте; без них («Вітаміни A + E. Натисніть Enter.») — формула
+        if (ops.all { it == "+" } && m.value.none { it.isDigit() || it in 'a'..'z' } && KEY_CONTEXT_RE.containsMatchIn(sentenceAround(text, m.range)))
             return@replace m.value
-        val s = FORMULA_LETTER_RE.replace(m.value) { l ->
+        // тире последним знаком, а за формулой слово — тире текста: «Якщо x = 2 — a не змінюється»
+        val proseDash = ops.size > 1 && ops.last() in DASHES && PROSE_AFTER_RE.containsMatchIn(text.substring(m.range.last + 1))
+        var i = 0
+        val s = FORMULA_OP_RE.replace(m.value) { o -> o.groupValues.drop(1).first { it.isNotEmpty() }.let {
+            val last = ++i == ops.size
+            " " + (if (it in DASHES && last && proseDash) "—" else if (it in DASHES || it == "-") "мінус" else COMPARE_WORDS[it] ?: ARITH_OPS.getValue(it)) + " " } }
+        FORMULA_LETTER_RE.replace(s) { l ->
             val name = SCHOOL_LATIN.getValue(l.groupValues[1].lowercase()[0])
             val pow = when (l.groupValues[2]) { "²" -> " ${uv(name)} квадраті"; "³" -> " ${uv(name)} кубі"; else -> "" }
-            (if (l.range.first > 0 && m.value[l.range.first - 1].isDigit()) " " else "") + name + pow
+            (if (l.range.first > 0 && s[l.range.first - 1].isDigit()) " " else "") + name + pow
         }
-        FORMULA_OP_RE.replace(s) { o -> o.groupValues.drop(1).first { it.isNotEmpty() }.let {
-            " " + (if (it in DASHES) "мінус" else COMPARE_WORDS[it] ?: ARITH_OPS.getValue(it)) + " " } }
     }
+    /** Предложение вокруг [range]: от конца прошлого («.», «!», «?», «;», «…» и пробел) до конца этого. */
+    private fun sentenceAround(text: String, range: IntRange): String {
+        val from = SENTENCE_END_RE.findAll(text.substring(0, range.first)).lastOrNull()?.range?.last?.plus(1) ?: 0
+        val to = SENTENCE_END_RE.find(text, range.last + 1)?.range?.first ?: text.length
+        return text.substring(from, to)
+    }
+    private val SENTENCE_END_RE = Regex("""[.!?;…](?=\s|$)""")
+    private val PROSE_AFTER_RE = Regex("""^\s+[а-яєіїґ]""", RegexOption.IGNORE_CASE)
     // коэффициент — только строчной буквой: «2x», «10a»; «4G», «3D», «4K» — не формула
     private const val TERM = """(?:\d+(?:[.,]\d+)?[a-z]?|[A-Za-z])[²³]?"""
-    // «<», «>» — только в пробелах, как [COMPARE_RE]; минус в пробелах до слоя уже стал тире (Normalizer.punctuation): «x − 1 = 0»
-    // приходит как «x — 1 = 0»
-    private const val FORMULA_OP = """\s*([=+−×÷≥≤≠])\s*|\s+([<>—–])\s+"""
+    // «<», «>» — только в пробелах, как [COMPARE_RE]; дефис в пробелах до слоя уже стал тире (Normalizer.punctuation): «x - 1 = 0»
+    // приходит как «x – 1 = 0»; «−» украинский Splitter оставляет ([TextLayer.mathMinus]); дефис без пробелов — между термами
+    private const val FORMULA_OP = """\s*([=+−×÷≥≤≠])\s*|\s+([<>—–])\s+|(?<=[\dA-Za-z²³])(-)(?=[-−]?[\dA-Za-z])"""
     private val DASHES = setOf("—", "–")
-    /** Клавиша-модификатор или глагол «натиснути» в куске — «A + B» сочетание клавиш. Не проверено носителем. */
-    private val KEY_CONTEXT_RE = Regex("""(?<![\p{L}])(?:ctrl|shift|alt|win|cmd|fn|tab|esc|enter|контрол|шифт|шіфт|альт|ентер|натисн\p{L}*)(?![\p{L}])""",
-        RegexOption.IGNORE_CASE)
+    private val RELATIONS = setOf("=", "≥", "≤", "≠", "<", ">")
+    /** Клавиша-модификатор или глагол «натиснути» в предложении — «A + B» сочетание клавиш; кириллицей клавиша — только рядом
+     * с «+» («альт» без него — и альт в хорі). Не проверено носителем. */
+    private val KEY_CONTEXT_RE = Regex("""(?<![\p{L}])(?:ctrl|shift|alt|win|cmd|fn|tab|esc|enter|натисн\p{L}*)(?![\p{L}])|""" +
+        """(?<![\p{L}])(?:контрол|шифт|шіфт|альт|ентер)\s*\+|\+\s*(?:контрол|шифт|шіфт|альт|ентер)(?![\p{L}])""", RegexOption.IGNORE_CASE)
     private val FORMULA_RE = Regex("""(?<![\p{L}\d.,])$TERM(?:(?:$FORMULA_OP)[-−]?$TERM)+(?![\p{L}\d])""")
     private val FORMULA_LETTER_RE = Regex("""(?<![A-Za-z])([A-Za-z])([²³]?)""")
     private val FORMULA_OP_RE = Regex(FORMULA_OP)
@@ -1148,8 +1174,8 @@ object UkNumbers {
             m.groupValues[1] + nums.joinToString(if (upTo) " до " else " — ") { r -> ordinal(romanValue(r), case, Gender.N) } + " " + noun +
                 (if (m.groups[6] != null && !mid) " ." else "")
         }
-        // ponytail: род по имени: ж. р. — только [FEM_NAMES], прочее на -а/-я/-и — родовий ч. р. («Указ Петра I» — «першого»,
-        // «за Миколи I»), согласная и «-о» — називний ч. р. («Карл XII», «Петро I»), прочее не трогаем. Предлог в начале фразы
+        // ponytail: род по имени: ж. р. — [FEM_NAMES] и родовий на -и не из [MASC_A_NAMES] («за Іоанни I» — «першої»), прочее
+        // на -а/-я — родовий ч. р. («Указ Петра I» — «першого», «за Миколи I»), согласная и «-о» — називний ч. р. («Карл XII», «Петро I»), прочее не трогаем. Предлог в начале фразы
         // («Після II світової») — не имя. Одна буква — только I/І после кириллического имени: «День Х», «Model X» не трогаем.
         // Кириллическая «І» перед точкой — инициал, перед словом с заглавной — союз («Київ І Львів»), перед строчной — римское
         s = ROMAN_NAME.replace(s) { m ->
@@ -1256,7 +1282,10 @@ object UkNumbers {
             last == 'і' -> Case.PRE to (if (stemIn(1, FEM_NAMES)) Gender.F else Gender.M)
             // родовий жіночого: «Катерини II» → «другої», «Марії I» → «першої»
             (last == 'и' || last == 'ї') && stemIn(1, FEM_NAMES) -> Case.GEN to Gender.F
-            last == 'а' || last == 'я' || last == 'и' -> Case.GEN to Gender.M
+            // родовий на «-и» — только у имён на «-а»: мужские — из [MASC_A_NAMES] («Миколи»), прочие — женские («Іоанни I» →
+            // «першої»); мужские с основой на согласную дают «-а» («Петра»)
+            last == 'и' -> Case.GEN to (if (stemIn(1, MASC_A_NAMES)) Gender.M else Gender.F)
+            last == 'а' || last == 'я' -> Case.GEN to Gender.M
             last in "еєїyeiu" -> null
             else -> Case.NOM to Gender.M
         }
