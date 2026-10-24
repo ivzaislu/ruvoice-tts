@@ -14,6 +14,13 @@ import ru.kost.ruvoice.text.Segment
 class PipelineTest {
     private val d = TestData.data()
 
+    /** Неразрывный пробел не у цифры — обычный ещё до замен: regex-правило с пробелом в ключе его находит; у цифр — как был. */
+    @Test fun nbspBetweenWordsBecomesSpace() {
+        assertEquals("в кому, т. е. 1\u00a0200\u00a0000 и 5\u00a0км", Pipeline.wordSpaces("в\u00a0кому, т.\u202fе. 1\u00a0200\u00a0000 и 5\u00a0км"))
+        val r = ru.kost.ruvoice.text.Replacements.parse(listOf("~впала в кому = впала в к+ому"))
+        assertEquals("Эмма впала в к+ому.", Pipeline.plan("Эмма впала\u00a0в\u00a0кому.", d, 0, 0, r).single().text)
+    }
+
     @Test fun plainTextToSentencesWithPauses() {
         val s = Pipeline.plan("Раз. Два!\nТри?", d, sentencePauseMs = 100, paragraphPauseMs = 300)
         assertEquals(listOf(
