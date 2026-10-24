@@ -10,6 +10,18 @@ class ReplacementsTest {
         assertEquals("Г+арри и Г+арри!", r.apply("Гарри и гарри!"))
     }
 
+    /** Неразрывный и узкие пробелы (книги, вставка в «Разбор»: «в\u00a0кому») матчат пробел ключа; в тексте они остаются. */
+    @Test fun unicodeSpacesMatchKeySpace() {
+        val r = Replacements.parse(listOf("в кому = в к+ому", "старый замок = старый з+амок", "\$Эмма Ватсон = Эмма В+атсон",
+            "обливаясь пот* = обливаясь п+от*", "да, ну = д+а, н+у"))
+        assertEquals("впала в\u00a0к+ому.", r.apply("впала в\u00a0кому."))
+        assertEquals("впала в\u202fк+ому", r.apply("впала в\u202fкому"))
+        assertEquals("Старый\u2009з+амок", r.apply("Старый\u2009замок"))
+        assertEquals("Эмма\u00a0В+атсон", r.apply("Эмма\u00a0Ватсон"))
+        assertEquals("обливаясь п+отом", r.apply("обливаясь\u00a0потом"))
+        assertEquals("д+а, н+у", r.apply("да,\u00a0ну"))
+    }
+
     @Test fun systemVowelInterjectionDoubled() {
         val line = java.io.File(TestData.root(), "app/src/main/assets/dicts/replace/Системный.txt").readLines().single { it.startsWith("~(?<![\\p{L}+-])([аоэу])") }
         val r = Replacements.parse(listOf(line))
