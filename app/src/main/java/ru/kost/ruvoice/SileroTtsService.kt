@@ -54,6 +54,12 @@ object Pipeline {
     private val speechStart = Regex("^([—–-]\\s|[«\"“„])")
     // Тире + строчная буква в начале — авторский хвост, который Splitter отрезал по «!»/«?»
     // («— Привет! — сказал он.»), а не новая реплика.
+    /** Неразрывный и узкие пробелы не у цифры («в\u00a0кому», «т.\u00a0е.») — обычный, до всего остального: так их видят
+     * и regex-замены «~» с пробелом в ключе, и правила разбиения. У цифры («1\u00a0200\u00a0000», «5\u00a0км») — как есть:
+     * по ним Normalizer.glueThousands склеивает разряды. Длина не меняется — смещения подсветки те же. */
+    private val wordSpaceRe = Regex("(?<![0-9])[\u00a0\u202f\u2000-\u200a](?![0-9])")
+    fun wordSpaces(t: String): String = if (t.none { it == '\u00a0' || it == '\u202f' || it in '\u2000'..'\u200a' }) t else wordSpaceRe.replace(t, " ")
+
     private val authorStart = Regex("^[—–-]\\s+\\p{Ll}")
     // Реплика с авторской вставкой: «— Пойдём, — сказал он, — нам пора.» режется по « — » на
     // куски, чётные — речь, нечётные — автор. Перед таким тире всегда стоит знак («, —», «! —»,
@@ -102,7 +108,7 @@ object Pipeline {
     fun plan(text: CharSequence, d: SileroData, sentencePauseMs: Int, paragraphPauseMs: Int,
              replacements: Replacements = Replacements.parse(emptyList()), rules: Rules = Rules(), englishWords: Int = 0,
              englishJoinMs: Int = English.JOIN_PUNCT_MS, layer: TextLayer = Layers.RU, allowed: String = d.allowed): List<Segment> {
-        val src = text.toString().let { t ->
+        val src = wordSpaces(text.toString()).let { t ->
             if (!rules.on("letter_name")) t else loneLetter.matchEntire(t)?.let { m ->
                 m.groupValues[2][0].let { c -> layer.letterName(c, lone = m.groupValues[1].isEmpty() && m.groupValues[3].isEmpty()) }
                     ?.let { name ->
