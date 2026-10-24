@@ -45,7 +45,9 @@ class Replacements private constructor(private val rules: List<Rule>, private va
 
     fun apply(text: String): String {
         var result = text
-        var lower = text.lowercase()
+        // неразрывный и узкие пробелы — как обычный: в книгах и во вставленном в «Разбор» тексте «в\u00a0кому»
+        // не находил «в кому»; длина та же, в результат идут символы исходного текста
+        var lower = spaced(text.lowercase())
         // lowercase у редких букв меняет длину строки — тогда индексы lower и text разъедутся,
         // indexOf-путь нельзя, всё через regex по всему тексту
         var aligned = lower.length == text.length
@@ -61,7 +63,7 @@ class Replacements private constructor(private val rules: List<Rule>, private va
                 else -> applyWild(result, if (aligned) lower else null, rule)
             }
             if (next != null && next != result) {
-                result = next; lower = result.lowercase(); aligned = lower.length == result.length
+                result = next; lower = spaced(result.lowercase()); aligned = lower.length == result.length
             }
         }
         // после удаления ключей могли остаться двойные или краевые пробелы
@@ -86,7 +88,7 @@ class Replacements private constructor(private val rules: List<Rule>, private va
 
     private fun applyLiteral(text: String, lower: String, rule: Rule): String? {
         val key = rule.key
-        val hay = if (rule.caseSensitive) text else lower
+        val hay = if (rule.caseSensitive) spaced(text) else lower
         var i = hay.indexOf(key); if (i < 0) return null
         var sb: StringBuilder? = null; var last = 0
         while (i >= 0) {
@@ -145,6 +147,14 @@ class Replacements private constructor(private val rules: List<Rule>, private va
     companion object {
         private const val LITERAL = 0; private const val WILD = 1; private const val REGEX = 2
         private val spaces = Regex(" {2,}")
+        /** Пробелы, которые в ключе пишутся обычным: неразрывный, цифровой, узкий неразрывный и типографские U+2000–U+200A. */
+        private fun uSpace(c: Char) = c == '\u00a0' || c == '\u202f' || c in '\u2000'..'\u200a'
+        private const val SPACE_CLASS = "[ \\u00a0\\u202f\\u2000-\\u200a]"
+        private fun spaced(s: String): String {
+            if (s.none(::uSpace)) return s
+            val a = s.toCharArray(); for (i in a.indices) if (uSpace(a[i])) a[i] = ' '
+            return String(a)
+        }
         private val token = Regex("[\\p{L}\\d]+")
         private const val PROGRESS_STEP = 2000
 
@@ -319,7 +329,9 @@ class Replacements private constructor(private val rules: List<Rule>, private va
             val k = if (caseSensitive) key else key.lowercase()
             val mask = hasMask(k)
             val body = (if (mask) k.split('*') else listOf(k)).joinToString("([\\p{L}\\d-]*)") { part ->
-                part.split(',').joinToString(",\\s*") { if (it.isEmpty()) "" else Regex.escape(it) }
+                part.split(',').joinToString(",(?:\\s|$SPACE_CLASS)*") { seg ->
+                    seg.split(' ').joinToString(SPACE_CLASS) { if (it.isEmpty()) "" else Regex.escape(it) }
+                }
             }
             val src = if (isWord(k, mask)) "(?<![\\p{L}\\d])$body(?![\\p{L}\\d])" else body
             return if (caseSensitive) Regex(src) else Regex(src, RegexOption.IGNORE_CASE)
