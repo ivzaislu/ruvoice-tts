@@ -29,7 +29,9 @@ object Abbrev {
     private val latSpellSet = setOf(
         "USB", "URL", "API", "CPU", "GPU", "IBM", "IP", "ISBN", "OS", "SOS", "UFO",
         "UK", "UN", "USA", "UTF", "VGA", "WTO", "CIA", "EU", "TV", "PC", "AI", "IT",
-        "ID", "OK", "DNA", "CEO", "VIP", "USSR"
+        "ID", "OK", "DNA", "CEO", "VIP", "USSR",
+        // одна гласная, словом читалось «афк», «нб+а» (жалоба 28.10.2026)
+        "UFC", "NBA", "HBO", "MMA", "WWE", "ATP", "AMD", "UPS", "ABC", "MBA", "ATM", "UAE", "USD", "AOL"
     )
 
     // готовое чтение для аббревиатур, где механическая расшифровка по буквам не совпадает

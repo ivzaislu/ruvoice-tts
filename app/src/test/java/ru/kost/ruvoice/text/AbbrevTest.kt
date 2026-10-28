@@ -128,4 +128,9 @@ class AbbrevTest {
         assertEquals("сила сто ньютонов.", Normalizer.prepare("Сила 100Н.", allowed)) // число с единицей — не код
         assertEquals("тэ эмм +а-ноль один +эмм и +ээр-ноль ноль семь.", Normalizer.prepare("ТМА-01М и Р-007.", allowed))
     }
+    @Test fun singleVowelLatinSpelled() {
+        // жалоба 28.10.2026: «UFC» читалось словом «+афк»
+        assertEquals("бой ю эф с+и прошёл", Abbrev.apply("бой UFC прошёл"))
+        assertEquals("канал эйч би +оу", Abbrev.apply("канал HBO"))
+    }
 }
