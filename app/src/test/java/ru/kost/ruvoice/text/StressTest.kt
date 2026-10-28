@@ -369,4 +369,11 @@ class StressTest {
         assertEquals("в сует+е", Stress(d, yo2).apply("в сует+е"))
         assertEquals("в суёте", Stress(d, yo2).apply("в суете").replace("+", ""))
     }
+    @Test fun systemStressFixesOct28() {
+        // жалобы 28.10.2026: однозначные слова, модель ставила иначе
+        val dict = ru.kost.ruvoice.DictCache.stress(listOf(File(TestData.root(), "app/src/main/assets/dicts/stress/Системный.txt")))
+        val s = Stress(d, firstVowel, dict)
+        assertEquals("б+ездарю поддосп+ешником засоп+ожника ив+ашка кругол+я ерм+ошка", s.apply("бездарю поддоспешником засопожника ивашка круголя ермошка"))
+        assertEquals("восьмифунт+овых четырехфунт+овою четырёхфунт+овых", s.apply("восьмифунтовых четырехфунтовою четырёхфунтовых"))
+    }
 }
