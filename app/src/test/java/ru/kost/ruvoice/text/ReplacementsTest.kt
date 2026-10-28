@@ -157,4 +157,21 @@ class ReplacementsRegexTest {
         assertEquals("вдоль каменной стен+ы и дальше", r.apply("вдоль каменной стены и дальше"))
         assertEquals("сложены ст+ены и крыша", r.apply("сложены стены и крыша"))
     }
+    /** Жалобы 28.10.2026: фразы-подсказки для омографов из системного словаря замен. */
+    @Test fun systemComplaintPhrasesOct28() {
+        val r = Replacements.parse(java.io.File(TestData.root(), "app/src/main/assets/dicts/replace/Системный.txt").readLines())
+        assertEquals("день прошел в сует+е.", r.apply("день прошел в суете."))
+        assertEquals("зачем вы суете нос?", r.apply("зачем вы суете нос?"))
+        assertEquals("пог+оню организовать", r.apply("погоню организовать"))
+        assertEquals("глаз+а не опускает", r.apply("глаза не опускает"))
+        assertEquals("плеснула вин+а в кубок", r.apply("плеснула вина в кубок"))
+        assertEquals("у китай-г+орода", r.apply("у китай-города"))
+        assertEquals("как с д+ыбы сняли?", r.apply("как с дыбы сняли?"))
+        assertEquals("встал на дыбы", r.apply("встал на дыбы"))
+        assertEquals("под корень извест+и", r.apply("под корень извести"))
+        assertEquals("ват+ажке не чета", r.apply("ватажке не чета"))
+        assertEquals("расс+орить их", r.apply("рассорить их"))
+        assertEquals("вы меня тор+опите", r.apply("вы меня торопите"))
+        assertEquals("по обе ст+ороны дороги", r.apply("по обе стороны дороги"))
+    }
 }
