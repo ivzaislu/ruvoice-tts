@@ -51,6 +51,19 @@ class Stress(private val d: SileroData, private val models: StressModels, privat
         return own(sentence).also { trace?.add("${layer.code}: $it") }
     }
 
+    private val kaRe = Regex("([\\p{L}+]+)-к\\+а(?![\\p{L}+-])", RegexOption.IGNORE_CASE)
+    /** «-ка» строчными за кириллическим словом в исходном тексте: «Т-34-ка», «Ли-Ка», «7-ка», «№ 301-КГ» — не частица. */
+    private val kaSourceRe = Regex("([а-яё]+)-ка(?![\\p{L}\\d+-])", RegexOption.IGNORE_CASE)
+    /** Названия букв: «Эс-ка Мэна» — аббревиатура по буквам, не частица. */
+    private val letterNames = setOf("а", "бэ", "бе", "вэ", "ве", "гэ", "ге", "дэ", "де", "жэ", "зэ", "зе", "ка", "ха", "эль", "эл",
+        "эм", "эн", "пэ", "пе", "эр", "эс", "тэ", "те", "эф", "це", "цэ", "че", "ша", "ща", "ще")
+    private fun fuseKa(s: String, source: String): String {
+        if ("-к+а" !in s.lowercase()) return s
+        val words = kaSourceRe.findAll(source).filter { it.value.endsWith("ка") }.map { it.groupValues[1].lowercase().replace('ё', 'е') }
+            .filter { it !in letterNames }.toSet()
+        return kaRe.replace(s) { m -> if (m.groupValues[1].replace("+", "").lowercase().replace('ё', 'е') in words) m.groupValues[1] + "ка" else m.value }
+    }
+
     private fun ruApply(sentence: String, source: String): String {
         var s = sentence
         fun step(name: String, next: String) { trace?.add("$name: $next"); s = next }
@@ -62,6 +75,9 @@ class Stress(private val d: SileroData, private val models: StressModels, privat
         if (rules.on("homo")) step("homo", homographPass(s))
         if (rules.on("accentor")) step("accentor", accentorPass(s))
         step("dict", userDictPass(s, sentence, preset))
+        // «скаж+и-к+а» — у частицы свой «+», модель тянет «а»: слитно и без знака, «скаж+ика» (жалоба 28.10.2026). После словаря:
+        // слитное слово сдвинуло бы ему счёт слов, а «давай» из словаря пусть сначала получит своё ударение
+        if (rules.on("accentor")) step("ka", fuseKa(s, source))
         // твёрдое [э] в заимствованиях — после всех ударений, чтобы модель и словари видели обычное «е»
         if (rules.on("hard_e") && hardE != null) step("hard_e", hardE.apply(s))
         return s
@@ -604,7 +620,9 @@ class Stress(private val d: SileroData, private val models: StressModels, privat
             val yoVowelIds = listOf(yoPred)
             // акцентор без второго выхода (пак bel/ukr) отдаёт пустые строки «ё»
             val setYo = yp.isNotEmpty() && yp[yoPred] > 0.5f && cleanWord !in userDict   // «бытие быти+е» в словаре: модель не ставит «ё», иначе словарь слово не найдёт
-            if (haveStress) stressedVowelIds = lower.split("+").map { part -> part.count { it in vowels } }
+            // номер гласной перед каждым «+» с начала слова; кусок после последнего «+» не ударение — иначе «сует+е»
+            // давало [2, 1], и «ё» акцентора на гласной 1 вписывалась: «суёт+е» (жалоба 28.10.2026)
+            if (haveStress) stressedVowelIds = lower.split("+").dropLast(1).map { part -> part.count { it in vowels } }.runningReduce(Int::plus)
             val pos = positions(lower, stressedVowelIds, yoVowelIds)
             if (pos.numVowels == 0) { out.append(rawWord); continue }
             for (yoPos in pos.yo) if (yoPos in pos.stress && setYo && lower[yoPos] == 'е')

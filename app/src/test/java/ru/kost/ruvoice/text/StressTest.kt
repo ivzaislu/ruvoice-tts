@@ -345,4 +345,28 @@ class StressTest {
         // вхождения по порядку: строчное и заглавное в одном сегменте
         assertEquals(listOf("волк+ов", "в+олков"), Regex("в\\+?олк\\+?ов").findAll(full("Много волков, сказал Волков.")).map { it.value }.toList())
     }
+    @Test fun kaParticleFused() {
+        // жалоба 28.10.2026: «скаж+и-к+а» — частица со своим «+»; слитно, одно ударение
+        val s = Stress(d, firstVowel)
+        for (w in listOf("скажи", "ну", "давай", "смотри")) s.apply("$w-ка, дядя.").let { assertTrue(it, it.startsWith(s.apply(w) + "ка, ")) }
+        assertEquals("к+а", Stress(d, firstVowel).apply("ка"))
+        // не частица: буква и число через дефис в исходном тексте («RRRR-0-K», «7-ка»), имя «Ли-Ка»
+        assertEquals("н+оль-к+а", s.apply("ноль-ка", "0-K"))
+        assertEquals("с+емь-к+а", s.apply("семь-ка", "7-ка"))
+        assertEquals("л+и-к+а", s.apply("ли-ка", "Ли-Ка"))
+        // название буквы: «Эс-ка Мэна» — по буквам
+        assertTrue(s.apply("эс-ка мэна", "Эс-ка Мэна").startsWith("+эс-к+а "))
+        assertTrue(s.apply("цэ-ка партии", "Цэ-ка партии").startsWith("ц+э-к+а "))
+    }
+
+    @Test fun presetStressDoesNotLetModelYoIn() {
+        // жалоба 28.10.2026: «сует+е» из фразы, акцентор ставит «ё» на вторую гласную — «суёт+е»; лишний индекс после «+»
+        val yo2 = object : StressModels {
+            override fun accentor(words: List<String>) = Pair(
+                Array(words.size) { FloatArray(10).also { it[1] = 1f } }, Array(words.size) { FloatArray(7).also { it[1] = 1f } })
+            override fun homo(ids: List<LongArray>, starts: LongArray, ends: LongArray) = FloatArray(ids.size) { 0.9f }
+        }
+        assertEquals("в сует+е", Stress(d, yo2).apply("в сует+е"))
+        assertEquals("в суёте", Stress(d, yo2).apply("в суете").replace("+", ""))
+    }
 }
