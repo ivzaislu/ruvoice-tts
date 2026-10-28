@@ -305,12 +305,17 @@ object Normalizer {
     // Цепочка целиком («8 000 000 000»): попарная склейка в цикле съедала цифру соседней группы
     // и давала «8000 000000» → «восемь тысяч ноль».
     private val thousandsSpaceRe = Regex("""(?<!\d)(\d{1,3})((?: \d{3})+)(?!\d)""")
+    // слэш в пробелах с обеих сторон: «i7 920/3.5 GHz», «1/2 300 рублей» — не разряды
+    private val slashAheadRe = Regex("""^ / \d""")
+    private val slashBehindRe = Regex("""\d / $""")
     private fun glueThousandsSpace(text: String) = thousandsSpaceRe.replace(text) { m ->
         val groups = m.groupValues[2]
         val tail = text.substring(m.range.last + 1)
         // группа с ведущим нулём («14 033», «1 050») отдельным числом не бывает — это разряды
         // «с 42 500 до 47 000 руб.» — деньги в конце диапазона относятся и к первому числу
+        // «4 820 / 11 000» — дробь или счёт, не два числа (жалоба 28.10.2026)
         if (groups.length > 4 || groups == " 000" || groups[1] == '0' || moneyOrUnitAheadRe.containsMatchIn(tail) ||
+            slashAheadRe.containsMatchIn(tail) || slashBehindRe.containsMatchIn(text.substring(0, m.range.first)) ||
             // «1 249,90 руб.» — копейки, потом деньги
             fracMoneyAheadRe.find(tail)?.let { moneyOrUnitAheadRe.containsMatchIn(tail.substring(it.range.last + 1)) } == true ||
             rangeMoneyAheadRe.find(tail)?.let { moneyOrUnitAheadRe.containsMatchIn(tail.substring(it.range.last + 1)) } == true)
@@ -530,8 +535,9 @@ object Normalizer {
     // количественным (eligibleAlone); слова-триггеры («Глава I», «Россия XX века») отдаём старому пути.
     // Только [IVX] — «Размер XL», «Диск CD» остаются бытовыми сокращениями, короли за XX не бывают.
     // Латинское слово следом («Название I Am Legend») — это английская фраза, не номер.
+    // Имя слитно с заглавной внутри («ЛжеДмитрий II», «ЛжеДмитрий I») — тоже имя (жалоба 28.10.2026).
     private val romanAfterNameRe = Regex(
-        """(?<![\p{L}])([А-ЯЁ][а-яё]+)\s+([IVX]+)(?:-(?:$ordSuffixAlt))?(?![\p{L}\d])(?!\s+[A-Za-z])(?!\s*(?:и|[-–—,])\s*[IVX]+(?![\p{L}\d]))""")
+        """(?<![\p{L}])((?:[А-ЯЁ][а-яё]+)+)\s+([IVX]+)(?:-(?:$ordSuffixAlt))?(?![\p{L}\d])(?!\s+[A-Za-z])(?!\s*(?:и|[-–—,])\s*[IVX]+(?![\p{L}\d]))""")
     // Предлог/союз с заглавной в начале предложения — не имя («За XV и XVI века», «Между XV и XVI»).
     private val notNames = setOf("за", "на", "но", "из", "под", "над", "от", "до", "по", "для", "без", "через", "около",
         "после", "вокруг", "среди", "между", "перед", "при", "про", "обо", "или", "как", "что", "это", "все", "уже", "ещё",
@@ -1777,7 +1783,8 @@ object Normalizer {
     // «две третьих»). Числитель больше знаменателя — тоже словами, если знаменатель 2 или круглый
     // («7/2» — «семь вторых», «100/100» — «сто сотых»); «24/7» и «25/3» — как раньше, «a дробь b».
     // «7/18 июля» — дата по двум стилям, её читает dayMonth()
-    private val fractionSlashRe by lazy { Regex("""(?<![\d/])(\d+)/(\d+)(?![\d/])(?!\s+(?:$monthGenAlt)(?![а-яё]))""", RegexOption.IGNORE_CASE) }
+    // «4820 / 11000» с пробелами вокруг слэша — так же, как слитно; не номер с годом («№58 / 2010 г.»)
+    private val fractionSlashRe by lazy { Regex("""(?<![\d/])(\d+)(?:/| / )(\d+)(?![\d/])(?!\s+(?:$monthGenAlt)(?![а-яё]))""", RegexOption.IGNORE_CASE) }
     // Триггер падежа перед дробью («без 100/100», «равна 5/7») — оба в этом падеже: «пяти седьмым».
     // by lazy: genTriggerAlt объявлен ниже по файлу.
     private val fracCaseBehind by lazy {
@@ -1786,8 +1793,15 @@ object Normalizer {
         }
     }
     private val measureAheadRe = Regex("""^\s+[а-яё]{3,}[ая](?![а-яё])""")
+    // слэш в пробелах после «№» или перед годом («№58 / 2010 г.», уже «2010-й год») — номер выпуска, не дробь;
+    // десятичные по краям («7,5 / 2,5») — не дробь целых; деление в выражении («10 / 2 = 5», «* 24 / 730») — как было
+    // цепочка «10 / 20 / 30», «12 / 05 / 2020» и «6204 / 2RS» (буква сразу за знаменателем) — не дробь
+    private val spacedSlashNotFracBehind = Regex("""(?:№\s*|\d[.,]|\d\s*/\s*|(?:[*×÷]|умножить на|разделить на|плюс|минус)\s*)$""")
+    private val spacedSlashNotFracAhead = Regex("""^(?:\s*/\s*\d|[\p{L}\d]|\s*г(?:\.|од)|-[а-яё]|[.,]\d|\s*(?:[=*×÷]|равно|умножить|разделить|плюс|минус)(?![а-яё]))""")
     private fun fractionsSlash(text: String) = fractionSlashRe.replace(text) { m ->
         val (a, b) = m.destructured
+        if (' ' in m.value && (spacedSlashNotFracBehind.containsMatchIn(text.substring(0, m.range.first)) ||
+                spacedSlashNotFracAhead.containsMatchIn(text.substring(m.range.last + 1)))) return@replace m.value
         val an = a.toIntOrNull(); val bn = b.toIntOrNull()
         // «5/3 стакана», «7/3 часа» — неправильная дробь перед мерой в род. п. тоже словами («пять третьих»)
         val measure = bn in 3..4 && an != null && an in 1..30 && measureAheadRe.containsMatchIn(text.substring(m.range.last + 1))
@@ -3176,7 +3190,10 @@ object Normalizer {
             // и не круглые: «за 1500 лет» — «одну тысячу пятьсот»
             if (n < 1000 || k % 10 != 1L || k % 100 == 11L || obliqueNounAfter(m, 3)) return@replace m.value
             val case = if (m.groupValues[1].equals("по", true)) Case.DAT else Case.ACC
-            m.withGroupReplaced(2 to Declension.cardinal(n, case, feminine = true))
+            // «тысячу» женская сама (Declension), род остатка — по существительному следом: «в 1341 раз» — «сорок один раз»,
+            // «за 1002 рубля» — «два», «за 1001 ночь» — «одну» (жалоба 28.10.2026)
+            val g = listOf(m.groupValues[3], m.groupValues[4]).firstNotNullOfOrNull { morphGender(it.lowercase()) }
+            m.withGroupReplaced(2 to Declension.cardinal(n, case, feminine = g != Gender.M && g != Gender.N))
         }
         morph?.let { s = morphNoun(morphAdj(s, it), it) }
 
