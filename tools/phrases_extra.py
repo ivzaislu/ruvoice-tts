@@ -293,7 +293,9 @@ def load_extra():
         s = line.split('#', 1)[0].strip()
         if '=' not in s: continue
         phrase, var = (x.strip() for x in s.split('=', 1))
-        w = var.replace('+', '').replace('ё', 'е')  # ё-вариант («все же = вс+ё же») ищется в фразе по «е»
+        # ё-вариант («все же = вс+ё же») ищется в фразе по «е»; «ъ» на конце — подсказка модели, в фразе её нет
+        # («п+отомъ»: «п+отом» модель читает «п+атом», выбрано на слух 28.10.2026)
+        w = var.replace('+', '').replace('ё', 'е').removesuffix('ъ')
         if re.search(r'(?<![а-яё])' + re.escape(w) + r'(?![а-яё])', phrase): out[w].append((phrase, var))
     return out
 

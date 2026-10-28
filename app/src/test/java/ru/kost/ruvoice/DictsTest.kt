@@ -229,7 +229,9 @@ class DictsTest {
         val phrases = replace.dropWhile { !it.startsWith("# Фразы-подсказки") }   // выше — сложные слова и орфоэпия («гм = гмм»)
         val pairs = phrases.takeWhile { !it.startsWith("# Ударение на предлоге") }.mapNotNull { Replacements.split(it) }
         assertTrue(pairs.size > 5000)
-        assertTrue(pairs.filter { '*' !in it.first }.all { (k, v) -> v.replace("+", "").replace('ё', 'е') == k.replace('ё', 'е').removePrefix("$") && v.count { it == '+' } in 1..2 })
+        // «п+отомъ»: «ъ» на конце слова — подсказка модели, в ключе её нет (жалоба 28.10.2026)
+        val hardEnd = Regex("ъ(?![а-яё])")
+        assertTrue(pairs.filter { '*' !in it.first }.all { (k, v) -> v.replace("+", "").replace('ё', 'е').replace(hardEnd, "") == k.replace('ё', 'е').removePrefix("$").replace(hardEnd, "") && v.count { it == '+' } in 1..2 })
         // ударение на предлоге: предлог слеплен со следующим словом («н+абок»), иначе оба звучат ударно
         val clitic = phrases.dropWhile { !it.startsWith("# Ударение на предлоге") }.mapNotNull { Replacements.split(it) }
         assertTrue(clitic.size > 100)

@@ -54,7 +54,8 @@ for it in items:
     if w in fixes and not pe.extra_pick(w, text): ours = fixes[w]
     stat['всего'] += 1
     # «ё» не сравниваем: модель в тесте работает без «ё» (put_yo=False), а золото narusco/Викисловаря её пишет
-    ye = lambda x: x.replace('ё', 'е')
+    # «п+отомъ»: «ъ» на конце только для модели, золото пишет «п+отом»
+    ye = lambda x: re.sub('ъ(?![а-яё])', '', x.replace('ё', 'е'))
     stat['silero верно'] += ye(base) == ye(target)
     stat['аппка верно'] += ye(ours) == ye(target)
     if ye(ours) != ye(target) or ye(base) != ye(target): miss.append((it['context'], target, base, ours))
