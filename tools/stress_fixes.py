@@ -49,7 +49,10 @@ def load_fixes(path=FIXES):
         s = line.split('#', 1)[0].strip()
         if '=' in s:
             k, v = (x.strip() for x in s.split('=', 1))
-            if v.replace('+', '') == k and v.count('+') == 1: out[k] = v
+            # в своём списке ключ через «е» может читаться с «ё» («холеной = хол+ёной»): словарь подменяет слово целиком;
+            # в wiki_names.txt такие строки не берём, там «е»-копии пишет system_dicts.py по своим правилам
+            b = v.replace('+', '')
+            if (b == k or path == FIXES and b.replace('ё', 'е') == k) and v.count('+') == 1: out[k] = v
     return out
 
 
@@ -57,7 +60,7 @@ def apply(data):
     """exceptions: слово → [индекс ударной гласной, индекс «ё» или -1]."""
     n = 0
     for w, v in load_fixes().items():
-        data['exceptions'][w] = [v.index('+'), -1]; n += 1
+        data['exceptions'][w] = [v.index('+'), v.replace('+', '').find('ё')]; n += 1
     return n
 
 

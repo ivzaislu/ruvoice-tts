@@ -152,6 +152,14 @@ class RulesOffTest {
         assertEquals("св+ет, +испускаемый фонар+ём, +и кот+ёл.", st.apply("свет, испускаемый фонарем, и котел."))
     }
 
+    /** Строки tools/stress_fixes.txt с ключом через «е» и значением с «ё» («холеной = хол+ёной») доходят до модели с «ё». */
+    @Test fun systemDictFixesYo() {
+        val stress = java.io.File(TestData.root(), "app/src/main/assets/dicts/stress/Системный.txt").readLines().mapNotNull { DictLines.parseStress(it) }.toMap()
+        val st = Stress(d, firstVowel, stress, off("gram"))
+        assertEquals("хол+ёной р+укой, трёхс+отого г+ода, благоприобрет+ённого н+авыка.",
+            st.apply("холеной рукой, трехсотого года, благоприобретенного навыка."))
+    }
+
     /** Дефис после безударной приставки модель слышит пробелом; текст для подсветки не меняется. */
     @Test fun prefixHyphenForModel() {
         val stress = Stress(d, firstVowel, rules = off("homo", "gram"))
