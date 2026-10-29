@@ -43,6 +43,6 @@ class AboutActivity : AppCompatActivity() {
 
     companion object {
         const val SUPPORT_URL = "https://pay.cloudtips.ru/p/ddc25c30"
-        const val RELEASES_URL = "https://github.com/kost-t-human/ruvoice-tts/releases"
+        const val RELEASES_URL = "https://ruvoice-tts.github.io"
     }
 }

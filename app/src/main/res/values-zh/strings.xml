@@ -248,15 +248,15 @@
     <string name="about_telegram">Telegram 群组，发布公告，欢迎提问和建议：\nhttps://t.me/ruVoiceTTS</string>
     <string name="about_support">RuVoice 免费、无广告，以后也会如此。如果它对您有用，想表示感谢，可以请作者喝杯咖啡。这完全自愿，不会影响应用的任何功能。</string>
     <string name="about_support_button">支持项目</string>
-    <string name="about_releases">最新版本总是在发布页面上，应用商店可能会有延迟。</string>
-    <string name="about_releases_button">GitHub 发布页</string>
+    <string name="about_releases">最新版本总是在网站上，应用商店可能会有延迟。</string>
+    <string name="about_releases_button">RuVoice 网站</string>
     <string name="browser_missing">未找到浏览器</string>
-    <string name="about_body">RuVoice TTS %1$s\n源代码和新版本：https://github.com/kost-t-human/ruvoice-tts\n\n语音合成：Silero Models（github.com/snakers4/silero-models），模型 v5_5_ru，许可证 CC BY-NC-SA 4.0。仅限非商业用途。\n\n完整版的新声音基于公开录音训练：LibriVox（公有领域）、Common Voice 和 OHF-Voice（CC0）、RUSLAN corpus（ruslan-corpus.github.io，CC BY-NC-SA 4.0）、GK tramrunner 和 TIMUR MURATOV 的维基百科有声条目（CC BY-SA）。\n\n重音：Silero Stress（github.com/snakers4/silero-stress），MIT 许可证。\n\n形态学词典：AOT（github.com/sokirko74/morph_dict），LGPL 许可证。\n\n变速：Sonic，Bill Cox，Apache-2.0。</string>
+    <string name="about_body">RuVoice TTS %1$s\n网站和新版本：https://ruvoice-tts.github.io\n\n语音合成：Silero Models（github.com/snakers4/silero-models），模型 v5_5_ru，许可证 CC BY-NC-SA 4.0。仅限非商业用途。\n\n完整版的新声音基于公开录音训练：LibriVox（公有领域）、Common Voice 和 OHF-Voice（CC0）、RUSLAN corpus（ruslan-corpus.github.io，CC BY-NC-SA 4.0）、GK tramrunner 和 TIMUR MURATOV 的维基百科有声条目（CC BY-SA）。\n\n重音：Silero Stress（github.com/snakers4/silero-stress），MIT 许可证。\n\n形态学词典：AOT（github.com/sokirko74/morph_dict），LGPL 许可证。\n\n变速：Sonic，Bill Cox，Apache-2.0。\n\n源代码：https://github.com/kost-t-human/ruvoice-tts</string>
 
     <!-- 语音包 -->
     <string name="voice_packs">更多语音…</string>
     <string name="packs_title">更多语音</string>
-    <string name="packs_hint">语音包是一个 zip 文件，内含 Silero 模型及其语音（80 至 95 MB）。语音包中的语音会出现在“语音”标签页的列表中。使用其他模型的语音包（例如 cis_ru）没有疑问句和感叹句语调，也没有逻辑重音。白俄罗斯语语音包（cis_be）的疑问句和感叹句由程序自己抬高音调来表现。\n\n语音包在单独的发布页“Паки голосов”（语音包）中：\nhttps://github.com/kost-t-human/ruvoice-tts/releases/tag/packs</string>
+    <string name="packs_hint">语音包是一个 zip 文件，内含 Silero 模型及其语音（80 至 95 MB）。语音包中的语音会出现在“语音”标签页的列表中。使用其他模型的语音包（例如 cis_ru）没有疑问句和感叹句语调，也没有逻辑重音。白俄罗斯语语音包（cis_be）的疑问句和感叹句由程序自己抬高音调来表现。\n\n语音包在网站上：\nhttps://ruvoice-tts.github.io/packs/\n\nGitHub 上的发布页“Паки голосов”（语音包）里也有：\nhttps://github.com/kost-t-human/ruvoice-tts/releases/tag/packs</string>
     <string name="packs_none">没有语音：此版本的应用未内置模型。请安装语音包 ruvoice-pack-ru.zip（标准语音，约 85 MB）或其他任意语音包。</string>
     <string name="packs_install">从文件安装…</string>
     <string name="packs_installing">正在安装语音包…</string>

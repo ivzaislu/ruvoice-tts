@@ -253,15 +253,15 @@
     <string name="about_telegram">Группа в Telegram, анонсы, вопросы и предложения:\nhttps://t.me/ruVoiceTTS</string>
     <string name="about_support">RuVoice бесплатный, без рекламы и таким останется. Если он вам пригодился и хочется сказать спасибо — можно угостить автора кофе. Это необязательно и ни на что в приложении не влияет.</string>
     <string name="about_support_button">Поддержать проект</string>
-    <string name="about_releases">Свежая версия всегда на странице релизов, в сторах бывает с задержкой.</string>
-    <string name="about_releases_button">Релизы на GitHub</string>
+    <string name="about_releases">Свежая версия всегда на сайте, в сторах бывает с задержкой.</string>
+    <string name="about_releases_button">Сайт RuVoice</string>
     <string name="browser_missing">Браузер не найден</string>
-    <string name="about_body">RuVoice TTS %1$s\nИсходники и новые версии: https://github.com/kost-t-human/ruvoice-tts\n\nСинтез речи: Silero Models (github.com/snakers4/silero-models), модель v5_5_ru, лицензия CC BY-NC-SA 4.0. Только некоммерческое использование.\n\nНовые голоса полной сборки обучены на открытых записях: LibriVox (общественное достояние), Common Voice и OHF-Voice (CC0), RUSLAN corpus (ruslan-corpus.github.io, CC BY-NC-SA 4.0), аудиостатьи Википедии GK tramrunner и TIMUR MURATOV (CC BY-SA).\n\nУдарения: Silero Stress (github.com/snakers4/silero-stress), лицензия MIT.\n\nМорфологический словарь: AOT (github.com/sokirko74/morph_dict), лицензия LGPL.\n\nРастяжение темпа: Sonic, Bill Cox, Apache-2.0.</string>
+    <string name="about_body">RuVoice TTS %1$s\nСайт и новые версии: https://ruvoice-tts.github.io\n\nСинтез речи: Silero Models (github.com/snakers4/silero-models), модель v5_5_ru, лицензия CC BY-NC-SA 4.0. Только некоммерческое использование.\n\nНовые голоса полной сборки обучены на открытых записях: LibriVox (общественное достояние), Common Voice и OHF-Voice (CC0), RUSLAN corpus (ruslan-corpus.github.io, CC BY-NC-SA 4.0), аудиостатьи Википедии GK tramrunner и TIMUR MURATOV (CC BY-SA).\n\nУдарения: Silero Stress (github.com/snakers4/silero-stress), лицензия MIT.\n\nМорфологический словарь: AOT (github.com/sokirko74/morph_dict), лицензия LGPL.\n\nРастяжение темпа: Sonic, Bill Cox, Apache-2.0.\n\nИсходники: https://github.com/kost-t-human/ruvoice-tts</string>
 
     <!-- Паки голосов -->
     <string name="voice_packs">Дополнительные голоса…</string>
     <string name="packs_title">Дополнительные голоса</string>
-    <string name="packs_hint">Пак — zip-файл с моделью Silero и её голосами (80–95 МБ). Голоса пака появляются в списке на вкладке «Голос». У паков с другими моделями (например, cis_ru) нет интонации вопросов и восклицаний и логического ударения. В белорусском паке (cis_be) вопрос и восклицание приложение делает само, повышением тона.\n\nПаки лежат в отдельном релизе «Паки голосов»:\nhttps://github.com/kost-t-human/ruvoice-tts/releases/tag/packs</string>
+    <string name="packs_hint">Пак — zip-файл с моделью Silero и её голосами (80–95 МБ). Голоса пака появляются в списке на вкладке «Голос». У паков с другими моделями (например, cis_ru) нет интонации вопросов и восклицаний и логического ударения. В белорусском паке (cis_be) вопрос и восклицание приложение делает само, повышением тона.\n\nПаки лежат на сайте:\nhttps://ruvoice-tts.github.io/packs/\n\nОни же на GitHub, в релизе «Паки голосов»:\nhttps://github.com/kost-t-human/ruvoice-tts/releases/tag/packs</string>
     <string name="pack_lang">язык: %1$s</string>
     <string name="packs_none">Голосов нет: в этой версии приложения модель не встроена. Установите пак ruvoice-pack-ru.zip (штатные голоса, около 85 МБ) или любой другой пак.</string>
     <string name="packs_install">Установить из файла…</string>
